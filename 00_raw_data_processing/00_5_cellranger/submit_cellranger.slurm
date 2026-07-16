@@ -1,0 +1,30 @@
+#!/bin/bash
+#SBATCH --job-name=cell_ranger
+#SBATCH --partition=long
+#SBATCH --nodes=1
+#SBATCH --cpus-per-task=90
+#SBATCH --mem=470G
+#SBATCH --time=4-00:00:00
+#SBATCH --output=%x_%j.out
+#SBATCH --error=%x_%j.err
+
+# submit_cellranger.slurm
+# SLURM wrapper that allocates the largest CPU-only node (90 cores, 470G) and launches the Cell Ranger batch. No --gres=gpu (the cluster is CPU-only).
+
+hostname; date
+echo "Job name: $SLURM_JOB_NAME"; echo "Job ID: $SLURM_JOB_ID"
+# Log the node, timestamp, and job identifiers into the .out file for traceability.
+
+module load Miniconda3/202411
+eval "$(/soft/system/software/Miniconda3/202411/bin/conda shell.bash hook)"
+conda activate scrna
+module load cellranger/4.0.0
+# Load Miniconda, activate the scrna environment, and load the Cell Ranger 4.0.0 module.
+
+export DATA_DIR="/users/genomics/albertoc/Tesi/hopes_and_dreams"
+export REF="/users/genomics/albertoc/Tesi/cell_ranger/refdata-cellranger-GRCh38-3.0.0"
+# Site-specific paths, set here at the entry point rather than defaulted inside run_cellranger_batch.sh: DATA_DIR is the data root (expects renamed_fastq/ inside it, writes cellranger_out/ there), REF is the reference transcriptome. These are the values used for the thesis run; to replicate elsewhere, change these two lines (or export both before sbatch).
+
+cd "$SLURM_SUBMIT_DIR"
+bash run_cellranger_batch.sh
+# Run the parallel Cell Ranger batch within this allocation. Submit with 'sbatch submit_cellranger.slurm' FROM the 00_5_cellranger folder: SLURM copies this file to a spool directory, so "$0" does not point at the repo and cannot be used to locate run_cellranger_batch.sh; SLURM_SUBMIT_DIR (the directory sbatch was called from) is the reliable anchor.
