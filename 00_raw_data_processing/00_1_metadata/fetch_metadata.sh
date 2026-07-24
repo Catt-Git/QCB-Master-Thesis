@@ -8,6 +8,9 @@
 # OUTPUT: ena_full_metadata.tsv (one row per SRR, incl. header; fields: run_accession,sample_accession,sample_title,library_strategy,library_source,library_selection,library_name,experiment_title,fastq_md5,fastq_ftp)
 # Note on fastq_md5: these MD5s refer to the files AS SERVED BY ENA. Since the pipeline downloads via prefetch + fasterq-dump (which rebuilds FASTQ from the .sra, not the ENA file), local MD5s will NOT match these. Use fastq_md5 only as a source of truth for the expected file count per run.
 
+# Usage: bash fetch_metadata.sh
+# (no arguments/env vars; writes ena_full_metadata.tsv next to this script)
+
 set -euo pipefail
 # Exit on error, undefined variables, and pipe failures, essential for detecting data corruption or misconfiguration early in the pipeline.
 

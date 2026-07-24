@@ -7,6 +7,9 @@
 # INPUT: ../00_1_metadata/ena_full_metadata.tsv
 # OUTPUT: sample_map_gex_clean.tsv (all rows, incl. any UNPARSED) and sample_map_gex_final.tsv (correctly parsed rows only)
 
+# Usage: bash build_sample_map.sh
+# (optionally META=<path to ena_full_metadata.tsv> to override the default input)
+
 set -euo pipefail
 # Exit on error, undefined variables, and pipe failures, essential for detecting data corruption or misconfiguration early in the pipeline.
 

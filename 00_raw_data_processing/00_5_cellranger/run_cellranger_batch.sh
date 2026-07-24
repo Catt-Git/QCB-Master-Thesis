@@ -7,6 +7,9 @@
 # INPUT: renamed_fastq/ and renamed_fastq/unique_samples.txt
 # OUTPUT: cellranger_out/<sample>/outs/filtered_feature_bc_matrix.h5
 
+# Usage: DATA_DIR=<data root> REF=<path to refdata-cellranger-GRCh38-3.0.0> bash run_cellranger_batch.sh
+# (normally launched via 'sbatch submit_cellranger.slurm', not directly)
+
 set -uo pipefail
 # Exit on undefined variables and pipe failures; note -e is intentionally omitted so one failing sample does not abort the whole batch (failures are logged instead).
 

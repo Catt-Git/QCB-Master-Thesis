@@ -1,0 +1,64 @@
+name: benchmark-py-r
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - anndata
+  - scanpy
+  - scvi-tools
+  - h5py
+  - pandas
+  - numpy
+  - scipy
+  - scikit-learn
+  - scikit-misc         
+  - numba
+  - leidenalg
+  - python-igraph
+  - matplotlib
+  - seaborn
+  - ipython
+  - bbknn             
+  - rpy2                
+  - sra-tools
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.4
+
+  - r-base>=4.4
+  - r-seurat            
+  - r-seuratobject
+  - r-matrix
+  - r-rlang
+  - r-optparse
+  - r-remotes           
+  - bioconductor-singlecellexperiment
+  - bioconductor-batchelor         
+  - bioconductor-scater
+  - bioconductor-scran
+  - bioconductor-scuttle
+  - bioconductor-biocparallel
+  - bioconductor-biocgenerics
+  - bioconductor-summarizedexperiment
+  - bioconductor-s4vectors
+  - bioconductor-iranges
+  - bioconductor-delayedarray
+  - bioconductor-delayedmatrixstats
+  - bioconductor-biocneighbors
+  - bioconductor-biocsingular
+  - bioconductor-zellkonverter      
+  - pip
+  - pip:
+      - tqdm
+      - celltypist
+      - drvi-py                
+      - scib      
+      - scrublet # NEW ADDITION                
+      - gseapy                                  
+      - scanorama                 
+      - harmonypy                  
+      - anndata2ri                  
