@@ -1,3 +1,6 @@
+#     conda activate benchmark-py-r
+#     Rscript -e "remotes::install_github('theislab/kBET')"
+
 name: benchmark-py-r
 channels:
   - pytorch
@@ -50,15 +53,18 @@ dependencies:
   - bioconductor-delayedmatrixstats
   - bioconductor-biocneighbors
   - bioconductor-biocsingular
-  - bioconductor-zellkonverter      
+  - bioconductor-zellkonverter
+  - bioconductor-rhdf5
+  - bioconductor-hdf5array
   - pip
   - pip:
-      - tqdm
-      - celltypist
-      - drvi-py                
-      - scib      
-      - scrublet # NEW ADDITION                
-      - gseapy                                  
-      - scanorama                 
-      - harmonypy                  
-      - anndata2ri                  
+      - tqdm==4.68.4
+      - celltypist==1.7.1
+      - drvi-py==0.2.7
+      - scib==1.1.7
+      - scrublet==0.2.3
+      - gseapy==1.3.0
+      - scanorama==1.7.4
+      - harmonypy==2.0.0
+      - anndata2ri==2.0
+
