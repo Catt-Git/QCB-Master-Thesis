@@ -45,6 +45,8 @@ dependencies:
   - bioconductor-biocneighbors
   - bioconductor-biocsingular
   - bioconductor-zellkonverter
+  - bioconductor-rhdf5
+  - bioconductor-hdf5array
   - pip
   - pip:
       - drvi-py==0.2.7

@@ -1,17 +1,89 @@
+# Isolated legacy environment, used by one method only: scGen.
+#
+# Every pin below was established empirically by building the environment and
+# running environments/check_scgen_env.py until it exited 0. Four of them are not
+# obvious and must not be "modernised" without re-running that check.
+#
+# WHY CONDA ONLY PROVIDES PYTHON HERE
+# The previous version of this file declared numpy/pandas/scanpy on the conda side
+# and scgen/scvi-tools under `pip:`. pip then resolved its own dependency tree and
+# installed numpy 2.0.2 over the conda-managed numpy 1.23, leaving pandas 1.5.3
+# (built against the numpy 1.x ABI) to fail with "numpy.dtype size changed".
+# A later repair attempt made it worse: conda removed the files it had on record
+# while pip's files stayed, leaving a numpy/ directory with no __init__.py. That
+# imports as an empty namespace package, so `import numpy` succeeds and the error
+# only surfaces later, somewhere else. Keeping every Python package on one side
+# removes the shared ownership that caused this.
+#
+# WHY scvi-tools IS 0.19 AND NOT 0.20
+# The previous file pinned scvi-tools >=0.20,<0.21, which cannot work: scGen 2.1.0
+# does `from scvi._compat import Literal`, and 0.20 replaced that symbol with a
+# class whose body raises DeprecationWarning on import. 0.19.0 is the last release
+# where the import succeeds, and scGen 2.1.0 is the latest release, so the fix has
+# to come from this side.
+#
+# WHY pip IS HELD BELOW 24.1
+# scvi-tools 0.19.0 requires pytorch-lightning >=1.7,<1.8, and every 1.7.x wheel
+# declares `torch (>=1.9.*)`, which is not valid PEP 440. pip 24.1 started
+# rejecting such metadata, so a current pip cannot install this stack at all and
+# fails with a misleading "no matching distribution" error.
+#
+# BUILD (from scratch, do not `conda env update` this one)
+#     conda env remove -n scgen-py
+#     conda env create -f environments/scgen-py.yml
+#     conda activate scgen-py
+#     python environments/check_scgen_env.py    # must exit 0
+
 name: scgen-py
 channels:
   - conda-forge
-  - bioconda
 dependencies:
   - python=3.9
-  - pip
-  - anndata=0.8
-  - scanpy=1.9
-  - numpy=1.23        
-  - pandas<2           
-  - h5py
-  - scipy
-  - scikit-learn
+  # See "WHY pip IS HELD BELOW 24.1" above. conda pins the installer itself so a
+  # fresh env never starts with a pip that refuses the legacy wheels.
+  - pip<24.1
   - pip:
-      - "scvi-tools>=0.20,<0.21"
+      # --- ABI-critical pair -------------------------------------------------
+      # numpy 1.26.4 is the last 1.x release with cp39 wheels; pandas 1.5.3 is
+      # built against the numpy 1.x ABI. Neither may be moved without the other.
+      - numpy==1.26.4
+      - pandas==1.5.3
+      - scipy==1.13.1
+      - scikit-learn==1.6.1
+      - numba==0.60.0
+
+      # --- single-cell I/O ---------------------------------------------------
+      # anndata 0.10.9 renamed AlignedViewMixin -> AlignedView in
+      # anndata._core.aligned_mapping, which breaks mudata 0.2.x (a hard
+      # dependency of scvi-tools). 0.10.8 is the last version mudata can import.
+      # scGen itself also calls AnnData.concatenate, removed in anndata 0.13.
+      - anndata==0.10.8
+      - mudata==0.2.4
+      - scanpy==1.9.8
+      - h5py==3.14.0
+
+      # --- torch stack -------------------------------------------------------
+      # pytorch-lightning is dictated by scvi-tools 0.19.0 (>=1.7,<1.8).
+      - torch==2.0.1
+      - pytorch-lightning==1.7.7
+      - torchmetrics==0.11.4
+      - pyro-ppl==1.8.4
+
+      # --- jax stack ---------------------------------------------------------
+      # scvi-tools imports jax at module level. 0.4.30 is the last release with
+      # cp39 support.
+      - jax==0.4.30
+      - jaxlib==0.4.30
+      - flax==0.8.5
+      - chex==0.1.90
+      - optax==0.2.4
+      - numpyro==0.19.0
+
+      # --- the method itself -------------------------------------------------
+      # requests is imported by scvi.data._built_in_data._cellxgene but is not
+      # declared as a dependency, so it has to be listed here.
+      - scvi-tools==0.19.0
       - scgen==2.1.0
+      - requests==2.32.5
+      - adjustText==1.4.0
+      - seaborn==0.13.2
