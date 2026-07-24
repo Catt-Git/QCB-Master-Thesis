@@ -1,9 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=h5ad_concat
-#SBATCH --partition=long
+#SBATCH --partition=normal
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=64
-#SBATCH --mem=450G
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=150G
 #SBATCH --output=%x_%j.out
 #SBATCH --error=%x_%j.err
 
@@ -16,11 +16,11 @@ echo "Job name: $SLURM_JOB_NAME"; echo "Job ID: $SLURM_JOB_ID"
 
 module load Miniconda3/202411
 eval "$(/soft/system/software/Miniconda3/202411/bin/conda shell.bash hook)"
-conda activate scrna
-# Load Miniconda and activate the scrna environment (cellranger module NOT needed here, the merge only reads the .h5 files).
+conda activate catalano_env
+# Load Miniconda and activate the catalano_env (cellranger module NOT needed here, the merge only reads the .h5 files).
 
 which python3
-# Sanity check: confirm python3 comes from the scrna environment.
+# Sanity check: confirm python3 comes from the catalano_env.
 
 export DATA_DIR="/users/genomics/albertoc/Tesi/hopes_and_dreams"
 # Site-specific data root, set here at the entry point rather than defaulted inside the script. This is the value used for the thesis run; to replicate elsewhere, change this line (or export DATA_DIR before sbatch).

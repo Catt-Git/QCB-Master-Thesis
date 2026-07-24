@@ -1,0 +1,17 @@
+name: scgen-py
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.9
+  - pip
+  - anndata=0.8
+  - scanpy=1.9
+  - numpy=1.23        
+  - pandas<2           
+  - h5py
+  - scipy
+  - scikit-learn
+  - pip:
+      - "scvi-tools>=0.20,<0.21"
+      - scgen==2.1.0

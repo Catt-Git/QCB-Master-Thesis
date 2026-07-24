@@ -105,7 +105,7 @@ def main():
     # are already unique (prefixed above); merge='same' propagates .var columns shared
     # across samples (notably .var['gene_ids'], the Ensembl IDs) into the combined object.
 
-    combined.write_h5ad(args.out)
+    combined.write_h5ad(args.out, compression="gzip")
     print(f"\nFinal total: {combined.n_obs} cells, {combined.n_vars} genes")
     print(f"Saved to: {args.out}")
     # Write the combined object and report its final dimensions.
