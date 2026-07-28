@@ -42,7 +42,7 @@ The `.h5ad` chain under `$DATA_DIR` (each step consumes the previous file):
     ├── all_samples_combined_scrublet_norm_cc.h5ad                 # 01_4  (+ cell cycle)
     ├── all_samples_combined_scrublet_norm_cc_annotated.h5ad       # 01_4  (+ CellTypist; fraction recoded in place)
     ├── all_samples_combined_scrublet_norm_cc_annotated_reduced.h5ad  # 01_5  (+ HVG/PCA/neighbors/UMAP)
-    ├── shiao_hvg_2k_unintegrated.csv                              # 01_5  (selected HVG symbols)
+    ├── shiao_hvg_2k_unintegrated_list.csv                              # 01_5  (selected HVG symbols)
     └── shiao.h5ad                                                 # 01_5  (+ Leiden) — definitive unintegrated object
 
 Auxiliary inputs also expected under `$DATA_DIR`:

@@ -1,3 +1,5 @@
+# #     Rscript -e "remotes::install_github('theislab/kBET')"
+
 name: benchmark-hpc
 channels:
   - conda-forge
@@ -30,6 +32,19 @@ dependencies:
   - r-rlang
   - r-optparse
   - r-remotes
+  # funky heatmap (02_4_metrics/make_summary_table.R -> utils/plotSingleTaskRNA.R)
+  - r-dynutils
+  - r-hmisc
+  - r-ggimage
+  - r-tibble
+  - r-rcolorbrewer
+  - r-stringr
+  - r-plyr
+  - r-ggplot2
+  - r-cowplot
+  - r-dplyr
+  - r-scales
+  - r-ggforce
   - bioconductor-batchelor
   - bioconductor-singlecellexperiment
   - bioconductor-scater
@@ -52,9 +67,9 @@ dependencies:
       - drvi-py==0.2.7
       - scib==1.1.7
       - scanorama
-      - harmonypy
+      - harmony-pytorch
       - celltypist
       - anndata2ri
       - gseapy
       - tqdm
-      - scrublet # NEW ADDITION
+      - scrublet 

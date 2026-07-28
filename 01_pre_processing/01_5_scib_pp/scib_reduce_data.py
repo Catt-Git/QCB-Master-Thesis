@@ -13,7 +13,7 @@ Input : $DATA_DIR/all_samples_combined_scrublet_norm_cc_annotated.h5ad
 Output: $DATA_DIR/all_samples_combined_scrublet_norm_cc_annotated_reduced.h5ad
         adds .var['highly_variable'] (binary, batch-aware), .obsm['X_pca'],
         neighbors graph, .obsm['X_umap']
-        $DATA_DIR/shiao_hvg_2k_unintegrated.csv
+        $DATA_DIR/shiao_hvg_2k_unintegrated_list.csv
         gene symbol + Ensembl id of the selected HVGs (one row per gene)
 
 Local usage:
@@ -92,7 +92,7 @@ print(f"HVGs selected: {int(adata.var['highly_variable'].sum())}")
 # Save the selected HVGs for reuse outside this AnnData (e.g. restricting other objects/tools
 # to the same feature set): plain list of gene symbols, one per line, no header.
 hvg_genes = adata.var_names[adata.var["highly_variable"]]
-HVG_CSV_PATH = os.path.join(DATA_DIR, "shiao_hvg_2k_unintegrated.csv")
+HVG_CSV_PATH = os.path.join(DATA_DIR, "shiao_hvg_2k_unintegrated_list.csv")
 pd.Series(hvg_genes).to_csv(HVG_CSV_PATH, index=False, header=False)
 print(f"Wrote {len(hvg_genes)} HVGs to {HVG_CSV_PATH}")
 
