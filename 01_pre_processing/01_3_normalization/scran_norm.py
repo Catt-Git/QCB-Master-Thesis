@@ -90,19 +90,14 @@ assert n_zero_genes == 0, f"{n_zero_genes} zero-count genes present; run sc.pp.f
 
 print("Normalizing data (scran via scib)...", flush=True)
 # scib scran wrapper: quickCluster -> computeSumFactors -> logNormCounts.
-#   min_mean=0.1     : computeSumFactors min.mean; standard scib default for droplet data
-#   log=True         : return log1p-transformed normalized expression in .X
-#   precluster=True  : run quickCluster (leiden) before size-factor estimation
-#   cluster_method='leiden' : leiden preclustering (louvain deprecated)
-#   sparsify=False   : keep .X storage as-is, no forced conversion
 # Raw counts remain in .layers['counts']; size factors written to .obs['size_factors'].
 scib.preprocessing.normalize(
     adata,
-    min_mean=0.1,
-    log=True,
-    precluster=True,
-    cluster_method="leiden",
-    sparsify=False,
+    min_mean=0.1, # computeSumFactors min.mean; standard scib default for droplet data
+    log=True, # return log1p-transformed normalized expression in .X
+    precluster=True, # run quickCluster (leiden) before size-factor estimation
+    cluster_method="leiden", # leiden preclustering (louvain deprecated)
+    sparsify=False, # keep .X storage as-is, no forced conversion
 )
 
 # scib.preprocessing.normalize() leaves two footprints we don't want in the output:

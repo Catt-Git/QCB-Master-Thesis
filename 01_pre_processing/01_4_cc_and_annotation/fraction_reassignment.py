@@ -8,17 +8,17 @@ to a BIOLOGICAL immune label taken from the CellTypist annotation: each cell bec
 `dataset_origin`, so the sort-vs-lineage mismatch stays inspectable downstream.
 
 Motivation: a LARGE share of cells were annotated by CellTypist as the OPPOSITE lineage of their
-CD45 sort - this is not a handful of outliers. In this dataset ~10.7% of the CD45+ (immune-sorted)
-cells (~52k / ~490k) get a non-immune cell_type, and ~4.4% of the CD45- (non_immune-sorted) cells
-get an immune cell_type. Keeping `fraction` equal to the sort would therefore mislabel tens of
-thousands of cells; recoding it from the annotation makes `fraction` reflect biology, while the
-raw sort remains available in `dataset_origin` for QC of that very mismatch.
+CD45 sort - this is not a handful of outliers. From 01_preprocessing/01_6_visualizatoin it's possible to
+see that in this dataset ~10.7% of the CD45+ (immune-sorted) cells (~52k / ~490k) get a non-immune cell_type
+and ~4.4% of the CD45- (non_immune-sorted) cells get an immune cell_type. Keeping `fraction` equal to the sort
+would therefore mislabel tens of thousands of cells; recoding it from the annotation makes `fraction` 
+reflect biology, while the raw sort remains available in `dataset_origin` for QC of that very mismatch.
 
 The immune / non-immune lineage sets are specific to the CellTypist model used in
 celltypist_annotation.py (Cells_Adult_Breast.pkl, Kumar et al. 2023 adult breast atlas, 58 labels).
 
 Note: 'Lymph-*' are LYMPHATIC ENDOTHELIAL subtypes in this atlas's nomenclature (not lymphocytes),
-so they are non-immune -- incl. 'Lymph-immune', an immune-interacting lymphatic endothelial subtype.
+so they are non-immune.
 
 Input : $DATA_DIR/all_samples_combined_scrublet_norm_cc_annotated.h5ad
         Output of 01_4_celltypist_annotation. Must contain .obs['cell_type'] and .obs['fraction'].
