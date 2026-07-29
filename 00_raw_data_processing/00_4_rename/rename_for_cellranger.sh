@@ -7,6 +7,8 @@
 # INPUT: ../00_2_sample_mapping/sample_map_gex_final.tsv (col1=SRR, col6=sample_id) and $DATA_DIR/fastq_raw with the SRR*_1/_2.fastq.gz files
 # OUTPUT: $DATA_DIR/renamed_fastq/ and $DATA_DIR/renamed_fastq/unique_samples.txt (input to Cell Ranger)
 # Usage: DATA_DIR=/path/with/space bash rename_for_cellranger.sh
+# On the cluster (how the thesis run was done) this is launched through 'sbatch submit_rename.slurm',
+# which sets DATA_DIR and gives the copy its own allocation (~2.4TB of rsync).
 
 set -euo pipefail
 # Exit on error, undefined variables, and pipe failures, essential for detecting data corruption or misconfiguration early in the pipeline.
@@ -36,10 +38,15 @@ awk -F'\t' -v src="$SOURCE_DIR" -v dest="$DEST_DIR" '{
 echo "Commands generated: $(wc -l < "$RENAME_COMMANDS") (expected: 2x number of samples)"
 # Report how many copy operations were generated as a sanity check.
 
+RSYNC_OPTS=(-ah)
+[ -t 1 ] && RSYNC_OPTS+=(--progress)
+# --progress only when stdout is a terminal: it redraws a percentage line with carriage returns, which is useful interactively but turns a SLURM .out file into megabytes of unreadable partial lines.
+
 while IFS=$'\t' read -r original new; do
-    rsync -ah --progress "$original" "$new"
+    echo "$(basename "$original") -> $(basename "$new")"
+    rsync "${RSYNC_OPTS[@]}" "$original" "$new"
 done < "$RENAME_COMMANDS"
-# Copy each file to its new name with rsync (progress shown, resume-safe).
+# Copy each file to its new name with rsync (resume-safe), printing one line per file so the job log records what was copied.
 
 cd "$DEST_DIR"
 ls *_R1_001.fastq.gz | sed 's/_S1_L001_R1_001.fastq.gz//' | sort -u > unique_samples.txt

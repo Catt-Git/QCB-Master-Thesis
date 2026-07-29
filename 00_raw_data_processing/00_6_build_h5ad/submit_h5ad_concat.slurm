@@ -8,7 +8,12 @@
 #SBATCH --error=%x_%j.err
 
 # submit_h5ad_concat.slurm
-# SLURM wrapper that activates the scrna environment and runs build_combined_h5ad.py to merge the Cell Ranger .h5 outputs into a single AnnData.
+# SLURM wrapper for step 6: runs build_requested_metadata.py (rebuilds the small sample_metadata_final.tsv from the sample map) and then build_combined_h5ad.py, which merges the 149 Cell Ranger .h5 outputs into a single AnnData.
+# The two scripts are chained here rather than submitted separately because the metadata builder is a sub-second text transformation of a repo TSV: a job of its own would spend more time queueing than running, and keeping them together guarantees the metadata read by the merge is the one derived from the sample map actually present in this clone.
+#
+# Usage (submit FROM the 00_6_build_h5ad folder, after Cell Ranger):
+#   sbatch submit_h5ad_concat.slurm
+#   sbatch --dependency=afterok:<cellranger_jobid> submit_h5ad_concat.slurm # chain it to step 5
 
 hostname; date
 echo "Job name: $SLURM_JOB_NAME"; echo "Job ID: $SLURM_JOB_ID"
@@ -22,11 +27,16 @@ conda activate catalano_env
 which python3
 # Sanity check: confirm python3 comes from the catalano_env.
 
-export DATA_DIR="/users/genomics/albertoc/Tesi/hopes_and_dreams"
-# Site-specific data root, set here at the entry point rather than defaulted inside the script. This is the value used for the thesis run; to replicate elsewhere, change this line (or export DATA_DIR before sbatch).
+export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams}"
+# Site-specific data root, set here at the entry point rather than defaulted inside the script. This is the value used for the thesis run; to replicate elsewhere change this line, or pass it at submission with 'sbatch --export=ALL,DATA_DIR=...' (the ${VAR:-default} form lets the submitted value win).
 
 cd "$SLURM_SUBMIT_DIR"
 # Submit with 'sbatch submit_h5ad_concat.slurm' FROM the 00_6_build_h5ad folder: SLURM copies this file to a spool directory, so "$0" cannot be used to locate build_combined_h5ad.py; SLURM_SUBMIT_DIR (the directory sbatch was called from) is the reliable anchor.
+
+python3 build_requested_metadata.py \
+    --sample-map ../00_2_sample_mapping/sample_map_gex_final.tsv \
+    --out        sample_metadata_final.tsv
+# Rebuild the per-sample metadata table (srr, sample_id, batch, cohort, treatment, fraction, dataset_origin, response) from the sample map. Both files are small TSVs kept IN the repo, so this touches no data under DATA_DIR; it runs here to keep the whole phase on the cluster and to make sure the table the merge is about to read matches the current sample map.
 
 python3 build_combined_h5ad.py \
     --cellranger-dir "$DATA_DIR/cellranger_out" \

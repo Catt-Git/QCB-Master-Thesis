@@ -9,6 +9,9 @@
 # OUTPUT: <SRR>_1.fastq.gz (barcode+UMI, 26bp effective) and <SRR>_2.fastq.gz (cDNA) in $DATA_DIR/fastq_raw
 # REQUIREMENTS: sra-tools (prefetch, fasterq-dump), pigz, and ~2.4TB free under $DATA_DIR
 # Usage: DATA_DIR=/path/with/space bash download_fastq.sh
+# On the cluster (how the thesis run was done) this is not launched directly but through 'sbatch submit_download.slurm',
+# which turns the loop below into a SLURM array of one task per SRR and calls this script with SAMPLE_MAP pointing at a
+# one-line map. Running it by hand still works and downloads the whole list serially.
 
 set -euo pipefail
 # Exit on error, undefined variables, and pipe failures, essential for detecting data corruption or misconfiguration early in the pipeline.

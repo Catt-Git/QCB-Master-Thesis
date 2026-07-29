@@ -2,11 +2,17 @@
 
 # verify_integrity.sh
 # Post-download checks on the FASTQ files.
-# 1) gzip integrity of every FASTQ (the step that was missing when the corrupted ENA files went undetected).
-# 2) R1 and R2 read lengths, to confirm the expected structure and to establish which file is the barcode (R1) and which is the cDNA (R2): R1 (barcode+UMI+padding) is 101bp for most samples and 151bp for 2 samples (16bp barcode + 10bp UMI = 26bp effective, handled with --r1-length=26); R2 (cDNA) is the long biological read and starts with the 5'v1 TSO AAGCAGTGGTATCAAC.
+# 1) gzip integrity of every FASTQ.
+# 2) R1 and R2 read lengths, to confirm the expected structure and to establish which file is the barcode
+# (R1) and which is the cDNA (R2): R1 (barcode+UMI+padding) is 101bp for most samples and 151bp for 2 samples 
+# (16bp barcode + 10bp UMI = 26bp effective, handled with --r1-length=26); R2 (cDNA) is the long biological 
+# read and starts with the 5'v1 TSO AAGCAGTGGTATCAAC.
 
 # Usage: DATA_DIR=/path/with/space bash verify_integrity.sh
 # (or FASTQ_DIR=/explicit/folder bash verify_integrity.sh to check a different folder)
+# On the cluster (how the thesis run was done) this is launched through 'sbatch submit_verify_integrity.slurm',
+# which sets DATA_DIR, keeps a copy of the report and turns any CORRUPTED line into a non-zero exit
+# (this script always exits 0 by design, see below).
 
 set -uo pipefail
 # Exit on undefined variables and pipe failures;
@@ -20,7 +26,7 @@ cd "$FASTQ_DIR"
 echo "### 1) gzip integrity ###"
 for f in *.fastq.gz; do
     echo -n "$f: "
-    gzip -t "$f" && echo "OK" || echo "CORRUPTED - re-download (use utils/fetch_missing_sample.sh)"
+    gzip -t "$f" && echo "OK" || echo "CORRUPTED - re-download (on the cluster: resubmit that line of the download array, see README; locally: utils/fetch_missing_sample.sh)"
 done
 # Test each gzip archive; report OK or flag the file for re-download.
 

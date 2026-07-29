@@ -5,6 +5,10 @@
 # Used for the two samples with a corrupted ENA copy: P07_A_P (SRR26540980) and P10_C_P (SRR26541023). Both have 151bp reads (instead of 101bp) but process correctly with --r1-length=26. Before relaunching Cell Ranger on these, delete the failed run folder: rm -rf cellranger_out/P07_A_P cellranger_out/P10_C_P.
 
 # Usage: DATA_DIR=/path/with/space bash fetch_missing_sample.sh SRR26540980
+# On the cluster prefer resubmitting that run's index of the download array, which does the same work inside an allocation and with the same code path as the original download:
+#   idx=$(grep -n SRR26540980 ../00_2_sample_mapping/sample_map_gex_final.tsv | cut -d: -f1)
+#   cd ../00_3_download && sbatch --array=$idx submit_download.slurm
+# (delete the corrupted <SRR>_1/_2.fastq.gz first, otherwise the run is skipped as already present)
 
 set -euo pipefail
 # Exit on error, undefined variables, and pipe failures, essential for detecting data corruption or misconfiguration early in the pipeline.
