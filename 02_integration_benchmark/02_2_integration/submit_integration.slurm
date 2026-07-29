@@ -45,6 +45,16 @@ HVG_RDS="$DATA_DIR/shiao_hvg_2k_unintegrated_list.rds"
 
 has_embed() { case ",$1," in *,embed,*) return 0 ;; *) return 1 ;; esac }
 
+# Where a trained method checkpoints its model: its own flat per-method directory,
+# so 02_integration/ holds only the integrated objects the metrics read. Same
+# layout as run_all.sh's local mode. Empty for the untrained methods.
+set_model_arg() {
+  model_arg=()
+  case "$1" in
+    scvi|scanvi|scgen) model_arg=(--model-dir "$DATA_DIR/02_${1}") ;;
+  esac
+}
+
 # Pick this task's grid row (index = row number, matching run_all.sh's expansion).
 JOB=$(awk -F'\t' 'NR>1 && $1!="" { idx++; if (idx == '"$SLURM_ARRAY_TASK_ID"') print }' "$GRID")
 [ -n "$JOB" ] || { echo "no grid row for array index $SLURM_ARRAY_TASK_ID" >&2; exit 1; }
@@ -77,11 +87,13 @@ conda activate "$ENVUSE"
 
 case "$language" in
   python)
+    set_model_arg "$method"
     if [ "$method" = "scgen" ]; then
-      python "$SCRIPT_DIR/run_scgen.py" -i "$in_path" -o "$out_path"
+      python "$SCRIPT_DIR/run_scgen.py" -i "$in_path" -o "$out_path" "${model_arg[@]}"
     else
       emb_arg=(); has_embed "$types" && emb_arg=(--emb-out "$emb_path")
-      python "$SCRIPT_DIR/run_integration.py" -m "$method" -i "$in_path" -o "$out_path" "${emb_arg[@]}"
+      python "$SCRIPT_DIR/run_integration.py" -m "$method" -i "$in_path" -o "$out_path" \
+        "${emb_arg[@]}" "${model_arg[@]}"
     fi
     ;;
   R)

@@ -3,7 +3,8 @@
 
 One function per method, all with the same shape:
 
-    method(adata, batch_key, label_key=None, seed=0) -> AnnData
+    method(adata, batch_key, label_key=None, seed=0, model_dir=None,
+           model_prefix="", retrain=False) -> AnnData
 
 so the dispatcher in run_integration.py can call them uniformly. Each returns
 the object carrying whatever the metrics need for its output type:
@@ -12,18 +13,29 @@ the object carrying whatever the metrics need for its output type:
     embed (harmony, scvi, scanvi) -> obsm['X_emb']
     full + embed (scanorama)      -> corrected .X and obsm['X_emb']
 
-BBKNN, Harmony, scVI and scANVI are thin wrappers over scib.integration: they
-modify the object in place and preserve cell order, so nothing extra is needed.
+BBKNN and Harmony are thin wrappers over scib.integration: they modify the object
+in place and preserve cell order, so nothing extra is needed. model_dir /
+model_prefix / retrain are ignored by everything except scVI and scANVI.
 
 Scanorama is reimplemented here and NOT taken from scib.integration, because
 `anndata.AnnData.concatenate` was removed in anndata 0.13. This version recreates
 what the scib wrapper did, but preserves the input cell order by preallocating the
 output arrays and writing each batch's corrected block back to its original row.
 
+scVI and scANVI are reimplemented too, for a different reason: they are the two
+long trainings of the phase (13 epochs over 619k cells for scVI, and scANVI redoes
+those 13 before its own 4), and scib.integration gives no access to the fitted
+model, so a failure anywhere after training throws the training away. The versions
+below reproduce scib's call sequence and parametrisation exactly, adding only a
+checkpoint to model_dir. See _fit_or_load_scvi for the details that must stay in
+step with scib.
+
 scib_compat must be imported by the caller before scib; this module assumes it.
 """
 
 from __future__ import annotations
+
+import os
 
 import numpy as np
 import pandas as pd
@@ -31,8 +43,11 @@ import scipy.sparse as sp
 import scanpy as sc
 import scib
 
+from model_paths import has_saved_model, saved_model
 
-def bbknn(adata, batch_key, label_key=None, seed=0):
+
+def bbknn(adata, batch_key, label_key=None, seed=0, model_dir=None,
+          model_prefix="", retrain=False):
     """BBKNN: batch-balanced kNN graph. Output type: knn.
 
     scib.integration.bbknn recomputes PCA and returns a copy with the corrected
@@ -42,7 +57,8 @@ def bbknn(adata, batch_key, label_key=None, seed=0):
     return scib.integration.bbknn(adata, batch_key)
 
 
-def harmony(adata, batch_key, label_key=None, seed=0):
+def harmony(adata, batch_key, label_key=None, seed=0, model_dir=None,
+            model_prefix="", retrain=False):
     """Harmony (harmony-pytorch). Output type: embed.
 
     scib.integration.harmony imports `from harmony import harmonize`.
@@ -53,35 +69,127 @@ def harmony(adata, batch_key, label_key=None, seed=0):
     return scib.integration.harmony(adata, batch_key)
 
 
-def scvi(adata, batch_key, label_key=None, seed=0):
+def _fit_or_load_scvi(adata, batch_key, model_dir, prefix, retrain, max_epochs=None):
+    """Train an SCVI, or reload one from model_dir. Returns (model, net_adata).
+
+    This is scib.integration.scvi's body, minus the `return_model` branch and plus
+    the checkpoint. Everything that affects the result is kept identical to scib,
+    so the run stays comparable with a scib-run benchmark:
+
+      * counts are read from layers['counts'] (hence the unscaled input);
+      * n_latent=30, n_hidden=128, n_layers=2, gene_likelihood='nb' -- scib's
+        values, from the scVI tutorials, not scvi-tools' own defaults;
+      * train_size=1.0 (no validation split, no early stopping);
+      * max_epochs=None leaves scvi-tools' heuristic in charge, which is 13 epochs
+        at 619k cells -- the same formula scib applies for the scANVI path;
+      * setup_anndata runs on a copy, so the caller's object never picks up the
+        registry scvi-tools writes into .uns.
+    """
+    from scvi.model import SCVI
+
+    scib.utils.check_sanity(adata, batch_key, None)
+    if "counts" not in adata.layers:
+        raise TypeError("adata has no layers['counts']; scVI needs raw counts")
+
+    net_adata = adata.copy()
+    SCVI.setup_anndata(net_adata, layer="counts", batch_key=batch_key)
+
+    if not retrain and has_saved_model(model_dir, prefix):
+        print(f"[load] scVI model from {saved_model(model_dir, prefix)} "
+              "(--retrain to ignore)", flush=True)
+        return SCVI.load(model_dir, adata=net_adata, prefix=prefix), net_adata
+
+    vae = SCVI(net_adata, gene_likelihood="nb", n_layers=2, n_latent=30, n_hidden=128)
+    train_kwargs = {"train_size": 1.0}
+    if max_epochs is not None:
+        train_kwargs["max_epochs"] = max_epochs
+    vae.train(**train_kwargs)
+
+    if model_dir is not None:
+        print(f"[save] scVI model -> {saved_model(model_dir, prefix)}", flush=True)
+        vae.save(model_dir, prefix=prefix, overwrite=True)
+    return vae, net_adata
+
+
+def scvi(adata, batch_key, label_key=None, seed=0, model_dir=None,
+         model_prefix="", retrain=False):
     """scVI. Output type: embed.
 
-    Reads raw counts from layers['counts'] (scib calls setup_anndata(layer=
-    'counts')), so the input must be the unscaled object with that layer intact.
-    Writes the latent space to obsm['X_emb'].
+    Reads raw counts from layers['counts'], so the input must be the unscaled
+    object with that layer intact. Writes the latent space to obsm['X_emb'].
     """
     import scvi as scvi_tools
 
     scvi_tools.settings.seed = seed
-    return scib.integration.scvi(adata, batch_key)
+    vae, _ = _fit_or_load_scvi(adata, batch_key, model_dir, model_prefix, retrain)
+    adata.obsm["X_emb"] = vae.get_latent_representation()
+    return adata
 
 
-def scanvi(adata, batch_key, label_key=None, seed=0):
+def scanvi(adata, batch_key, label_key=None, seed=0, model_dir=None,
+           model_prefix="", retrain=False):
     """scANVI. Output type: embed.
 
     Semi-supervised: needs the cell-type labels as well as the batch. Like scVI
     it reads layers['counts'] and writes obsm['X_emb'].
+
+    Two trainings, checkpointed separately in model_dir (<run_id>_scvi_model.pt
+    then <run_id>_scanvi_model.pt), because the first is the expensive one: scANVI
+    initialises from a full scVI fit, so a crash in the short second stage would
+    otherwise redo the long first. A resume reloads whichever stages are on disk.
+
+    Epoch counts follow scib.integration.scanvi rather than scvi-tools' defaults:
+    n_epochs_scVI = min(round((20000 / n_obs) * 400), 400) and
+    n_epochs_scANVI = min(10, max(2, round(n_epochs_scVI / 3))), which at 619k
+    cells is 13 then 4.
     """
     if label_key is None:
         raise ValueError("scanvi requires label_key (the cell-type annotation)")
 
     import scvi as scvi_tools
+    from scvi.model import SCANVI
 
     scvi_tools.settings.seed = seed
-    return scib.integration.scanvi(adata, batch_key, label_key)
+
+    n_epochs_scvi = int(np.min([round((20000 / adata.n_obs) * 400), 400]))
+    n_epochs_scanvi = int(np.min([10, np.max([2, round(n_epochs_scvi / 3.0)])]))
+
+    # One prefix per stage, both in the same flat directory.
+    scvi_prefix = f"{model_prefix}scvi_"
+    scanvi_prefix = f"{model_prefix}scanvi_"
+
+    # Stage 2 already on disk: the scVI stage need not be reloaded at all, since
+    # SCANVI.load rebuilds the full model from its own checkpoint.
+    if not retrain and has_saved_model(model_dir, scanvi_prefix):
+        print(f"[load] scANVI model from {saved_model(model_dir, scanvi_prefix)} "
+              "(--retrain to ignore)", flush=True)
+        net_adata = adata.copy()
+        SCANVI.setup_anndata(net_adata, layer="counts", batch_key=batch_key,
+                             labels_key=label_key, unlabeled_category="UnknownUnknown")
+        scanvae = SCANVI.load(model_dir, adata=net_adata, prefix=scanvi_prefix)
+        adata.obsm["X_emb"] = scanvae.get_latent_representation()
+        return adata
+
+    vae, _ = _fit_or_load_scvi(adata, batch_key, model_dir, scvi_prefix, retrain,
+                               max_epochs=n_epochs_scvi)
+
+    scanvae = SCANVI.from_scvi_model(
+        scvi_model=vae,
+        labels_key=label_key,
+        unlabeled_category="UnknownUnknown",  # anything definitely not in the data
+    )
+    scanvae.train(max_epochs=n_epochs_scanvi, train_size=1.0)
+
+    if model_dir is not None:
+        print(f"[save] scANVI model -> {saved_model(model_dir, scanvi_prefix)}", flush=True)
+        scanvae.save(model_dir, prefix=scanvi_prefix, overwrite=True)
+
+    adata.obsm["X_emb"] = scanvae.get_latent_representation()
+    return adata
 
 
-def scanorama(adata, batch_key, label_key=None, seed=0):
+def scanorama(adata, batch_key, label_key=None, seed=0, model_dir=None,
+              model_prefix="", retrain=False):
     """Scanorama, reimplemented to preserve cell order. Output types: full + embed.
 
     Corrects each batch with scanorama.correct_scanpy and writes the results back
