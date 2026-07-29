@@ -39,8 +39,14 @@ mkdir -p logs
 INTEGRATION_ENV="${INTEGRATION_ENV:-catalano_env}"
 SCGEN_ENV="${SCGEN_ENV:-scgen-py}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SLURM copies this file to the node's spool directory before running it, so
+# "$0"/BASH_SOURCE point there and NOT at the repo - they cannot locate
+# benchmark_grid.tsv or the sibling dispatchers. run_all.sh exports
+# INTEGRATION_DIR; SLURM_SUBMIT_DIR (where sbatch was called from) covers a
+# direct `sbatch` issued from 02_2_integration/, as phase 00 does.
+SCRIPT_DIR="${INTEGRATION_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 GRID="$SCRIPT_DIR/../benchmark_grid.tsv"
+[ -f "$GRID" ] || { echo "grid not found: $GRID (set INTEGRATION_DIR, or sbatch from 02_2_integration/)" >&2; exit 1; }
 HVG_RDS="$DATA_DIR/shiao_hvg_2k_unintegrated_list.rds"
 
 has_embed() { case ",$1," in *,embed,*) return 0 ;; *) return 1 ;; esac }
@@ -81,9 +87,15 @@ mkdir -p "$(dirname "$out_path")" "$(dirname "$emb_path")"
 
 echo ">>> [$SLURM_ARRAY_TASK_ID] $run_id  ($method, $language, env=$ENVUSE)"
 
+# `set -u` off across the whole conda block, the shell hook included: the hook
+# auto-activates `base`, which sources this Miniconda's activate.d/openjdk_activate.sh,
+# and that script expands ${JAVA_HOME} before defining it - fatal under -u, before
+# `conda activate` is even reached. Same guard as conda_guarded() in run_all.sh.
+set +u
 module load Miniconda3/202411
 eval "$(/soft/system/software/Miniconda3/202411/bin/conda shell.bash hook)"
 conda activate "$ENVUSE"
+set -u
 
 case "$language" in
   python)

@@ -32,8 +32,14 @@ ENV="${METRICS_ENV:-catalano_env}"
 TASK="shiao"
 BATCH_KEY="cohort"; LABEL_KEY="cell_type"; ORGANISM="human"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# SLURM copies this file to the node's spool directory before running it, so
+# "$0"/BASH_SOURCE point there and NOT at the repo - they cannot locate
+# benchmark_grid.tsv or the sibling scripts. run_all_metrics.sh exports
+# METRICS_DIR; SLURM_SUBMIT_DIR (where sbatch was called from) covers a direct
+# `sbatch` issued from 02_4_metrics/, as phase 00 does.
+SCRIPT_DIR="${METRICS_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 GRID="$SCRIPT_DIR/../benchmark_grid.tsv"
+[ -f "$GRID" ] || { echo "grid not found: $GRID (set METRICS_DIR, or sbatch from 02_4_metrics/)" >&2; exit 1; }
 ROOT="$DATA_DIR/02_metrics"
 
 # Expand the grid into one line per (run, type): the SLURM_ARRAY_TASK_ID-th line
@@ -53,9 +59,15 @@ mkdir -p "$out_dir"
 
 echo ">>> [$SLURM_ARRAY_TASK_ID] $run_id  ($method, $type)"
 
+# `set -u` off across the whole conda block, the shell hook included: the hook
+# auto-activates `base`, which sources this Miniconda's activate.d/openjdk_activate.sh,
+# and that script expands ${JAVA_HOME} before defining it - fatal under -u, before
+# `conda activate` is even reached. Same guard as conda_guarded() in run_all_metrics.sh.
+set +u
 module load Miniconda3/202411
 eval "$(/soft/system/software/Miniconda3/202411/bin/conda shell.bash hook)"
 conda activate "$ENV"
+set -u
 
 python "$SCRIPT_DIR/check_integrations.py" -i "$int_path" -u "$ref_path" \
   --types "$type" -b "$BATCH_KEY" -l "$LABEL_KEY"
