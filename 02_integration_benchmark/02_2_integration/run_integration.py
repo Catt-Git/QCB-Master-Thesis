@@ -21,6 +21,11 @@ For embed outputs, obsm['X_emb'] is also written to <--emb-out>.npy: a small,
 durable artifact for the figures step that survives the integrated object being
 cleaned up.
 
+scVI and scANVI additionally checkpoint their trained model to --model-dir and
+reload it on a re-run: they are the long trainings of the phase, and a crash
+afterwards should not cost them again. See model_paths for where it lands and why
+it is not next to the integrated object.
+
 Usage:
   export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
   python run_integration.py -m harmony \
@@ -45,6 +50,7 @@ import scib_compat  # noqa: F401,E402
 
 import scanpy as sc  # noqa: E402
 import integration_methods as im  # noqa: E402
+from model_paths import default_model_dir, model_prefix  # noqa: E402
 
 
 def parse_args():
@@ -57,12 +63,20 @@ def parse_args():
     p.add_argument("--emb-out", default=None,
                    help="path to write obsm['X_emb'] as .npy (embed outputs)")
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--model-dir", default=None,
+                   help="directory scVI/scANVI save and reload their trained "
+                        "model in, as <run_id>_model.pt; ignored by the other "
+                        "methods [default: <DATA_DIR>/02_<method>]")
+    p.add_argument("--retrain", action="store_true",
+                   help="train even if --model-dir holds a saved model")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
     method = args.method
+    if args.model_dir is None:
+        args.model_dir = default_model_dir(args.output, method)
 
     print(f"[read] {args.input}", flush=True)
     adata = sc.read_h5ad(args.input)
@@ -79,7 +93,9 @@ def main():
     print(f"[run] {method} (batch_key={args.batch_key}, "
           f"label_key={args.label_key}, seed={args.seed})", flush=True)
     fn = im.METHODS[method]
-    integrated = fn(adata, args.batch_key, label_key=args.label_key, seed=args.seed)
+    integrated = fn(adata, args.batch_key, label_key=args.label_key, seed=args.seed,
+                    model_dir=args.model_dir, model_prefix=model_prefix(args.output),
+                    retrain=args.retrain)
 
     # Cell order is load-bearing for the metrics; verify it survived.
     assert np.array_equal(integrated.obs_names.to_numpy(), obs_names_before), (

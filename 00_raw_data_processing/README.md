@@ -11,18 +11,20 @@ straight onto the HPC storage and never touches the local machine, and every ste
 that storage. Each folder therefore holds the script that does the work plus the `.slurm` wrapper
 that is the actual entry point.
 
+Environment: `environments/benchmark-hpc.yml`, in the used HPC is called `catalano_env`.
+
 | # | Folder | Script | What it does | Where |
 |---|--------|--------|--------------|-------|
-| 1 | `00_1_metadata` | `fetch_metadata.sh` | Download ENA metadata for the BioProject | HPC (SLURM, `submit_metadata.slurm`) |
-| 2 | `00_2_sample_mapping` | `build_sample_map.sh` | SRR to patient/timepoint/fraction; exclude TCR/BCR and mouse | HPC (SLURM, `submit_sample_map.slurm`) |
-| 3 | `00_3_download` | `download_fastq.sh` | Download FASTQ via `prefetch` + `fasterq-dump` | HPC (SLURM, `submit_download.slurm`; array, 1 task = 1 SRR) |
-| 3b | `00_3_download` | `verify_integrity.sh` | Checks: `gzip -t`, R1/R2 lengths, 5' TSO | HPC (SLURM, `submit_verify_integrity.slurm`) |
-| 4 | `00_4_rename` | `rename_for_cellranger.sh` | Rename to `*_S1_L001_R[12]_001.fastq.gz`; build `unique_samples.txt` | HPC (SLURM, `submit_rename.slurm`) |
+| 1 | `00_1_metadata` | `fetch_metadata.sh` | Download ENA metadata for the BioProject | HPC (SLURM) |
+| 2 | `00_2_sample_mapping` | `build_sample_map.sh` | SRR to patient/timepoint/fraction; exclude TCR/BCR and mouse | HPC (SLURM) |
+| 3 | `00_3_download` | `download_fastq.sh` | Download FASTQ via `prefetch` + `fasterq-dump` | HPC (SLURM) |
+| 3b | `00_3_download` | `verify_integrity.sh` | Checks: `gzip -t`, R1/R2 lengths, 5' TSO | HPC (SLURM) |
+| 4 | `00_4_rename` | `rename_for_cellranger.sh` | Rename to `*_S1_L001_R[12]_001.fastq.gz`; build `unique_samples.txt` | HPC (SLURM) |
 | 5 | `00_5_cellranger` | `run_cellranger_batch.sh` | `cellranger count` in parallel (5x16 cores) | HPC (SLURM, `submit_cellranger.slurm`) |
-| 6 | `00_6_build_h5ad` | `build_requested_metadata.py` + `build_combined_h5ad.py` | Build `sample_metadata_final.tsv`, then concatenate the `.h5` into one AnnData | HPC (SLURM, `submit_h5ad_concat.slurm`, both in order) |
-| - | `utils` | `check_download_completeness.sh` | Check download completeness (R1 & R2) | HPC (shell, seconds — no allocation) |
-| - | `utils` | `check_cellranger_completeness.sh` | Check for missing sample matrices | HPC (shell, seconds — no allocation) |
-| - | `utils` | `fetch_missing_sample.sh` | Re-download a single corrupted/missing SRR | local (shell) — superseded on the cluster, see below |
+| 6 | `00_6_build_h5ad` | `build_requested_metadata.py` + `build_combined_h5ad.py` | Build `sample_metadata_final.tsv`, then concatenate the `.h5` into one AnnData | HPC (SLURM) |
+| - | `utils` | `check_download_completeness.sh` | Check download completeness (R1 & R2) | HPC (terminal) |
+| - | `utils` | `check_cellranger_completeness.sh` | Check for missing sample matrices | HPC (terminal) |
+| - | `utils` | `fetch_missing_sample.sh` | Re-download a single corrupted/missing SRR | local (terminal) — superseded on the cluster, see below |
 
 The two `utils` completeness checks are `stat` loops over 150 paths, no allocation
 needed. `fetch_missing_sample.sh` is the local way to repair a single run; on the cluster the same
@@ -32,7 +34,7 @@ re-fetched inside a proper allocation.
 
 ## Data location (`DATA_DIR`)
 
-The FASTQ and the Cell Ranger outputs (~2.4 TB) live **outside** the repo. Every script that touches
+The FASTQ and the Cell Ranger outputs (~2.4 TB) live outside the repo. Every script that touches
 them requires `DATA_DIR` and exits immediately with an explanatory message if it is unset.
 
 Expected layout under `$DATA_DIR` (the scripts create it as they go):
@@ -99,12 +101,9 @@ cd ../00_6_build_h5ad && sbatch --dependency=afterok:$cr submit_h5ad_concat.slur
 Chaining is convenient but unforgiving: `afterok` on the download array requires **all 150** tasks to
 succeed, and task 44 (`SRR26541168`, the empty run) never will. Either drop that index
 (`--array=1-43,45-150`) or submit the steps one at a time, checking each with `sacct` and the `utils`
-scripts before moving on — which is how the thesis run was actually done.
+scripts before moving on,  which is how the thesis run was actually done.
 
 Two steps reach the internet from a compute node: step 1 (ENA API) and step 3 (`prefetch` to NCBI).
-If the compute nodes are firewalled, those two have to run where outbound access exists (the login
-node for step 1, which is seconds of `wget`); everything else is storage-local.
-
 Allocations requested by the wrappers (for Methods; all CPU-only, the cluster has no GPU). The
 partition sets the wall-clock limit — `long` is 30 days — so the choice between `normal` and `long`
 is the only thing to get right.
@@ -120,11 +119,11 @@ is the only thing to get right.
 | 6 h5ad | `normal` | 8 | 150 G | 149 matrices held in memory at concat |
 
 
-## Key parameters (verbatim, ready for Materials & Methods)
+## Key parameters 
 
 **Download**
 - SRA Toolkit: `prefetch --max-size 100G` (the 20 GB default skips the 37-40 GB files)
-  + `fasterq-dump --include-technical --split-files` — `--include-technical` is
+  + `fasterq-dump --include-technical --split-files`, `--include-technical` is
   critical: without it the barcode read (R1) is dropped as a "technical read".
 - Run as a SLURM array, one task per run (`--array=1-150%4`, the index being the line of
   `sample_map_gex_final.tsv`), 8 cores and 16 GB per task on partition `long`.
@@ -137,7 +136,7 @@ is the only thing to get right.
   resubmitted with `sbatch --array=<idx>,<idx> submit_download.slurm` and picks up
   where it stopped. Task 44 (`SRR26541168`, the empty run) is expected to fail.
 - A task interrupted mid-`pigz` leaves a truncated `.fastq.gz` that the skip test still
-  accepts — this is what step 3b (`gzip -t`) catches afterwards. To repair, delete the
+  accepts, this is what step 3b (`gzip -t`) catches afterwards. To repair, delete the
   two files of that run and resubmit its index; the index of a given accession is
   `grep -n <SRR> 00_2_sample_mapping/sample_map_gex_final.tsv | cut -d: -f1`.
 
@@ -159,7 +158,6 @@ is the only thing to get right.
 
 - 150 mapped human GEX runs to 149 processable (P30_C_P / SRR26541168 excluded, empty).
 - 104 CD45+ (P, immune) + 46 CD45- (N, non_immune).
-- Only 16/34 patients have CD45- libraries deposited.
 - Response (author-provided, GSE246613): 9 R1 / 14 R2 / 11 NR across 34 patients.
 
 ## Critical methodological notes

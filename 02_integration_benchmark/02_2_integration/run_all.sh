@@ -27,6 +27,14 @@
 # Embeddings (embed / full,embed rows) are also written to
 # 02_embeddings/<run_id>.npy: small, durable artifacts for the figures step.
 #
+# The three trained methods checkpoint their fitted model to
+# 02_<method>/<run_id>_model.pt (02_scvi/, 02_scanvi/, 02_scgen/, alongside the
+# 02_drvi/ the DRVI notebook writes) and reload it instead of training again on a
+# re-run. Training is the long half of those runs and what follows it is the
+# fragile half, so a crash after training no longer costs the training. They are
+# kept out of 02_integration/ so that directory holds only the integrated objects
+# the benchmark scores. Delete a .pt to force that run to train again.
+#
 # Usage:
 #   export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 #   ./run_all.sh                        # local, every row
@@ -48,7 +56,7 @@
 # Usage examples:
 # Run all scaled locally
 # ./run_all.sh --scaling scaled
-# Run all scaled on slurm
+# Run all scaled on slurm server
 # ./run_all.sh --scaling scaled --slurm
 
 set -euo pipefail
@@ -75,6 +83,26 @@ if [ -n "${SEURAT_REFERENCE:-}" ]; then SEURAT_REF_ARG=(--reference "$SEURAT_REF
 conda_guarded() { set +u; conda "$@"; set -u; }
 in_list() { local x="$1"; shift; local e; for e in "$@"; do [ "$e" = "$x" ] && return 0; done; return 1; }
 
+# Called as `need_value "$@"` from an option branch: aborts if the option has no
+# value after it. Without it the `shift 2` fails and the script dies silently.
+need_value() {
+  [ $# -ge 2 ] || { echo "$1 needs a value" >&2; exit 1; }
+}
+
+# Abort unless every given value appears in column `col` of the grid.
+check_in_grid() {
+  local what="$1" col="$2"; shift 2
+  [ $# -gt 0 ] || return 0
+  local valid; valid="$(awk -F'\t' -v c="$col" 'NR>1 && $1!="" { print $c }' "$GRID" | sort -u)"
+  local v
+  for v in "$@"; do
+    if ! grep -qxF -- "$v" <<< "$valid"; then
+      { echo "unknown $what '$v'; the grid has:"; sed 's/^/  /' <<< "$valid"; } >&2
+      exit 1
+    fi
+  done
+}
+
 # Parse the command line.
 USE_SLURM=0; DRY_RUN=0; KEEP_RDS=0; FORCE=0
 SCALING_FILTER=""
@@ -85,16 +113,27 @@ while [ $# -gt 0 ]; do
     --keep-rds) KEEP_RDS=1; shift ;;
     --force|-f) FORCE=1; shift ;;
     --dry-run|-n) DRY_RUN=1; shift ;;
-    --scaling) SCALING_FILTER="${2:-}"; shift 2 ;;
+    --scaling) need_value "$@"; SCALING_FILTER="$2"; shift 2 ;;
     --scaling=*) SCALING_FILTER="${1#*=}"; shift ;;
-    --method) METHOD_FILTER+=("${2:-}"); shift 2 ;;
+    --method) need_value "$@"; METHOD_FILTER+=("$2"); shift 2 ;;
     --method=*) METHOD_FILTER+=("${1#*=}"); shift ;;
+    # Anything else that looks like an option is a typo, not a run id. Without
+    # this it would land in RUNID_FILTER, match no grid row, and the script would
+    # report "0 run(s) executed" and exit 0 -- a typo indistinguishable from a
+    # successful no-op.
+    -*) echo "unknown option '$1'" >&2; exit 1 ;;
     *) RUNID_FILTER+=("$1"); shift ;;
   esac
 done
 if [ -n "$SCALING_FILTER" ] && [ "$SCALING_FILTER" != "scaled" ] && [ "$SCALING_FILTER" != "unscaled" ]; then
   echo "--scaling must be 'scaled' or 'unscaled', got '$SCALING_FILTER'" >&2; exit 1
 fi
+
+# Same reasoning for the values: a run id or method that is not in the grid is a
+# typo, and silently matching nothing would look like success. Checked here, up
+# front, so local and --slurm mode reject it identically.
+check_in_grid "run id" 1 "${RUNID_FILTER[@]+"${RUNID_FILTER[@]}"}"
+check_in_grid "method" 2 "${METHOD_FILTER[@]+"${METHOD_FILTER[@]}"}"
 
 # A row is wanted if it matches every active filter (scaling, method, run_id).
 want_row() {
@@ -115,6 +154,17 @@ already_done() { [ "$FORCE" -eq 0 ] && [ -f "$1" ]; }
 
 # Whether the run has an embedding worth exporting (embed appears in types).
 has_embed() { case ",$1," in *,embed,*) return 0 ;; *) return 1 ;; esac }
+
+# Where a trained method checkpoints its model: its own flat per-method directory,
+# rather than beside the output, so 02_integration/ holds only the integrated
+# objects the metrics read. The run id goes in the file name, not in a
+# subdirectory (see model_paths.py). Sets model_arg, empty for untrained methods.
+set_model_arg() {
+  model_arg=()
+  case "$1" in
+    scvi|scanvi|scgen) model_arg=(--model-dir "$DATA_DIR/02_${1}") ;;
+  esac
+}
 
 # Remove an integrated .rds once it has been converted, unless --keep-rds.
 drop_rds() {
@@ -156,13 +206,14 @@ run_slurm() {
   local spec; spec="$(IFS=,; echo "${indices[*]}")%${MAX_CONCURRENT}"
   echo "selected ${#indices[@]}/${total} row(s), ${n_have} already integrated, throttled to ${MAX_CONCURRENT}: $spec"
 
+  local exports="ALL,DATA_DIR=$DATA_DIR,KEEP_RDS=$KEEP_RDS"
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry] sbatch --export=ALL,DATA_DIR=$DATA_DIR --array=$spec $SCRIPT_DIR/submit_integration.slurm"
+    echo "[dry] sbatch --export=$exports --array=$spec $SCRIPT_DIR/submit_integration.slurm"
     return 0
   fi
-  local j; j="$(sbatch --parsable --export="ALL,DATA_DIR=$DATA_DIR" --array="$spec" "$SCRIPT_DIR/submit_integration.slurm")"
+  local j; j="$(sbatch --parsable --export="$exports" --array="$spec" "$SCRIPT_DIR/submit_integration.slurm")"
   echo "submitted integration array: job $j"
-  echo "DRVI is a notebook: run it by hand (run_drvi.ipynb). Then score with 02_4_metrics/run_all_metrics.sh."
+  echo "DRVI is a notebook: run it by hand (shiao_drvi_128.ipynb). Then score with 02_4_metrics/run_all_metrics.sh."
 }
 
 # Local mode: run every matching integration here, in sequence.
@@ -199,11 +250,13 @@ run_local() {
       case "$language" in
         python)
           conda_guarded activate "$env"
+          local model_arg; set_model_arg "$method"
           if [ "$method" = "scgen" ]; then
-            python "$SCRIPT_DIR/run_scgen.py" -i "$in_path" -o "$out_path"
+            python "$SCRIPT_DIR/run_scgen.py" -i "$in_path" -o "$out_path" "${model_arg[@]}"
           else
             local emb_arg=(); has_embed "$types" && emb_arg=(--emb-out "$emb_path")
-            python "$SCRIPT_DIR/run_integration.py" -m "$method" -i "$in_path" -o "$out_path" "${emb_arg[@]}"
+            python "$SCRIPT_DIR/run_integration.py" -m "$method" -i "$in_path" -o "$out_path" \
+              "${emb_arg[@]}" "${model_arg[@]}"
           fi
           conda_guarded deactivate
           ;;

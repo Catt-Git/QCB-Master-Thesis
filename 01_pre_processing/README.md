@@ -16,12 +16,12 @@ BioProject **PRJNA1032700** / GEO **GSE246613**.
 | 2 | `01_2_qc_scrublet_filtering` | `qc_scrublet_filter.ipynb` | QC metrics (mt/ribo), per-biopsy Scrublet, cell filter (doublets, top-1% UMI, `pct_mt<10`, `n_genes>100`), drop zero-count genes. QC violins/scatters. | local (notebook) |
 | 3 | `01_3_normalization` | `scran_norm.py` | scran normalization via scib (`quickCluster → computeSumFactors → logNormCounts`); adds `size_factors`, clears `.raw`, casts `.X` to float32. | HPC (SLURM) |
 | 3 | `01_3_normalization` | `submit_scran_norm.slurm` | SLURM wrapper for the scran step. | HPC (SLURM) |
-| 4 | `01_4_cc_and_annotation` | `cell_cycle_score.py` | Tirosh/Regev cell-cycle scoring → `S_score`, `G2M_score`, `phase`. | terminal |
-| 5 | `01_4_cc_and_annotation` | `celltypist_annotation.py` | CellTypist annotation (`Cells_Adult_Breast.pkl`, majority voting) → `cell_type`, `celltypist_predicted`. | terminal |
-| 6 | `01_4_cc_and_annotation` | `fraction_reassignment.py` | Recode `fraction` CD45+/CD45- → `imm`/`non_imm` from the CellTypist lineage (in-place); `dataset_origin` left untouched. | terminal |
-| 7 | `01_5_scib_pp` | `scib_reduce_data.py` | Batch-aware HVG (`cohort`, 2000) + PCA(50) + neighbors + UMAP; also writes the selected HVG list. | terminal |
-| 8 | `01_5_scib_pp` | `scib_clustering.py` | Leiden optimal-resolution sweep (0.1–1.0) vs `cell_type` NMI → `shiao.h5ad`. | terminal |
-| 9 | `01_6_visualization` | `visualization_unintegrated.ipynb` | Figures on the final unintegrated object: count barplots, annotation/sort-purity check, normalization, QC & Leiden UMAPs. Read-only. | local (notebook) |
+| 4 | `01_4_cc_and_annotation` | `cell_cycle_score.py` | Tirosh/Regev cell-cycle scoring → `S_score`, `G2M_score`, `phase`. | local (terminal) |
+| 5 | `01_4_cc_and_annotation` | `celltypist_annotation.py` | CellTypist annotation (`Cells_Adult_Breast.pkl`, majority voting) → `cell_type`, `celltypist_predicted`. | local (terminal) |
+| 6 | `01_4_cc_and_annotation` | `fraction_reassignment.py` | Recode `fraction` CD45+/CD45- → `imm`/`non_imm` from the CellTypist lineage (in-place); `dataset_origin` left untouched. | local (terminal) |
+| 7 | `01_5_scib_pp` | `scib_reduce_data.py` | Batch-aware HVG (`cohort`, 2000) + PCA(50) + neighbors + UMAP; also writes the selected HVG list. | local (terminal) |
+| 8 | `01_5_scib_pp` | `scib_clustering.py` | Leiden optimal-resolution sweep (0.1–1.0) vs `cell_type` NMI → `shiao.h5ad`. | local (terminal) |
+| 9 | `01_6_visualization` | `visualization_unintegrated.ipynb` | Figures on the final unintegrated object: count barplots, annotation/sort-purity check, raw-vs-scran normalization and size factors, the per-key QC UMAPs plus a combined 6-panel metadata grid, and the Leiden sweep (resolution/NMI profile + the two 6-panel resolution grids). Read-only. | local (notebook) |
 
 > **Note on step 6.** `fraction_reassignment.py` must run *after* `celltypist_annotation.py`
 > (it needs `cell_type`) and *before* `01_5` (so the recoded `fraction` propagates into
@@ -68,6 +68,34 @@ set at the top; submit from the folder that contains it, so the job anchors on
 ```bash
 cd 01_3_normalization && sbatch submit_scran_norm.slurm
 ```
+
+## Figures
+
+The repo keeps only the lightweight figures, one folder per producing step:
+
+| Folder | From | Content |
+|---|---|---|
+| `figures/02_qc_scrublet_filtering/` | 01_2 | QC violins and total-counts/genes scatters, before filtering |
+| `figures/03_normalization/` | 01_3 | scran size-factor distribution and size factors vs library size |
+| `figures/05_scib_reduce_data/` | 01_5 | PCA elbow, PCA and UMAP coloured by `cell_type` |
+| `figures/06_visualization/` | 01_6 | the diagnostic set on the final object (below) |
+
+`06_visualization` is the figure set of the phase, all on `shiao.h5ad`:
+
+- **Composition** — cells per cohort / cell type / treatment / response, stacked by `fraction`;
+  non-immune cells per cohort; cell cycle phase by cell type and by cohort.
+- **Sort vs lineage** — purity per CD45 fraction and the breakdown of which non-immune labels
+  appear among the CD45+ cells (the 10.68% of the "Established numbers" below).
+- **Normalization** — raw vs scran log-normalized per-cell signal (violin + histogram), size
+  factors against `total_counts` and `n_genes_by_counts`, coloured by `cell_type` and `fraction`.
+- **UMAPs** — one panel per key (`cell_type`, `fraction`, `cohort`, `treatment`, `response`,
+  `phase`, `n_genes_by_counts`, `total_counts`, mito, ribo, `size_factors`) plus
+  `umap_combined_qc_unintegrated.png`, the 6-panel metadata grid. That grid uses the same keys,
+  layout and palettes as the DRVI latent-space UMAPs of phase 02, so unintegrated and
+  integrated can be put side by side: same cells, same panels, only the space changes.
+- **Leiden** — `leiden_resolution_profile_unintegrated.png` (NMI vs `cell_type` across the
+  0.1–1.0 grid, optimum marked) and the two 6-panel UMAP grids, resolutions 0.1–0.5 and
+  0.6–1.0, each with `cell_type` as reference.
 
 ## Object conventions (carried through every step)
 
@@ -138,5 +166,10 @@ cd 01_3_normalization && sbatch submit_scran_norm.slurm
 - CellTypist runs on a throwaway CP10K+log1p copy: the training normalization it expects
   differs from scran, so scoring on scran `.X` would be miscalibrated.
 - `01_6` is purely diagnostic (figures) and does not modify the data.
+- **The resolution/NMI profile of 01_6 is recomputed, not read back.**
+  `scib.clustering.cluster_optimal_resolution` discards the sweep it returns, so the curve is
+  rebuilt in the notebook from the per-resolution `optscib_unintegrated_leiden_<res>` columns
+  kept in `.obs`, with the criterion scib maximizes (NMI vs `cell_type`). The notebook then
+  checks that the clustering stored as `optscib_unintegrated_leiden` is indeed the argmax.
 - In `Cells_Adult_Breast.pkl` the `Lymph-*` labels are **lymphatic endothelial** subtypes
   (not lymphocytes) and are therefore classified non-immune.

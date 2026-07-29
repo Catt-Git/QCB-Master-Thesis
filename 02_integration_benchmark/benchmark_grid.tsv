@@ -15,4 +15,4 @@ scgen_unscaled	scgen	python	scgen-py	unscaled	shiao_hvg_2k.h5ad	02_integration/s
 scgen_scaled	scgen	python	scgen-py	scaled	shiao_hvg_2k_scaled.h5ad	02_integration/scgen_scaled.h5ad	full	shiao_hvg_2k_scaled.h5ad	0
 scvi_unscaled	scvi	python	benchmark-py-r	unscaled	shiao_hvg_2k.h5ad	02_integration/scvi_unscaled.h5ad	embed	shiao_hvg_2k.h5ad	0
 scanvi_unscaled	scanvi	python	benchmark-py-r	unscaled	shiao_hvg_2k.h5ad	02_integration/scanvi_unscaled.h5ad	embed	shiao_hvg_2k.h5ad	0
-drvi_unscaled	drvi	notebook	benchmark-py-r	unscaled	shiao_hvg_2k.h5ad	02_integration/drvi_unscaled.h5ad	embed	shiao_hvg_2k.h5ad	0
+drvi_unscaled_128	drvi	notebook	benchmark-py-r	unscaled	shiao_hvg_2k.h5ad	02_integration/drvi_unscaled_128.h5ad	embed	shiao_hvg_2k.h5ad	0
