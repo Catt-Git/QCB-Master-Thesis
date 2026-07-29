@@ -16,6 +16,8 @@
 #         --samples-file unique_samples.txt \
 #         --metadata-tsv sample_metadata_final.tsv \
 #         --out all_samples_combined.h5ad
+# On the cluster (how the thesis run was done) this is launched through 'sbatch submit_h5ad_concat.slurm',
+# which fills the four paths from DATA_DIR and asks for the ~150G the concatenation needs.
 
 import argparse
 import scanpy as sc

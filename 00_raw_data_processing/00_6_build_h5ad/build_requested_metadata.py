@@ -16,6 +16,9 @@
 #     python3 build_requested_metadata.py \
 #         --sample-map ../00_2_sample_mapping/sample_map_gex_final.tsv \
 #         --out        sample_metadata_final.tsv
+# On the cluster (how the thesis run was done) this is not launched on its own: submit_h5ad_concat.slurm
+# runs it first and then build_combined_h5ad.py, so the merge always reads a metadata table freshly
+# derived from the sample map present in this clone.
 
 import argparse
 import csv
