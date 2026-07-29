@@ -206,7 +206,9 @@ run_slurm() {
   local spec; spec="$(IFS=,; echo "${indices[*]}")%${MAX_CONCURRENT}"
   echo "selected ${#indices[@]}/${total} row(s), ${n_have} already integrated, throttled to ${MAX_CONCURRENT}: $spec"
 
-  local exports="ALL,DATA_DIR=$DATA_DIR,KEEP_RDS=$KEEP_RDS"
+  # INTEGRATION_DIR: SLURM runs the batch script from a spool copy, so the job
+  # cannot find the repo on its own (see submit_integration.slurm).
+  local exports="ALL,DATA_DIR=$DATA_DIR,KEEP_RDS=$KEEP_RDS,INTEGRATION_DIR=$SCRIPT_DIR"
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "[dry] sbatch --export=$exports --array=$spec $SCRIPT_DIR/submit_integration.slurm"
     return 0

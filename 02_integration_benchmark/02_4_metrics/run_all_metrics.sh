@@ -139,15 +139,15 @@ run_slurm() {
   echo "selected ${#indices[@]}/${total} array task(s), ${n_have} already scored, throttled to ${MAX_CONCURRENT}: $spec"
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry] sbatch --export=ALL,DATA_DIR=$DATA_DIR --array=$spec $SCRIPT_DIR/submit_metrics.slurm"
-    [ "$NO_KBET" -eq 0 ] && echo "[dry] sbatch --dependency=afterok:<jobid> --export=ALL,DATA_DIR=$DATA_DIR --array=$spec $SCRIPT_DIR/submit_kbet.slurm"
+    echo "[dry] sbatch --export=ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR --array=$spec $SCRIPT_DIR/submit_metrics.slurm"
+    [ "$NO_KBET" -eq 0 ] && echo "[dry] sbatch --dependency=afterok:<jobid> --export=ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR --array=$spec $SCRIPT_DIR/submit_kbet.slurm"
     return 0
   fi
 
-  local m; m="$(sbatch --parsable --export="ALL,DATA_DIR=$DATA_DIR" --array="$spec" "$SCRIPT_DIR/submit_metrics.slurm")"
+  local m; m="$(sbatch --parsable --export="ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR" --array="$spec" "$SCRIPT_DIR/submit_metrics.slurm")"
   echo "submitted metrics array: job $m"
   if [ "$NO_KBET" -eq 0 ]; then
-    local k; k="$(sbatch --parsable --dependency=afterok:"$m" --export="ALL,DATA_DIR=$DATA_DIR" --array="$spec" "$SCRIPT_DIR/submit_kbet.slurm")"
+    local k; k="$(sbatch --parsable --dependency=afterok:"$m" --export="ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR" --array="$spec" "$SCRIPT_DIR/submit_kbet.slurm")"
     echo "submitted kBET array:    job $k  (afterok:$m)"
   else
     echo "kBET array skipped (--no-kbet)"
