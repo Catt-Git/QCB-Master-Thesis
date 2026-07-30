@@ -58,7 +58,7 @@ Values used for the thesis run (Methods), these are the defaults written in the 
 
 | Variable | Value | Set in |
 |---|---|---|
-| `DATA_DIR` | `/users/genomics/albertoc/Tesi/hopes_and_dreams` | `submit_download.slurm`, `submit_verify_integrity.slurm`, `submit_rename.slurm`, `submit_cellranger.slurm`, `submit_h5ad_concat.slurm` |
+| `DATA_DIR` | `/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets` | `submit_download.slurm`, `submit_verify_integrity.slurm`, `submit_rename.slurm`, `submit_cellranger.slurm`, `submit_h5ad_concat.slurm` |
 | `REF` | `/users/genomics/albertoc/Tesi/cell_ranger/refdata-cellranger-GRCh38-3.0.0` | `submit_cellranger.slurm` |
 
 The scripts themselves keep no default and abort if `DATA_DIR` is unset: a hardcoded path inside
