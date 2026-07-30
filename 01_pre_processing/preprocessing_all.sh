@@ -38,7 +38,7 @@
 #   ./preprocessing_all.sh --slurm          # same chain as one job on `long`
 #   ./preprocessing_all.sh --force          # re-run everything, overwriting
 #   ./preprocessing_all.sh --dry-run        # print what would run, do nothing
-#   ./preprocessing_all.sh reduce reduce   # only the named step(s), in file order
+#   ./preprocessing_all.sh reduce           # only the named step(s), in file order
 #
 # Step names: norm, cc, annot, fraction, reduce, cluster.
 # Logs go to 01_pre_processing/logs/preprocessing_all_<timestamp>.log as well as to

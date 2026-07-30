@@ -391,8 +391,8 @@ Then submit. The environment is `catalano_env` (built from `environments/benchma
 
 ```bash
 # on the cluster
-export DATA_DIR=/users/genomics/albertoc/Tesi/hopes_and_dreams
-cd ~/Tesi/QCB-Master-Thesis/02_integration_benchmark/02_4_metrics
+export DATA_DIR=/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets
+cd <clone>/02_integration_benchmark/02_4_metrics
 mkdir -p logs
 ./run_all_metrics.sh --slurm --scaling unscaled --dry-run
 ./run_all_metrics.sh --slurm --scaling unscaled

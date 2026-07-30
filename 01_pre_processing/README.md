@@ -12,7 +12,7 @@ BioProject **PRJNA1032700** / GEO **GSE246613**.
 
 | # | Folder | Script | What it does | Where |
 |---|--------|--------|--------------|-------|
-| 1 | `01_1_load_and_check` | `load_and_check.ipynb` | Sanity-check the concatenated object: raw-count `.X`/`counts`, unique gene symbols, metadata fields; `cohort × response/treatment/fraction` crosstabs (the `batch_key` decision), NaN checks. No output file. | local (notebook) |
+| 1 | `01_1_load_and_check` | `load_and_check.ipynb` | Sanity-check the concatenated object: raw-count `.X`/`counts`, unique gene symbols, metadata fields; `cohort × response/treatment/fraction`, NaN checks. No output file. | local (notebook) |
 | 2 | `01_2_qc_scrublet_filtering` | `qc_scrublet_filter.ipynb` | QC metrics (mt/ribo), per-biopsy Scrublet, cell filter (doublets, top-1% UMI, `pct_mt<10`, `n_genes>100`), drop zero-count genes. QC violins/scatters. | local (notebook) |
 | 3 | `01_3_normalization` | `scran_norm.py` | scran normalization via scib (`quickCluster → computeSumFactors → logNormCounts`); adds `size_factors`, clears `.raw`, casts `.X` to float32. | HPC (SLURM) or local |
 | 3 | `01_3_normalization` | `submit_scran_norm.slurm` | SLURM wrapper for the scran step alone. | HPC (SLURM) |
@@ -38,7 +38,7 @@ export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 ./preprocessing_all.sh                  # every step, locally, in sequence
 ./preprocessing_all.sh --slurm          # the same chain as ONE job on `long`
 ./preprocessing_all.sh --dry-run        # print the plan, do nothing
-./preprocessing_all.sh reduce cluster   # only the named step(s), in file order
+./preprocessing_all.sh reduce           # only the named step(s), in file order
 ./preprocessing_all.sh --force          # re-run everything, overwriting
 ```
 
@@ -50,12 +50,9 @@ part of the chain: 01_1/01_2 produce its input, 01_6 only reads `shiao.h5ad`.
   delete an `.h5ad` truncated mid-write before resuming. `fraction` has no output of its own
   (it rewrites its input), so its check reads `.obs['fraction']` straight out of the HDF5:
   `imm`/`non_imm` categories mean the recode already happened.
-- **Pre-flight.** Every scheduled step must be able to read its input, either from disk or
-  from an earlier scheduled step; the run aborts before starting otherwise. This is the
-  guard for asking for a late step whose ~10 GB intermediate has been cleaned up.
 - **`--slurm`** submits `submit_preprocessing_all.slurm` (partition `long`, 470G, 8 cpus,
   no `--time`), which sets up `catalano_env` and re-invokes this same script in local mode
-  inside the job — one job for the whole phase, resume logic included, so a resubmit after
+  inside the job, one job for the whole phase, resume logic included, so a resubmit after
   a failure skips what is already done. Filters and `--force` are forwarded. Logs land in
   `01_pre_processing/logs/` (gitignored), both the runner's own timestamped `.log` and the
   job's `preprocessing_all_<jobid>.out`/`.err`.
@@ -79,16 +76,16 @@ The `.h5ad` chain under `$DATA_DIR` (each step consumes the previous file):
     ├── all_samples_combined_scrublet_norm_cc_annotated.h5ad       # 01_4  (+ CellTypist; fraction recoded in place)
     ├── all_samples_combined_scrublet_norm_cc_annotated_reduced.h5ad  # 01_5  (+ HVG/PCA/neighbors/UMAP)
     ├── shiao_hvg_2k_unintegrated_list.csv                              # 01_5  (selected HVG symbols)
-    └── shiao.h5ad                                                 # 01_5  (+ Leiden) — definitive unintegrated object
+    └── shiao.h5ad                                                 # 01_5  (+ Leiden) -  definitive unintegrated object
 
 Auxiliary inputs also expected under `$DATA_DIR`:
 
 | File | Used by | Via env var |
 |---|---|---|
 | `regev_lab_cell_cycle_genes.txt` (97 genes: 43 S + 54 G2M) | `cell_cycle_score.py` | `CC_GENES` |
-| `Cells_Adult_Breast.pkl` (CellTypist model, Kumar et al. 2023) | `celltypist_annotation.py` | — (loaded from `DATA_DIR`) |
+| `Cells_Adult_Breast.pkl` (CellTypist model, Kumar et al. 2023) | `celltypist_annotation.py` | (loaded from `DATA_DIR`) |
 
-**Local steps** — everything except 01_3 was run locally: the notebooks (01_1, 01_2, 01_6)
+**Local steps** - everything except 01_3 was run locally: the notebooks (01_1, 01_2, 01_6)
 interactively, the `.py` scripts (01_4, 01_5) with `python3` after `export DATA_DIR=...`
 (`cell_cycle_score.py` also needs `export CC_GENES=...`):
 
@@ -97,7 +94,7 @@ export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 01_4_cc_and_annotation/fraction_reassignment.py
 ```
 
-**HPC step** — only `01_3` (scran) was run on the cluster via its SLURM wrapper (`DATA_DIR`
+**HPC step** - only `01_3` (scran) was run on the cluster via its SLURM wrapper (`DATA_DIR`
 set at the top; submit from the folder that contains it, so the job anchors on
 `SLURM_SUBMIT_DIR`):
 
@@ -118,31 +115,30 @@ The repo keeps only the lightweight figures, one folder per producing step:
 
 `06_visualization` is the figure set of the phase, all on `shiao.h5ad`:
 
-- **Composition** — cells per cohort / cell type / treatment / response, stacked by `fraction`;
+- **Composition** - cells per cohort / cell type / treatment / response, stacked by `fraction`;
   non-immune cells per cohort; cell cycle phase by cell type and by cohort.
-- **Sort vs lineage** — purity per CD45 fraction and the breakdown of which non-immune labels
+- **Sort vs lineage** - purity per CD45 fraction and the breakdown of which non-immune labels
   appear among the CD45+ cells (the 10.68% of the "Established numbers" below).
-- **Normalization** — raw vs scran log-normalized per-cell signal (violin + histogram), size
+- **Normalization** - raw vs scran log-normalized per-cell signal (violin + histogram), size
   factors against `total_counts` and `n_genes_by_counts`, coloured by `cell_type` and `fraction`.
-- **UMAPs** — one panel per key (`cell_type`, `fraction`, `cohort`, `treatment`, `response`,
+- **UMAPs** - one panel per key (`cell_type`, `fraction`, `cohort`, `treatment`, `response`,
   `phase`, `n_genes_by_counts`, `total_counts`, mito, ribo, `size_factors`) plus
   `umap_combined_qc_unintegrated.png`, the 6-panel metadata grid. That grid uses the same keys,
-  layout and palettes as the DRVI latent-space UMAPs of phase 02, so unintegrated and
-  integrated can be put side by side: same cells, same panels, only the space changes.
-- **Leiden** — `leiden_resolution_profile_unintegrated.png` (NMI vs `cell_type` across the
+  layout and palettes as the DRVI latent-space UMAPs of phase 02, so they are directly comparable.
+- **Leiden** - `leiden_resolution_profile_unintegrated.png` (NMI vs `cell_type` across the
   0.1–1.0 grid, optimum marked) and the two 6-panel UMAP grids, resolutions 0.1–0.5 and
   0.6–1.0, each with `cell_type` as reference.
 
 ## Object conventions (carried through every step)
 
-- `.X` = **scran log1p-normalized** expression from 01_3 onward (already in log space — do
+- `.X` = **scran log1p-normalized** expression from 01_3 onward (already in log space: do
   **not** re-`log1p`). `.layers['counts']` = raw integer counts, kept unchanged throughout.
 - `var_names` = gene symbols (Ensembl in `.var['gene_ids']`).
 - Integration `batch_key = 'cohort'` (patient, technical batch); biological `label_key = 'cell_type'`.
 - `dataset_origin` (`immune`/`non_immune`) = technical **CD45 sort**, never modified.
   `fraction` (`imm`/`non_imm`) = **biological** immune/non-immune class from CellTypist (recoded in 01_4).
 
-## Key parameters (verbatim, ready for Materials & Methods)
+## Key parameters 
 
 **QC & filtering (01_2)**
 - Scrublet per biopsy (`batch_key='sample'`), `expected_doublet_rate=0.10`,
