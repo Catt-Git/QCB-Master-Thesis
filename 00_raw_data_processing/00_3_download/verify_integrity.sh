@@ -26,7 +26,7 @@ cd "$FASTQ_DIR"
 echo "### 1) gzip integrity ###"
 for f in *.fastq.gz; do
     echo -n "$f: "
-    gzip -t "$f" && echo "OK" || echo "CORRUPTED - re-download (on the cluster: resubmit that line of the download array, see README; locally: utils/fetch_missing_sample.sh)"
+    gzip -t "$f" && echo "OK" || echo "CORRUPTED - delete both files of this run and resubmit its index of the download array, see README"
 done
 # Test each gzip archive; report OK or flag the file for re-download.
 
