@@ -42,7 +42,7 @@ echo "Missing/incomplete:                           $missing"
 # Report the expected/present/missing counts.
 
 if [ "$missing" -gt 0 ]; then
-    echo "Incomplete runs (re-download with utils/fetch_missing_sample.sh):"
+    echo "Incomplete runs (delete their FASTQ and resubmit their index of the download array, see README):"
     printf '  %s\n' "${missing_list[@]}"
     exit 1
 fi

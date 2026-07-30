@@ -20,16 +20,15 @@ Environment: `environments/benchmark-hpc.yml`, in the used HPC is called `catala
 | 3 | `00_3_download` | `download_fastq.sh` | Download FASTQ via `prefetch` + `fasterq-dump` | HPC (SLURM) |
 | 3b | `00_3_download` | `verify_integrity.sh` | Checks: `gzip -t`, R1/R2 lengths, 5' TSO | HPC (SLURM) |
 | 4 | `00_4_rename` | `rename_for_cellranger.sh` | Rename to `*_S1_L001_R[12]_001.fastq.gz`; build `unique_samples.txt` | HPC (SLURM) |
-| 5 | `00_5_cellranger` | `run_cellranger_batch.sh` | `cellranger count` in parallel (5x16 cores) | HPC (SLURM, `submit_cellranger.slurm`) |
+| 5 | `00_5_cellranger` | `run_cellranger_batch.sh` | `cellranger count` in parallel (5x16 cores) | HPC (SLURM) |
 | 6 | `00_6_build_h5ad` | `build_requested_metadata.py` + `build_combined_h5ad.py` | Build `sample_metadata_final.tsv`, then concatenate the `.h5` into one AnnData | HPC (SLURM) |
 | - | `utils` | `check_download_completeness.sh` | Check download completeness (R1 & R2) | HPC (terminal) |
 | - | `utils` | `check_cellranger_completeness.sh` | Check for missing sample matrices | HPC (terminal) |
-| - | `utils` | `fetch_missing_sample.sh` | Re-download a single corrupted/missing SRR | local (terminal) — superseded on the cluster, see below |
 
-The two `utils` completeness checks are `stat` loops over 150 paths, no allocation
-needed. `fetch_missing_sample.sh` is the local way to repair a single run; on the cluster the same
-job is done by resubmitting that run's index of the download array (below), so the FASTQ is
-re-fetched inside a proper allocation.
+The two `utils` scripts are `stat` loops over 150 paths, so they run on the login node with no
+allocation. There is no separate script to re-download a single run: repairing one is a
+re-submission of the download array on that one index (see *Repairing a single run* below), which
+re-fetches the FASTQ through the same code path and inside a proper allocation.
 
 
 ## Data location (`DATA_DIR`)
@@ -118,6 +117,30 @@ is the only thing to get right.
 | 5 Cell Ranger | `long` | 90 | 470 G | whole node, 5 samples x 16 cores |
 | 6 h5ad | `normal` | 8 | 150 G | 149 matrices held in memory at concat |
 
+### Repairing a single run
+
+A run that fails, is truncated or arrives corrupted is re-fetched by resubmitting **its own index of
+the download array**: one array task is one line of `sample_map_gex_final.tsv`, so `--array=<idx>`
+downloads that accession alone, through the same `download_fastq.sh` and inside the same 8-core /
+16 GB allocation as the original transfer.
+
+```bash
+idx=$(grep -n SRR26540980 00_2_sample_mapping/sample_map_gex_final.tsv | cut -d: -f1)
+rm -f "$DATA_DIR"/fastq_raw/SRR26540980_[12].fastq.gz
+(cd 00_3_download && sbatch --array=$idx submit_download.slurm)
+```
+
+Deleting the two FASTQ first is **mandatory**: `download_fastq.sh` skips any SRR whose
+`_2.fastq.gz` is already there (this is also what makes the array resumable), so a corrupted file
+left in place means the resubmitted task exits having done nothing. Several indices can go in one
+submission: `sbatch --array=12,44,77 submit_download.slurm`. If the run had already been through
+Cell Ranger, its output folder must go too (`rm -rf "$DATA_DIR"/cellranger_out/<sample>`), otherwise
+step 5 skips the sample and keeps the matrix built from the bad FASTQ.
+
+This happened twice in the thesis run: `P07_A_P` (`SRR26540980`) and `P10_C_P` (`SRR26541023`),
+whose ENA copies were corrupted. Both came back with 151 bp reads instead of 101 bp, which Cell
+Ranger handles correctly thanks to `--r1-length=26`.
+
 
 ## Key parameters 
 
@@ -136,9 +159,8 @@ is the only thing to get right.
   resubmitted with `sbatch --array=<idx>,<idx> submit_download.slurm` and picks up
   where it stopped. Task 44 (`SRR26541168`, the empty run) is expected to fail.
 - A task interrupted mid-`pigz` leaves a truncated `.fastq.gz` that the skip test still
-  accepts, this is what step 3b (`gzip -t`) catches afterwards. To repair, delete the
-  two files of that run and resubmit its index; the index of a given accession is
-  `grep -n <SRR> 00_2_sample_mapping/sample_map_gex_final.tsv | cut -d: -f1`.
+  accepts, this is what step 3b (`gzip -t`) catches afterwards; see *Repairing a single
+  run* above.
 
 **Cell Ranger**
 - Version 4.0.0 (via `module load cellranger/4.0.0`).
