@@ -177,13 +177,13 @@ def main():
     # 1. cohort, integrated (single panel)
     fig, ax = plt.subplots(figsize=(6.5, 6))
     draw(ax, integrated, args.batch_key, cmap[args.batch_key], seed, ps,
-         f"{m} — cohort (integrated)", legend=True)
+         f"{m} - cohort (integrated)", legend=True)
     save(fig, "cohort_integrated")
 
     # 2. cohort, integrated | unintegrated (side by side)
     fig, axes = plt.subplots(1, 2, figsize=(13, 6))
     draw(axes[0], integrated, args.batch_key, cmap[args.batch_key], seed, ps,
-         f"{m} — cohort (integrated)", legend=False)
+         f"{m} - cohort (integrated)", legend=False)
     draw(axes[1], reference, args.batch_key, cmap[args.batch_key], seed, ps,
          "cohort (unintegrated)", legend=True)
     save(fig, "cohort_int_vs_unint")
@@ -191,13 +191,13 @@ def main():
     # 3. cell_type, integrated (single panel)
     fig, ax = plt.subplots(figsize=(6.5, 6))
     draw(ax, integrated, args.label_key, cmap[args.label_key], seed, ps,
-         f"{m} — cell_type (integrated)", legend=True)
+         f"{m} - cell_type (integrated)", legend=True)
     save(fig, "celltype_integrated")
 
     # 4. cell_type, integrated | unintegrated (side by side)
     fig, axes = plt.subplots(1, 2, figsize=(13, 6))
     draw(axes[0], integrated, args.label_key, cmap[args.label_key], seed, ps,
-         f"{m} — cell_type (integrated)", legend=False)
+         f"{m} - cell_type (integrated)", legend=False)
     draw(axes[1], reference, args.label_key, cmap[args.label_key], seed, ps,
          "cell_type (unintegrated)", legend=True)
     save(fig, "celltype_int_vs_unint")
@@ -205,9 +205,9 @@ def main():
     # 5. cohort + cell_type, both integrated (side by side, no unintegrated)
     fig, axes = plt.subplots(1, 2, figsize=(13, 6))
     draw(axes[0], integrated, args.batch_key, cmap[args.batch_key], seed, ps,
-         f"{m} — cohort (integrated)", legend=True)
+         f"{m} - cohort (integrated)", legend=True)
     draw(axes[1], integrated, args.label_key, cmap[args.label_key], seed, ps,
-         f"{m} — cell_type (integrated)", legend=True)
+         f"{m} - cell_type (integrated)", legend=True)
     save(fig, "cohort_celltype_integrated")
 
     print(f"[done] 5 panels written to {args.outdir}", flush=True)

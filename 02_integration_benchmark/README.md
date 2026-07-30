@@ -1,6 +1,6 @@
 # 02_integration_benchmark
 
-Third phase of the thesis: the **technical benchmark**. Ten batch-correction methods are run
+Third phase of the thesis (the big one): the **technical benchmark**. Ten batch-correction methods are run
 on the unintegrated object produced by `01_pre_processing`, each output is scored with the
 13 `scib` metrics, and the results are collected into a single summary table.
 
@@ -27,68 +27,103 @@ Integration `batch_key = 'cohort'` (34 patients), biological `label_key = 'cell_
 
 ## Execution order
 
-| # | Folder | Script | What it does | Where |
-|---|--------|--------|--------------|-------|
-| 0 | `utils` | `smoke_test_metrics.py` | Validates the metrics stack (scib, rpy2, R kBET, all 13 metrics) on a 5k-cell fixture before any real job is launched. | local + HPC |
-| 0 | `utils` | `submit_smoke_test.slurm` | SLURM wrapper for the smoke test. | HPC (SLURM) |
-| 0 | `utils` | `make_smoke_input.py` | Builds the tiny input for the *integration* smoke test (`smoke_hvg.h5ad` + `smoke_hvg_list.csv`) from `smoke_fixture.h5ad`. See "Smoke test of the integration step" below. | local |
-| 0 | `utils` | `smoke_test_metrics_pipeline.sh` | Local smoke of the metrics *pipeline*: runs the 02_4 scripts over the 5k `smoke_out/` objects (one command) to validate the code path before any cluster job. Distinct from `smoke_test_metrics.py`, which validates the *stack*. See "Smoke test of the metrics step" below. | local |
-| 1 | `02_1_prepare` | `subset_hvg.py` | Subsets `shiao.h5ad` to the 2,000 HVGs, asserts `layers['counts']` is still raw integers → `shiao_hvg_2k.h5ad`. | local |
-| 2 | `02_1_prepare` | `scale_batch.py` | Per-batch z-scoring into a preallocated array indexed by row position, so cell order cannot change; PCA recomputed on the scaled matrix → `shiao_hvg_2k_scaled.h5ad`. | local |
-| 3 | `02_1_prepare` | `h5ad_to_rds.R` | Converts each variant to a Seurat v3 `.rds` via `zellkonverter` (called once per variant), for the three R methods. | local |
-| 3 | `02_1_prepare` | `hvg_csv_to_rds.R` | Converts the HVG symbol list to an `.rds` character vector, read by the Seurat anchor calls. | local |
-| 4 | `02_2_integration` | `run_all.sh` | **The integration step.** Walks `benchmark_grid.tsv` and calls the right dispatcher for each row, **locally or on SLURM**. Default: runs each integration here, in sequence. `--slurm`: submits `submit_integration.slurm` for the matching rows, throttled to 3 concurrent tasks in partition `normal` (CPU). `--method` / `--scaling` / run_id filters, `--dry-run`. **Resumes by default**: a run whose `output` already exists is reported `[have]` and skipped (locally, and left out of the array spec on SLURM), so re-running the same command after a crash picks up where it stopped; `--force` overwrites. The R methods' `.rds` intermediate is deleted once converted, `--keep-rds` to keep it. Unknown options, run ids and method names are rejected up front, so a typo cannot silently select nothing and exit 0. | local + HPC |
-| 4a | `02_2_integration` | `run_integration.py` + `integration_methods.py` | Python dispatcher and method bodies: BBKNN, Scanorama, Harmony, scVI, scANVI. Called per row by `run_all.sh`; runnable on its own. scVI and scANVI checkpoint their trained model (see "Trained models" below); the two are reimplemented here rather than taken from `scib.integration`, which gives no access to the fitted model — same call sequence and same parametrisation, only the checkpoint added. | local + HPC |
-| 4b | `02_2_integration` | `run_integration.R` + `integration_methods.R` | R dispatcher and method bodies: fastMNN, Seurat CCA, Seurat RPCA. Called per row by `run_all.sh`; runnable on its own. | local + HPC |
-| 4c | `02_2_integration` | `run_scgen.py` | scGen, in its own `scgen-py` environment (calls `SCGEN` directly; that env has no scib). On the cluster it needs an equivalent env, `$SCGEN_ENV` (see `submit_integration.slurm`). Checkpoints its model (see "Trained models"), and chunks the decoder pass inside `batch_removal` (`--decode-chunk`, default 16,384 cells): scGen decodes every cell in one forward pass, which on 619k cells is a 1.85 GB hidden activation plus a 4.7 GB output resident on the GPU at once — an immediate OOM on a 4 GB card, whatever the training batch size. | local + HPC |
-| 4d | `02_2_integration` | `shiao_drvi_128.ipynb` | DRVI, run interactively: the latent size is chosen by looking at how many dimensions vanish, so it gets a notebook. Same cells and same 2,000 HVGs as every other method. `N_LATENT` at the top is the only cell to edit and drives the run id (`drvi_unscaled_<N>`), every output and the figure folder; the model and the latent space live in `$DATA_DIR/02_drvi/`, and the benchmark cell writes the scored output (`obsm['X_emb']` + `.npy`) exactly as `run_integration.py` does. It also draws the DRVI-specific figures (latent dimensions, interpretability) into `figures/<run_id>/`. Not in the SLURM array (a notebook); run by hand. See "Choosing the latent size" below. | local (GPU) |
-| 4e | `02_2_integration` | `rds_to_h5ad.py` | Converts the R outputs back to `.h5ad`. Python via rpy2/anndata2ri, **not** `zellkonverter::writeH5AD`, which has no native R writer and would provision CPython through basilisk. | local + HPC |
-| 4f | `02_2_integration` | `submit_integration.slurm` | The SLURM array task script `--slurm` submits: one array task per grid row, partition `normal` (CPU), throttled `%3`, no `--time`. Every method uses `catalano_env` except scGen (`$SCGEN_ENV`). | HPC (SLURM) |
-| 5 | `02_3_plot_method_umap` | `plot_all.sh` | **The UMAP QC step.** Walks `benchmark_grid.tsv` and plots every integrated run into `figures/<run_id>/`, so one command covers the whole grid. Runs after 02_2 and **before** the metrics: a cheap visual check that a method mixed the cohorts without destroying the cell types (see "Figures" below). **Resumes by default**: a run whose five panels all exist is `[have]` and skipped; `--force` redraws. | local |
-| 5a | `02_3_plot_method_umap` | `plot_methods_umaps.py` | Five UMAP QC panels for a single run. Called per row by `plot_all.sh`; runnable on its own. | local |
-| 5b | `utils` | `sync_to_cluster.sh` | **The local → cluster bridge**, needed only when the objects were produced here and the metrics run there (the usual split, see "Where things run"). Walks `benchmark_grid.tsv` and uploads the files it names to the same relative path under the cluster's `DATA_DIR`, so nothing is typed by hand and adding a grid row is enough to include it. `--what metrics` (default) sends the integrated objects + their references (what 02_4 needs), `--what inputs` the 02_1 prepared inputs + HVG lists (what 02_2 needs on the cluster), `--what all` both. Same `--method` / `--scaling` / run_id filters and `--dry-run` as the other wrappers. **Resumes by default**: a file already on the cluster at the same byte size is `[have]` and skipped, one still missing locally is `[skip]`; `--force` re-sends. `rsync` by default (resumes a half-sent file in place), `--scp` for clusters without it; one SSH connection is opened and reused, so authentication happens once. | local |
-| 6 | `02_4_metrics` | `run_all_metrics.sh` | **The metrics step.** Walks `benchmark_grid.tsv`, expands the `types` column (17 runs → 21 jobs) and scores every (run, type), **locally or on SLURM**. Default: runs the check + metrics + kBET here, in sequence, then merges. `--slurm`: submits the two arrays (6f) restricted to the matching indices, throttled to 3 concurrent tasks, kBET `afterok`-dependent on the metrics array. `--method` / `--scaling` / run_id filters, `--no-kbet`, `--no-check`, `--dry-run`. **Resumes by default**, per (run, type): a task whose CSV already carries a kBET value is `[have]` and skipped, so a `full,embed` row half-scored resumes on the missing half; `--force` re-scores. The kBET row is the completeness marker because `metrics.py` writes the CSV and `metrics_kbet.py` fills that row afterwards. | local + HPC |
-| 6a | `02_4_metrics` | `check_integrations.py` | Pre-flight check on one integrated object: cell count and order, batch/label keys, expected `obsm`/graph, finiteness. Cheap, and catches the failures that would otherwise surface hours into a metrics job. Called per (run, type); runnable on its own. | local + HPC |
-| 6b | `02_4_metrics` | `metrics.py` | **The 13 metrics** minus kBET, one invocation per (method, scaling, output type). Called per (run, type); runnable on its own. | local + HPC |
-| 6c | `02_4_metrics` | `metrics_kbet.py` | kBET alone, in a separate job/array; patches its value into the CSV `metrics.py` wrote. `--max-cells` optionally caps it (default: no cap, kBET runs on the full 620k in its own job). | local + HPC |
-| 6d | `02_4_metrics` | `merge_metrics.py` | Merges the per-run CSVs into the single table consumed by the plotting code. Run once, after the jobs finish. | local + HPC |
-| 6e | `02_4_metrics` | `make_summary_table.R` | Produces the final summary table (overall = 0.6 bio + 0.4 batch, min-max scaled). By default reproduces the published scIB figure with the vendored plotting code in `utils/` (`plotSingleTaskRNA.R` + `knit_table.R` + `img/`); falls back to a built-in scorer if its R packages (`dynutils`, `Hmisc`, `ggimage`) are missing. | local |
-| 6f | `02_4_metrics` | `submit_metrics.slurm` + `submit_kbet.slurm` | The SLURM array task scripts `--slurm` submits: one array task per (run, type), in partition `normal`, throttled to 3 concurrent (`%3`) and with no `--time` (the node's default limit applies). Runnable directly with `sbatch` too. | HPC (SLURM) |
-| - | `utils` | `metrics_shared.py` | Shared preparation for `metrics.py` and `metrics_kbet.py`: strict cell-order alignment, reference PCA/graph, the per-type `reduce_data` options and metric flags — so the two jobs score identically. | local + HPC (imported) |
-| - | `02_2_integration` | `model_paths.py` | The single definition of where scVI/scANVI/scGen checkpoint their model, shared by the two dispatchers so they cannot drift from `run_all.sh`. Stdlib only, so `scgen-py` can import it too. | local + HPC (imported) |
-| - | `utils` | `scib_compat.py` | Restores the numpy/pandas APIs scib 1.1.7 still expects. Imported by every script in this phase that touches scib. | local + HPC (imported) |
-| - | `utils` | `h5ad_compat.py` | Writes `.h5ad` files that `anndata 0.10` can also read, and verifies the result. Used by steps 1 and 2. | local (imported) |
+One line per script; the details live in the sections linked from the last column.
 
-> **Note on step 0.** The smoke test is not optional bookkeeping. `scib 1.1.7` predates the
-> numpy/pandas versions in the current environment and fails *halfway through* the metric
-> computation, not at the start. 
+| # | Folder | Script | What it does | Where | More |
+|---|--------|--------|--------------|-------|------|
+| 0 | `utils` | `smoke_test_metrics.py` | Validates the metrics *stack* (scib, rpy2, R kBET, all 13 metrics) on a 5k fixture. | local + HPC | [smoke, metrics](#smoke-test-of-the-metrics-step) |
+| 0 | `utils` | `submit_smoke_test.slurm` | SLURM wrapper for the stack smoke test. | HPC | |
+| 0 | `utils` | `make_smoke_input.py` | Builds the tiny inputs for the *integration* smoke test. | local | [smoke, integration](#smoke-test-of-the-integration-step) |
+| 0 | `utils` | `smoke_test_metrics_pipeline.sh` | Runs the whole 02_4 *pipeline* over the 5k `smoke_out/` objects. | local | [smoke, metrics](#smoke-test-of-the-metrics-step) |
+| 1 | `02_1_prepare` | `subset_hvg.py` | Subsets `shiao.h5ad` to the 2,000 HVGs → `shiao_hvg_2k.h5ad`. | local | |
+| 2 | `02_1_prepare` | `scale_batch.py` | Per-batch z-scoring + fresh PCA → `shiao_hvg_2k_scaled.h5ad`. | local | [notes](#critical-methodological-notes) |
+| 3 | `02_1_prepare` | `h5ad_to_rds.R` | Converts each variant to a Seurat v3 `.rds` (`zellkonverter`), for the R methods. | local | |
+| 3 | `02_1_prepare` | `hvg_csv_to_rds.R` | Converts the HVG symbol list to an `.rds` character vector, for the Seurat anchors. | local | |
+| 4 | `02_2_integration` | `run_all.sh` | **Driver of the integration step**: the whole grid, locally or on SLURM. | local + HPC | [drivers](#the-three-drivers) |
+| 4a | `02_2_integration` | `run_integration.py` + `integration_methods.py` | Python dispatcher and method bodies: BBKNN, Scanorama, Harmony, scVI, scANVI. | local + HPC | [models](#trained-models) |
+| 4b | `02_2_integration` | `run_integration.R` + `integration_methods.R` | R dispatcher and method bodies: fastMNN, Seurat CCA, Seurat RPCA. | local + HPC | [notes](#critical-methodological-notes) |
+| 4c | `02_2_integration` | `run_scgen.py` | scGen, in its own `scgen-py` / `$SCGEN_ENV` environment. | local + HPC | [models](#trained-models) |
+| 4d | `02_2_integration` | `shiao_drvi_128.ipynb` | DRVI, run interactively: the latent size is chosen by eye. | local (GPU) | [latent size](#choosing-the-latent-size-drvi) |
+| 4e | `02_2_integration` | `rds_to_h5ad.py` | Converts the R outputs back to `.h5ad` for the metrics. | local + HPC | [notes](#critical-methodological-notes) |
+| 4f | `02_2_integration` | `submit_integration.slurm` | The SLURM array task script for step 4. | HPC | [drivers](#the-three-drivers) |
+| 5 | `02_3_plot_method_umap` | `plot_all.sh` | **Driver of the UMAP QC step**: five panels per integrated run. | local | [drivers](#the-three-drivers) |
+| 5a | `02_3_plot_method_umap` | `plot_methods_umaps.py` | The five UMAP QC panels for a single run. | local | [figures](#per-method-umap-panels-02_3_plot_method_umap) |
+| 5b | `utils` | `sync_to_cluster.sh` | **The local → cluster bridge**: uploads the files the grid names. | local | [cluster](#running-the-metrics-on-the-cluster) |
+| 6 | `02_4_metrics` | `run_all_metrics.sh` | **Driver of the metrics step**: every (run, type), locally or on SLURM. | local + HPC | [drivers](#the-three-drivers) |
+| 6a | `02_4_metrics` | `check_integrations.py` | Pre-flight check on one integrated object: cells, order, keys, `obsm`/graph, finiteness. | local + HPC | |
+| 6b | `02_4_metrics` | `metrics.py` | **The 13 metrics** minus kBET, one invocation per (run, type). | local + HPC | [metrics](#metrics) |
+| 6c | `02_4_metrics` | `metrics_kbet.py` | kBET alone, patched into the CSV `metrics.py` wrote. | local + HPC | [notes](#critical-methodological-notes) |
+| 6d | `02_4_metrics` | `merge_metrics.py` | Merges the per-run CSVs into the single table the plotting reads. | local + HPC | |
+| 6e | `02_4_metrics` | `make_summary_table.R` | The final summary table (scIB funky heatmap). | local | [summary table](#final-summary-table-02_4_metrics) |
+| 6f | `02_4_metrics` | `submit_metrics.slurm` + `submit_kbet.slurm` | The two SLURM array task scripts for step 6. | HPC | [drivers](#the-three-drivers) |
+| - | `utils` | `metrics_shared.py` | Shared preparation, so `metrics.py` and `metrics_kbet.py` score identically. | imported | |
+| - | `02_2_integration` | `model_paths.py` | The single definition of the checkpoint layout. | imported | [models](#trained-models) |
+| - | `utils` | `scib_compat.py` | Restores the numpy/pandas APIs scib 1.1.7 expects. | imported | [notes](#critical-methodological-notes) |
+| - | `utils` | `h5ad_compat.py` | Writes `.h5ad` files `anndata 0.10` can read too. | imported | [notes](#critical-methodological-notes) |
 
-> **Notes on steps 4, 5 and 6.** Each step has one wrapper that walks `benchmark_grid.tsv` and
-> drives the whole grid with a single command; the lettered rows (`4a`–`4f`, `5a`, `6a`–`6f`) are
-> the underlying per-run scripts, also runnable on their own for a single method or run. The
-> integration (step 4, `run_all.sh`) and the metrics (step 6, `run_all_metrics.sh`) both run the
-> grid **either locally or on SLURM** (`--slurm`): locally they loop in sequence; on the cluster
-> they submit an array throttled to 3 concurrent tasks in partition `normal` (CPU), with no
-> `--time` (the node's own limit applies) — for the metrics, the kBET array is `afterok`-dependent
-> on the metrics one. The UMAP QC (step 5) is local only. On the cluster every method uses
-> `catalano_env`, except scGen (its own `$SCGEN_ENV`) and the metrics stack; DRVI is a notebook
-> and is always run by hand. The real runs are kept separate from the 5k smoke tests
-> (`utils/smoke_test_metrics_pipeline.sh` for the metrics half).
+A few of these deserve a line of their own:
+
+- `run_integration.py` **reimplements scVI and scANVI** instead of calling `scib.integration`,
+  which gives no access to the fitted model - same call sequence and same parametrisation, only
+  the checkpoint added.
+- `metrics_shared.py` holds the strict cell-order alignment, the reference PCA/graph and the
+  per-type `reduce_data` options and metric flags.
+- `model_paths.py` is stdlib only, so `scgen-py` can import it too.
+- `h5ad_compat.py` is used by steps 1 and 2; `scib_compat.py` by every script here that touches scib.
+
+## The three drivers
+
+Steps 4, 5 and 6 each have **one wrapper that walks `benchmark_grid.tsv`** and drives the whole
+grid with a single command; the lettered rows above are the per-run scripts underneath, also
+runnable on their own for a single method or run.
+
+The three share the same interface:
+
+- **Filters** - `--method`, `--scaling`, or explicit run ids; `--dry-run` previews without doing
+  anything. Unknown options, run ids and method names are rejected up front, so a typo cannot
+  silently select nothing and exit 0.
+- **Resume by default** - work already on disk is reported `[have]` and skipped, so re-running
+  the same command after a crash picks up where it stopped; `--force` redoes it.
+
+| Driver | Step | "Already done" means | Local | `--slurm` |
+|---|---|---|---|---|
+| `02_2_integration/run_all.sh` | integration | the row's `output` exists | each integration in sequence | `submit_integration.slurm`, one task per row |
+| `02_3_plot_method_umap/plot_all.sh` | UMAP QC | the run's five panels exist | in sequence | - (local only) |
+| `02_4_metrics/run_all_metrics.sh` | metrics | the (run, type) CSV carries a kBET value | check + metrics + kBET in sequence, then merge | `submit_metrics.slurm` + `submit_kbet.slurm`, one task per (run, type) |
+
+Per-driver extras:
+
+- `run_all.sh` deletes the R methods' `.rds` intermediate once converted; `--keep-rds` keeps it.
+- `run_all_metrics.sh` expands the `types` column (17 runs → 21 jobs) and takes `--no-kbet` /
+  `--no-check`. It resumes **per (run, type)**, so a half-scored `full,embed` row resumes on the
+  missing half; the kBET row is the completeness marker because `metrics.py` writes the CSV and
+  `metrics_kbet.py` fills that row afterwards. The merge and the summary table are run by hand
+  once the arrays finish - the driver prints the two commands.
+- `plot_all.sh` picks the `--type` from the grid's `types` column (`embed` wins when a run has
+  one, so scanorama/fastmnn are shown on their corrected embedding), matches each run to its
+  scaling reference, and skips rows not yet integrated.
+
+**On SLURM.** Both arrays run in partition `normal` (CPU), throttled to 3 concurrent tasks (`%3`),
+with no `--time` (the node's own limit applies); the kBET array is `afterok`-dependent on the
+metrics one. Only the matching rows enter the array spec, so an incomplete grid - the scaled half
+still integrating, say - costs nothing. Every method uses `catalano_env` except scGen
+(`$SCGEN_ENV`); the `.slurm` scripts are runnable directly with `sbatch` too. DRVI is a notebook
+and is always run by hand, in or out of the cluster.
 
 ## Smoke test of the integration step
 
-There are **two** smoke tests in this phase, one per half of the pipeline. Step 0 above
-(`smoke_test_metrics.py`) exercises the *metrics* stack. This one exercises the *integration*
-stack: it runs every 02_2 dispatcher on a tiny object before the real grid is launched.
+There are **two** smoke tests in this phase, one per half of the pipeline. This one exercises the
+*integration* stack: it runs every 02_2 dispatcher on a tiny object before the real grid is
+launched.
 
 **Why.** The ten integration methods span three environments (`benchmark-py-r`, `scgen-py`,
 and the R stack via `rpy2`), two languages, a GPU, and a Seurat↔AnnData round-trip. A single
 run on the full 620k-cell object takes from minutes (BBKNN) to hours (scANVI, kBET-scale
 Seurat), so a broken dispatcher, a missing dependency, a Seurat-version API change or a
 silent cell reordering is expensive to discover late. The smoke test surfaces all of those in
-a couple of minutes on 5,252 cells. It validates the **code path only** — *does the method
+a couple of minutes on 5,252 cells. It validates the **code path only** - *does the method
 run, is the output the expected type (`knn` graph / `embed` / `full`), and is the input cell
-order preserved* — **not** biological integration quality, which is meaningless at this size.
+order preserved* - **not** biological integration quality, which is meaningless at this size.
 Cell order matters because the metrics compare objects cell by cell while checking names only
 as a set, so a reordering passes validation and silently corrupts every score; each dispatcher
 asserts the order survived, and the smoke test is where that assertion first runs for real.
@@ -139,27 +174,32 @@ conda run -n scgen-py python 02_2_integration/run_scgen.py \
 Each dispatcher prints an `[out]` line reporting the `obsm`/graph it produced and asserts the
 cell order internally; a non-zero exit or a failed assertion is the signal to fix the script
 before touching the grid. On the tested PC (T1000, 4 GB) run scVI and scANVI one at a time; scGen
-fits on the card once its decoder pass is chunked (step 4c), but fall back to
+fits on the card once its decoder pass is chunked (see the notes), but fall back to
 `CUDA_VISIBLE_DEVICES=""` if other GPU processes are resident. The smoke outputs in
 `smoke_out/` are disposable and can be deleted once every method has come back green.
 
 ## Smoke test of the metrics step
 
-The counterpart of the integration smoke test, for the *scoring* half. It is a **local**
-runner in `utils/` — `smoke_test_metrics_pipeline.sh` — kept separate from the real,
-cluster-only metrics step (the two SLURM arrays) so no smoke logic ever leaks into the real
-run. It walks the same grid but scores the tiny `smoke_out/` objects against `smoke_hvg.h5ad`
-instead of the real integrations, running the whole metrics code path — the pre-flight check,
-both metric jobs, the CSV tree, the merge — in a few minutes on 5,252 cells before a single
-cluster job is submitted.
+The counterpart for the *scoring* half, and itself two tests - `smoke_test_metrics.py`
+validates the **stack**, `smoke_test_metrics_pipeline.sh` the **pipeline**.
 
-**Why, on top of step 0.** `smoke_test_metrics.py` (step 0) validates that the *environment*
-can compute every metric on an identity integration. This validates the *pipeline*: that
-`metrics.py` / `metrics_kbet.py` read the real integration outputs (embed / full / knn, from
-five different writers) correctly, that the per-type metric selection is right, that kBET
-patches cleanly into the CSV `metrics.py` wrote, and that the tree merges into the shape the
-plotting expects. It checks the **code path only** — every expected metric produces a finite
-value — not biological quality, which is meaningless at this size.
+**The stack** (`smoke_test_metrics.py`, step 0). Neither test is optional bookkeeping:
+`scib 1.1.7` predates the numpy/pandas versions in the current environment and fails *halfway
+through* the metric computation, not at the start. This one checks that the environment can
+compute every one of the 13 metrics on an identity integration, on a 5k fixture, before any real
+job is launched. It has a SLURM wrapper (`submit_smoke_test.slurm`) so the cluster environment
+can be validated the same way.
+
+**The pipeline** (`smoke_test_metrics_pipeline.sh`). A **local** runner in `utils/`, kept
+separate from the real cluster metrics step so no smoke logic ever leaks into the real run. It
+walks the same grid but scores the tiny `smoke_out/` objects against `smoke_hvg.h5ad` instead of
+the real integrations, running the whole metrics code path - the pre-flight check, both metric
+jobs, the CSV tree, the merge - in a few minutes on 5,252 cells. What it proves, on top of the
+stack test: that `metrics.py` / `metrics_kbet.py` read the real integration outputs (embed /
+full / knn, from five different writers) correctly, that the per-type metric selection is right,
+that kBET patches cleanly into the CSV `metrics.py` wrote, and that the tree merges into the
+shape the plotting expects. Code path only - every expected metric produces a finite value -
+not biological quality, which is meaningless at this size.
 
 ```bash
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
@@ -178,8 +218,8 @@ which expand into 11 metrics jobs; every expected metric per type must come back
 ## Trained models
 
 Three methods fit a model: **scVI**, **scANVI** and **scGen**. For those, training is the long
-half of the run and what follows it is the fragile half — `batch_removal` for scGen, the latent
-pass for the other two — so the fitted model is checkpointed in between and reloaded instead of
+half of the run and what follows it is the fragile half - `batch_removal` for scGen, the latent
+pass for the other two - so the fitted model is checkpointed in between and reloaded instead of
 retrained on a re-run. A crash after training no longer costs the training.
 
 The checkpoints do **not** go next to the integrated objects: `02_integration/` holds exactly
@@ -202,18 +242,16 @@ one; a resume reloads whichever stages are already on disk.
 
 `run_all.sh` and `submit_integration.slurm` pass the directory with `--model-dir`, since they own
 the layout (as they do for `02_embeddings/`); `model_paths.py` holds the convention for running a
-script by hand. **To force a retraining, delete the `.pt`** — `--force` alone re-runs the
+script by hand. **To force a retraining, delete the `.pt`** - `--force` alone re-runs the
 integration but still reloads the saved model. The per-script `--retrain` flag does the same for a
 single manual invocation.
 
 ## The run grid (`benchmark_grid.tsv`)
 
-Every run is one row. The file is the single source of truth: the local driver and the
+Every run is one row (17 rows). The file is the single source of truth: the local drivers and the
 SLURM arrays both read it, so the benchmark matrix stays a readable piece of data instead of
-logic scattered across scripts.
-
-Every run is one row (17 rows). A `types` value with two entries expands into two metrics
-jobs downstream, which is how the 17 runs become 21 metrics jobs.
+logic scattered across scripts. A `types` value with two entries expands into two metrics jobs
+downstream, which is how the 17 runs become 21 metrics jobs.
 
 | Column | Meaning |
 |---|---|
@@ -253,7 +291,7 @@ and an embedding in a *single* execution, so they are scored twice from the same
 changing `--type` only. scVI, scANVI and DRVI read `layers['counts']` and ignore `.X`
 entirely: a scaled variant would be a duplicate run, so it is not in the grid.
 
-Harmony runs through `scib.integration.harmony` (Python), not through R — the R `harmony`
+Harmony runs through `scib.integration.harmony` (Python), not through R - the R `harmony`
 package is not required anywhere in this phase.
 
 ### Choosing the latent size (DRVI)
@@ -261,21 +299,26 @@ package is not required anywhere in this phase.
 DRVI is the only method with a free hyperparameter that changes what the benchmark scores, and
 the criterion is visual: a *vanished* latent dimension carries no signal, so the number of
 dimensions the model actually keeps says whether the latent space was large enough. That is why
-DRVI is a notebook and not a grid row driven by `run_all.sh`.
+DRVI is a notebook (`shiao_drvi_128.ipynb`), not a grid row driven by `run_all.sh`, and why it
+is never in the SLURM array.
 
 Three sizes were run (`N_LATENT` = 32, 64, 128), each with its own run id
 (`drvi_unscaled_<N>`) so nothing overwrites anything. **128 is the run in the grid.** At 64 only
 16 dimensions vanish (48 used); at 128, 63 vanish and 65 are used. The count of *used*
 dimensions still grows from 48 to 65, so 64 was truncating the representation, while at 128 half
-the space is left unused — the size is no longer the binding constraint, which is the signal to
+the space is left unused - the size is no longer the binding constraint, which is the signal to
 stop there.
+
+**The notebook.** Same cells and same 2,000 HVGs as every other method. `N_LATENT` at the top is
+the only cell to edit: it drives the run id, every output and the figure folder. The model and
+the latent space live in `$DATA_DIR/02_drvi/`; the benchmark cell writes the scored output
+(`obsm['X_emb']` + `.npy`) exactly as `run_integration.py` does, and the notebook also draws the
+DRVI-specific figures into `figures/<run_id>/`.
 
 Nothing of the exploratory runs enters the benchmark: their integrated `.h5ad` and `.npy` are
 deleted, so the grid cannot pick them up, and what is kept is `figures/drvi_unscaled_64/` alone,
 as the evidence behind the choice. Their model and latent space under `$DATA_DIR/02_drvi/` are
-disposable too — deleting them only means a retraining if that size is ever revisited. The
-notebook is one file with a single `N_LATENT` at the top, so re-running another size is an edit,
-not a new script.
+disposable too - deleting them only means a retraining if that size is ever revisited.
 
 DRVI on the **non-immune compartment** is a different question in a different phase, and the size
 is re-chosen there: 176k cells and 18 labels are not this dataset, so `n_latent = 64` is the run of
@@ -299,7 +342,7 @@ Thirteen metrics, in the two groups used for the summary score.
 Trajectory conservation is present in the original paper, but **excluded** from this benchmark.
 
 Not every metric exists for every output type, and this is structural rather than a defect:
-`knn` output (BBKNN) supports only the graph-based metrics — silhouette, PCR, cell cycle and
+`knn` output (BBKNN) supports only the graph-based metrics - silhouette, PCR, cell cycle and
 HVG conservation are unavailable; `embed` output additionally loses HVG conservation. 
 The summary table will therefore have empty cells by construction.
 
@@ -343,17 +386,15 @@ $DATA_DIR/
 
 ## Where things run
 
-**Both integration and metrics can run locally or on SLURM** (`run_all.sh --slurm`,
-`run_all_metrics.sh --slurm`). The usual split is integration **locally** — the local
-environment is verified and has a GPU — and metrics **on the cluster**, with integrated objects
-transferred as they are produced by `utils/sync_to_cluster.sh` (see "Running the metrics on the
-cluster" below). The `--slurm` path exists for running integrations on the
-cluster too: all methods on partition `normal` (CPU), so scVI/scANVI/scGen are slower there than
+**Both integration and metrics can run locally or on SLURM** (see "The three drivers" for how).
+The usual split is integration **locally** - the local environment is verified and has a GPU -
+and metrics **on the cluster**, with integrated objects transferred as they are produced by
+`utils/sync_to_cluster.sh`. The `--slurm` path exists for running integrations on the cluster
+too: all methods land on partition `normal` (CPU), so scVI/scANVI/scGen are slower there than
 locally, and scGen needs its own `$SCGEN_ENV` (an equivalent of the local `scgen-py`); DRVI stays
-a by-hand notebook. On the cluster every SLURM array is throttled to 3 concurrent tasks in
-`normal`.
+a by-hand notebook.
 
-Embeddings are also exported on their own (~120 MB each — 619,693 cells x 50 dims, float32 —
+Embeddings are also exported on their own (~120 MB each - 619,693 cells x 50 dims, float32 -
 against several GB for a full object),
 which keeps the transfer cheap for the `embed` methods and gives the figures step something
 small and durable to read after the integrated objects are cleaned up.
@@ -362,7 +403,7 @@ small and durable to read after the integrated objects are cleaned up.
 
 Three things have to be there: the **code**, the **objects** and the **environment**.
 
-The code is a clone — `.gitignore` excludes `datasets/`, so it carries only scripts and figures.
+The code is a clone - `.gitignore` excludes `datasets/`, so it carries only scripts and figures.
 The whole `02_integration_benchmark/` tree must stay intact: the wrappers resolve
 `benchmark_grid.tsv` and `utils/` relative to their own location, and `metrics.py` /
 `metrics_kbet.py` import `utils/metrics_shared.py` (which must import `utils/scib_compat.py`
@@ -374,9 +415,17 @@ before `scib`). `make_summary_table.R` additionally reads `utils/plotSingleTaskR
 git clone git@github.com:Catt-Git/QCB-Master-Thesis.git ~/Tesi/QCB-Master-Thesis
 ```
 
-The objects go to the cluster's `DATA_DIR` in the **same layout as the local one** (`sync_to_cluster.sh`
-takes care of that). For the metrics that is the integrated objects plus the references they are
-scored against — not the `.rds`, not `shiao.h5ad`, not the checkpoints:
+The objects go to the cluster's `DATA_DIR` in the **same layout as the local one**, which is what
+`utils/sync_to_cluster.sh` is for: it walks `benchmark_grid.tsv` and uploads the files it names
+to the same relative path under the remote `DATA_DIR`, so nothing is typed by hand and adding a
+grid row is enough to include it. `--what metrics` (default) sends the integrated objects plus
+the references they are scored against - what 02_4 needs, so not the `.rds`, not `shiao.h5ad`,
+not the checkpoints; `--what inputs` sends the 02_1 prepared inputs + HVG lists (what 02_2 needs
+if the integrations run on the cluster); `--what all` both. Same filters, `--dry-run` and
+resume-by-default as the other wrappers - a file already remote at the same byte size is
+`[have]`, one still missing locally is `[skip]`, `--force` re-sends. Transfer is `rsync` (which
+resumes a half-sent file in place), `--scp` for clusters without it; one SSH connection is opened
+and reused, so authentication happens once.
 
 ```bash
 # locally
@@ -399,24 +448,19 @@ mkdir -p logs
 ```
 
 > **`logs/` must exist before `sbatch`.** `#SBATCH --output=logs/...` is resolved against the
-> directory `sbatch` was called from, and SLURM opens that file *before* the job body runs — the
+> directory `sbatch` was called from, and SLURM opens that file *before* the job body runs - the
 > `mkdir -p logs` inside the two `.slurm` scripts is too late to help. Submit from
 > `02_4_metrics/`, with the folder already created, or the array fails immediately.
-
-Runs missing from the cluster are simply not submitted: `run_all_metrics.sh` filters the array
-indices itself, so an incomplete grid (the scaled half still integrating, say) costs nothing.
-The merge and the summary table are run by hand once both arrays finish — `run_all_metrics.sh`
-prints the two commands.
 
 ## Figures
 
 One folder per run, `figures/<run_id>/`: the five comparison panels every method gets from
-`02_3`, plus — for DRVI only — the latent-space figures its notebook draws in the same folder.
+`02_3`, plus - for DRVI only - the latent-space figures its notebook draws in the same folder.
 
 ### Per-method UMAP panels (`02_3_plot_method_umap`)
 
-`02_3_plot_method_umap/plot_methods_umaps.py` writes `figures/<run_id>/` with five
-panels per run, from the integrated object and the unintegrated reference:
+`plot_methods_umaps.py` writes `figures/<run_id>/` with five panels per run, from the integrated
+object and the unintegrated reference:
 
 - `cohort`, integrated (single panel)
 - `cohort`, integrated vs unintegrated (two side by side)
@@ -432,12 +476,7 @@ corrected graph); the unintegrated UMAP is the reference's `obsm['X_umap']` from
 recomputed. `cell_type` colours are inherited from `uns['cell_type_colors']` and `cohort` from a 
 fixed palette, so a category keeps its colour across every panel and method.
 
-`plot_all.sh` is the driver (twin of `run_all.sh`): it walks `benchmark_grid.tsv` and
-plots every run whose integrated `.h5ad` already exists, into `figures/<run_id>/`. It picks the
-`--type` from the grid's `types` column (`embed` wins when a run has one, so scanorama/fastmnn
-are shown on their corrected embedding), matches each run to its scaling reference, and skips
-rows not yet integrated. It takes the same `run_id` and `--scaling` filters as
-`run_all.sh`, plus `--dry-run` to preview.
+`plot_all.sh` drives the whole grid (see "The three drivers"):
 
 ```bash
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
@@ -451,19 +490,19 @@ cd 02_integration_benchmark/02_3_plot_method_umap
 
 The DRVI notebook writes its own figures into the same `figures/<run_id>/` folder, each name
 suffixed with the run id so the 64 and 128 panels stay distinguishable once pulled out of their
-folder. They are *not* the method comparison — that is `02_3` above, identical for every method
-— but the reading of the latent space itself:
+folder. They are *not* the method comparison - that is `02_3` above, identical for every method
+- but the reading of the latent space itself:
 
-- `umap_<key>_<run_id>.png` — one UMAP of the DRVI space per metadata/QC key, plus
+- `umap_<key>_<run_id>.png` - one UMAP of the DRVI space per metadata/QC key, plus
   `umap_combined_<run_id>.png` (the 6-panel grid, same layout as the 01_6 unintegrated one) and
   `umap_per_cell_type_<run_id>.png` (one panel per CellTypist label, since ~50 labels in a
   single panel are unreadable).
-- `latent_dimension_stats[_rmVanished]_<run_id>.png` — per-dimension reconstruction effect, max,
+- `latent_dimension_stats[_rmVanished]_<run_id>.png` - per-dimension reconstruction effect, max,
   mean, std, with and without the vanished dimensions: the plot behind the latent-size choice.
-- `latent_dims_in_umap_<run_id>.png` and `latent_dims_in_heatmap_<key>_<run_id>.png` — each
+- `latent_dims_in_umap_<run_id>.png` and `latent_dims_in_heatmap_<key>_<run_id>.png` - each
   non-vanished dimension on the UMAP, and how the dimensions respond to `cell_type` (also sorted
   by label), `cohort`, `treatment`, `phase`.
-- `ood_*_<run_id>.png` / `ind_linear_weighted_mean_<run_id>.png` — interpretability scores.
+- `ood_*_<run_id>.png` / `ind_linear_weighted_mean_<run_id>.png` - interpretability scores.
   OOD comes from the decoder reconstructions (fast, favours the genes *specific* to a dimension,
   and `OOD_min/max_possible` are its two halves); IND averages the effect of each factor over
   all cells (broader, a gene shared by several dimensions keeps a high score in all of them).
@@ -476,6 +515,8 @@ folder. They are *not* the method comparison — that is `02_3` above, identical
 The final summary table is produced by the official scIB plotting code
 (`utils/plotSingleTaskRNA.R` + `utils/knit_table.R` + `utils/img/`, vendored from
 theislab/scib-reproducibility), driven by `make_summary_table.R -i <merged.csv> -o figures`.
+If those R packages (`dynutils`, `Hmisc`, `ggimage`) are missing it falls back to a built-in
+scorer.
 
 Overall score = 0.6 x bio conservation + 0.4 x batch correction, on min-max scaled metrics.
 
@@ -484,7 +525,7 @@ Overall score = 0.6 x bio conservation + 0.4 x batch correction, on min-max scal
 | Where | Environment | Notes |
 |---|---|---|
 | local | `benchmark-py-r` | everything except scGen; must be **activated**, otherwise rpy2 cannot find R |
-| local | `scgen-py` | scGen only; old pinned stack that conflicts with the main one |
+| local | `scgen-py` | scGen only; old pinned stack that conflicts with the main one. `run_scgen.py` calls `SCGEN` directly, since this env has no scib |
 | HPC | `catalano_env` | metrics, and every integration except scGen when `run_all.sh --slurm` is used (different name for `environments/benchmark-hpc.yml`) |
 | HPC | `$SCGEN_ENV` | scGen only on the cluster; an equivalent of the local `scgen-py` (`submit_integration.slurm` defaults to that name) |
 
@@ -517,8 +558,8 @@ plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`
 - **The scaling is not `scib.preprocessing.scale_batch`.** That function stitches its 34
   per-batch pieces back together with `anndata.AnnData.concatenate`, removed in anndata 0.13,
   and raises before scaling anything; recovering it would mean pinning anndata below 0.11,
-  which conflicts with scanpy 1.12. `scale_batch.py` reimplements the same operation —
-  `sc.pp.scale` per batch, scanpy defaults, no `max_value` clipping — so the result is
+  which conflicts with scanpy 1.12. `scale_batch.py` reimplements the same operation -
+  `sc.pp.scale` per batch, scanpy defaults, no `max_value` clipping - so the result is
   numerically what scIB would have produced. This is an implementation deviation from
   Luecken et al. 2022, not a methodological one.
 - **The scaled reference gets a fresh PCA, and this is not cosmetic.** `scib.metrics.pcr()`
@@ -532,11 +573,18 @@ plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`
   object rather than recomputed: no metric reads them on the reference.
 - **The benchmark inputs are written so that `anndata 0.10` can read them too.** scGen runs
   in `scgen-py`, pinned to anndata 0.10.8, while the inputs are written by anndata 0.13 under
-  pandas 3, which emits three encodings older readers reject — `nullable-string-array` (used
+  pandas 3, which emits three encodings older readers reject - `nullable-string-array` (used
   for the *index*, i.e. barcodes and gene symbols), `nullable-boolean`, and `null` for `None`
   values inside `.uns`. `utils/h5ad_compat.py` downcasts them before writing and re-opens the
   file afterwards to verify, so no separate legacy export is needed and there is only ever one
   copy of each input.
+- **scGen's decoder pass is chunked** (`run_scgen.py --decode-chunk`, default 16,384 cells).
+  scGen decodes every cell in one forward pass inside `batch_removal`, which on 619k cells is a
+  1.85 GB hidden activation plus a 4.7 GB output resident on the GPU at once - an immediate OOM
+  on a 4 GB card, whatever the training batch size.
+- **The R outputs are converted back with rpy2/anndata2ri** (`rds_to_h5ad.py`), **not** with
+  `zellkonverter::writeH5AD`, which has no native R writer and would provision CPython through
+  basilisk.
 - **Seurat runs on the legacy anchor API** (`FindIntegrationAnchors` + `IntegrateData`), not
   on v5 `IntegrateLayers`. The v5 API returns an embedding rather than a corrected matrix,
   which would turn Seurat from a `full` method into an `embed` one and change which metrics
