@@ -43,6 +43,6 @@ so no `.yml` can declare it. Run this once per environment that computes metrics
 Rscript -e "remotes::install_github('theislab/kBET')"
 ```
 
-Skipping it does not raise an error — the metrics jobs simply come back without
+Skipping it does not raise an error - the metrics jobs simply come back without
 kBET. `02_integration_benchmark/utils/smoke_test_metrics.py` reports whether the
 package is present before computing anything, which is the cheap way to find out.

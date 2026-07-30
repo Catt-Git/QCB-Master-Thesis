@@ -47,7 +47,7 @@ def patch_csv(path, setup, value):
 
     If the CSV metrics.py should have produced is missing, a standalone one is
     written with the full metric index and only kBET filled, so the job is not
-    lost — but that is a warning: the two CSVs are meant to be one file.
+    lost - but that is a warning: the two CSVs are meant to be one file.
     """
     if os.path.exists(path):
         df = pd.read_csv(path, index_col=0)

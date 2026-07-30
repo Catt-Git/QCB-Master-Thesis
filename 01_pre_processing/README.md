@@ -20,7 +20,7 @@ BioProject **PRJNA1032700** / GEO **GSE246613**.
 | 5 | `01_4_cc_and_annotation` | `celltypist_annotation.py` | CellTypist annotation (`Cells_Adult_Breast.pkl`, majority voting) → `cell_type`, `celltypist_predicted`. | local (terminal) |
 | 6 | `01_4_cc_and_annotation` | `fraction_reassignment.py` | Recode `fraction` CD45+/CD45- → `imm`/`non_imm` from the CellTypist lineage (in-place); `dataset_origin` left untouched. | local (terminal) |
 | 7 | `01_5_scib_pp` | `scib_reduce_data.py` | Batch-aware HVG (`cohort`, 2000) + PCA(50) + neighbors + UMAP; also writes the selected HVG list. | local (terminal) |
-| 8 | `01_5_scib_pp` | `scib_clustering.py` | Leiden optimal-resolution sweep (0.1–1.0) vs `cell_type` NMI → `shiao.h5ad`. | local (terminal) |
+| 8 | `01_5_scib_pp` | `scib_clustering.py` | Leiden optimal-resolution sweep (0.1-1.0) vs `cell_type` NMI → `shiao.h5ad`. | local (terminal) |
 | 9 | `01_6_visualization` | `visualization_unintegrated.ipynb` | Figures on the final unintegrated object: count barplots, annotation/sort-purity check, raw-vs-scran normalization and size factors, the per-key QC UMAPs plus a combined 6-panel metadata grid, and the Leiden sweep (resolution/NMI profile + the two 6-panel resolution grids). Read-only. | local (notebook) |
 
 > **Note on step 6.** `fraction_reassignment.py` must run *after* `celltypist_annotation.py`
@@ -29,7 +29,7 @@ BioProject **PRJNA1032700** / GEO **GSE246613**.
 
 ## Running the whole headless chain: `preprocessing_all.sh`
 
-Steps 3–8 (01_3 → 01_5) are six plain scripts with no arguments, so they can be chained
+Steps 3-8 (01_3 → 01_5) are six plain scripts with no arguments, so they can be chained
 in one command. `preprocessing_all.sh` does exactly that, in the same shape as
 `03_1_subsetting/subsetting_all.sh`:
 
@@ -126,8 +126,8 @@ The repo keeps only the lightweight figures, one folder per producing step:
   `umap_combined_qc_unintegrated.png`, the 6-panel metadata grid. That grid uses the same keys,
   layout and palettes as the DRVI latent-space UMAPs of phase 02, so they are directly comparable.
 - **Leiden** - `leiden_resolution_profile_unintegrated.png` (NMI vs `cell_type` across the
-  0.1–1.0 grid, optimum marked) and the two 6-panel UMAP grids, resolutions 0.1–0.5 and
-  0.6–1.0, each with `cell_type` as reference.
+  0.1-1.0 grid, optimum marked) and the two 6-panel UMAP grids, resolutions 0.1-0.5 and
+  0.6-1.0, each with `cell_type` as reference.
 
 ## Object conventions (carried through every step)
 
@@ -178,8 +178,8 @@ The repo keeps only the lightweight figures, one folder per producing step:
 
 **Clustering (01_5)**
 - `scib.clustering.cluster_optimal_resolution`, `label_key='cell_type'`, leiden
-  (`flavor='igraph'`, `n_iterations=2`), resolution grid **0.1–1.0** (capped from scib's
-  0.1–2.0), selected by max NMI; every per-resolution column
+  (`flavor='igraph'`, `n_iterations=2`), resolution grid **0.1-1.0** (capped from scib's
+  0.1-2.0), selected by max NMI; every per-resolution column
   (`optscib_unintegrated_leiden_<res>`) is kept for the 01_6 grids.
 
 ## Established numbers

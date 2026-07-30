@@ -104,7 +104,7 @@ scripts before moving on,  which is how the thesis run was actually done.
 
 Two steps reach the internet from a compute node: step 1 (ENA API) and step 3 (`prefetch` to NCBI).
 Allocations requested by the wrappers (for Methods; all CPU-only, the cluster has no GPU). The
-partition sets the wall-clock limit — `long` is 30 days — so the choice between `normal` and `long`
+partition sets the wall-clock limit - `long` is 30 days - so the choice between `normal` and `long`
 is the only thing to get right.
 
 | Step | Partition | CPUs | Mem | Note |
