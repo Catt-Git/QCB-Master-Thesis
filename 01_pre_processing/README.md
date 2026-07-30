@@ -14,8 +14,8 @@ BioProject **PRJNA1032700** / GEO **GSE246613**.
 |---|--------|--------|--------------|-------|
 | 1 | `01_1_load_and_check` | `load_and_check.ipynb` | Sanity-check the concatenated object: raw-count `.X`/`counts`, unique gene symbols, metadata fields; `cohort × response/treatment/fraction` crosstabs (the `batch_key` decision), NaN checks. No output file. | local (notebook) |
 | 2 | `01_2_qc_scrublet_filtering` | `qc_scrublet_filter.ipynb` | QC metrics (mt/ribo), per-biopsy Scrublet, cell filter (doublets, top-1% UMI, `pct_mt<10`, `n_genes>100`), drop zero-count genes. QC violins/scatters. | local (notebook) |
-| 3 | `01_3_normalization` | `scran_norm.py` | scran normalization via scib (`quickCluster → computeSumFactors → logNormCounts`); adds `size_factors`, clears `.raw`, casts `.X` to float32. | HPC (SLURM) |
-| 3 | `01_3_normalization` | `submit_scran_norm.slurm` | SLURM wrapper for the scran step. | HPC (SLURM) |
+| 3 | `01_3_normalization` | `scran_norm.py` | scran normalization via scib (`quickCluster → computeSumFactors → logNormCounts`); adds `size_factors`, clears `.raw`, casts `.X` to float32. | HPC (SLURM) or local |
+| 3 | `01_3_normalization` | `submit_scran_norm.slurm` | SLURM wrapper for the scran step alone. | HPC (SLURM) |
 | 4 | `01_4_cc_and_annotation` | `cell_cycle_score.py` | Tirosh/Regev cell-cycle scoring → `S_score`, `G2M_score`, `phase`. | local (terminal) |
 | 5 | `01_4_cc_and_annotation` | `celltypist_annotation.py` | CellTypist annotation (`Cells_Adult_Breast.pkl`, majority voting) → `cell_type`, `celltypist_predicted`. | local (terminal) |
 | 6 | `01_4_cc_and_annotation` | `fraction_reassignment.py` | Recode `fraction` CD45+/CD45- → `imm`/`non_imm` from the CellTypist lineage (in-place); `dataset_origin` left untouched. | local (terminal) |
@@ -26,6 +26,42 @@ BioProject **PRJNA1032700** / GEO **GSE246613**.
 > **Note on step 6.** `fraction_reassignment.py` must run *after* `celltypist_annotation.py`
 > (it needs `cell_type`) and *before* `01_5` (so the recoded `fraction` propagates into
 > `shiao.h5ad`). It rewrites the 01_4 annotated file in place.
+
+## Running the whole headless chain: `preprocessing_all.sh`
+
+Steps 3–8 (01_3 → 01_5) are six plain scripts with no arguments, so they can be chained
+in one command. `preprocessing_all.sh` does exactly that, in the same shape as
+`03_1_subsetting/subsetting_all.sh`:
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+./preprocessing_all.sh                  # every step, locally, in sequence
+./preprocessing_all.sh --slurm          # the same chain as ONE job on `long`
+./preprocessing_all.sh --dry-run        # print the plan, do nothing
+./preprocessing_all.sh reduce cluster   # only the named step(s), in file order
+./preprocessing_all.sh --force          # re-run everything, overwriting
+```
+
+Step names: `norm`, `cc`, `annot`, `fraction`, `reduce`, `cluster`. The notebooks are not
+part of the chain: 01_1/01_2 produce its input, 01_6 only reads `shiao.h5ad`.
+
+- **Resuming is the default.** A step whose output already exists is `[have]` and skipped,
+  so re-running after a crash picks up where it stopped; the check is existence only, so
+  delete an `.h5ad` truncated mid-write before resuming. `fraction` has no output of its own
+  (it rewrites its input), so its check reads `.obs['fraction']` straight out of the HDF5:
+  `imm`/`non_imm` categories mean the recode already happened.
+- **Pre-flight.** Every scheduled step must be able to read its input, either from disk or
+  from an earlier scheduled step; the run aborts before starting otherwise. This is the
+  guard for asking for a late step whose ~10 GB intermediate has been cleaned up.
+- **`--slurm`** submits `submit_preprocessing_all.slurm` (partition `long`, 470G, 8 cpus,
+  no `--time`), which sets up `catalano_env` and re-invokes this same script in local mode
+  inside the job — one job for the whole phase, resume logic included, so a resubmit after
+  a failure skips what is already done. Filters and `--force` are forwarded. Logs land in
+  `01_pre_processing/logs/` (gitignored), both the runner's own timestamped `.log` and the
+  job's `preprocessing_all_<jobid>.out`/`.err`.
+
+The sections below still describe every step on its own: the runner adds a way to chain
+them, it does not replace the per-step commands.
 
 ## Data location (`DATA_DIR`)
 

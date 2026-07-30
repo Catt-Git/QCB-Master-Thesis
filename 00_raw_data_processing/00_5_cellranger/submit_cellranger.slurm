@@ -24,7 +24,7 @@ conda activate scrna
 module load cellranger/4.0.0
 # Load Miniconda, activate the scrna environment, and load the Cell Ranger 4.0.0 module.
 
-export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams}"
+export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets}"
 export REF="${REF:-/users/genomics/albertoc/Tesi/cell_ranger/refdata-cellranger-GRCh38-3.0.0}"
 # Site-specific paths, set here at the entry point rather than defaulted inside run_cellranger_batch.sh: DATA_DIR is the data root (expects renamed_fastq/ inside it, writes cellranger_out/ there), REF is the reference transcriptome. These are the values used for the thesis run; to replicate elsewhere change these two lines, or pass them at submission with 'sbatch --export=ALL,DATA_DIR=...,REF=...' (the ${VAR:-default} form lets the submitted value win).
 

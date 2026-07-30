@@ -29,7 +29,7 @@ hostname; date
 echo "Job name: $SLURM_JOB_NAME"; echo "Array job: $SLURM_ARRAY_JOB_ID  Task: $SLURM_ARRAY_TASK_ID"
 # Log the node, timestamp, and job identifiers into the .out file for traceability.
 
-export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams}"
+export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets}"
 DOWNLOAD_ENV="${DOWNLOAD_ENV:-catalano_env}"
 # Data root (must hold ~2.4TB): the value used for the thesis run, set here at the entry point and overridable with 'sbatch --export=ALL,DATA_DIR=...'. download_fastq.sh itself keeps requiring DATA_DIR with no default, so the terabytes can never land in a repo clone by accident.
 # DOWNLOAD_ENV is the conda environment providing the SRA Toolkit (prefetch/fasterq-dump) and pigz: on the cluster that is catalano_env, built from environments/benchmark-hpc.yml, which declares sra-tools.

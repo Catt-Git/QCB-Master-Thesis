@@ -22,7 +22,7 @@ hostname; date
 echo "Job name: $SLURM_JOB_NAME"; echo "Job ID: $SLURM_JOB_ID"
 # Log the node, timestamp, and job identifiers into the .out file for traceability.
 
-export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams}"
+export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets}"
 # Data root: the value used for the thesis run, kept overridable with 'sbatch --export=ALL,DATA_DIR=...'. rename_for_cellranger.sh reads $DATA_DIR/fastq_raw and writes $DATA_DIR/renamed_fastq.
 
 cd "$SLURM_SUBMIT_DIR"

@@ -6,6 +6,8 @@ __pycache__/
 
 # ---------------------------------------------------------------------------
 # Run logs
+#   01_pre_processing/logs/ -> preprocessing_all.sh (uno per invocazione, timestamped)
+#                              + #SBATCH --output/--error di submit_preprocessing_all.slurm
 #   03_1_subsetting/logs/  -> subsetting_all.sh (uno per invocazione, timestamped)
 #   02_2_integration/logs/ -> #SBATCH --output/--error di submit_integration.slurm
 #   02_4_metrics/logs/     -> idem per submit_metrics.slurm / submit_kbet.slurm

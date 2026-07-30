@@ -27,7 +27,7 @@ conda activate catalano_env
 which python3
 # Sanity check: confirm python3 comes from the catalano_env.
 
-export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams}"
+export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets}"
 # Site-specific data root, set here at the entry point rather than defaulted inside the script. This is the value used for the thesis run; to replicate elsewhere change this line, or pass it at submission with 'sbatch --export=ALL,DATA_DIR=...' (the ${VAR:-default} form lets the submitted value win).
 
 cd "$SLURM_SUBMIT_DIR"
