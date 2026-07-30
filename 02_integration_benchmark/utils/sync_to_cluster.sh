@@ -53,7 +53,7 @@ set -euo pipefail
 
 UTILS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GRID="$UTILS_DIR/../benchmark_grid.tsv"
-REMOTE="${CLUSTER_DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams}"
+REMOTE="${CLUSTER_DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets}"
 
 # Read by the R methods only, so they are not in any grid column; they belong to
 # the `inputs` set all the same.
