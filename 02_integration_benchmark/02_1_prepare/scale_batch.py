@@ -13,18 +13,38 @@ AttributeError before scaling anything, and pinning anndata back below 0.11 to
 recover it would conflict with scanpy 1.12.
 This code basically reimplements the same logic.
 
-Why the PCA is recomputed, but the graph and UMAP are not?
-`scib.metrics.pcr()` reuses `obsm['X_pca']` together with `uns['pca']['variance']`
-whenever both exist, and it is called with `recompute_pca=False`. The PCA
-inherited from 01_5 describes the *unscaled* data, so carrying it into this object
-would silently hand PCR batch and cell-cycle conservation a baseline computed on
-a different matrix. It is recomputed here with the same parameters scib would use
-internally (50 components, arpack), so the stored result is what scib would have
-computed anyway - once, and identically for every metrics job that reads it.
-The neighbour graph and the UMAP are dropped instead of recomputed: no scib
-metric reads them on the reference object, `metrics.py` rebuilds what it needs on
-the integrated object, and a second "unintegrated" UMAP alongside the canonical
-one from 01_6 would only invite picking the wrong one in 02_3_plot_method_umap.
+Everything inherited from 01_5/01_6 - the PCA, the neighbour graph, the UMAP -
+describes the *unscaled* matrix, so all of it is dropped here. The PCA and the
+UMAP are then rebuilt on the scaled matrix; the graph is not kept.
+
+The PCA, because `scib.metrics.pcr()` reuses `obsm['X_pca']` together with
+`uns['pca']['variance']` whenever both exist, and is called with
+`recompute_pca=False`. Carrying the 01_5 PCA over would silently hand PCR batch
+and cell-cycle conservation a baseline computed on a different matrix. It is
+recomputed with the parameters scib would use internally (50 components, arpack),
+so the stored result is what scib would have computed anyway - once, and
+identically for every metrics job that reads it.
+
+The UMAP, because 02_3_plot_method_umap draws the unintegrated half of its QC
+panels straight from the reference's `obsm['X_umap']`, and a scaled run has to be
+shown against the scaled reference: per-batch z-scoring is itself a weak batch
+correction, so the unscaled layout would credit the method with mixing the
+scaling had already done. No scib metric reads it (`metrics.py` runs
+`reduce_data(umap=False)`), so for 02_4 it is inert either way. Parameters are
+the ones 01_6 used, taken from `uns['neighbors']['params']` of the unscaled
+object rather than assumed, so the two unintegrated baselines differ by the
+scaling alone and not by how they were laid out.
+
+The neighbour graph behind that UMAP is computed and then discarded: nothing
+downstream reads it off the reference, and on 619,693 cells it would add hundreds
+of MB to a file that is already 1.1 GB.
+
+Note for an existing `shiao_hvg_2k_scaled.h5ad` that predates the UMAP step: do
+not re-run this script to acquire it. Re-running rewrites .X, and that file is
+the exact input the scaled integrations consumed - deterministic or not, it must
+not be re-derived under finished runs. The UMAP was appended to it in place
+instead, reading only its stored PCA. Rebuilding from scratch is for a clean
+run, where no integration depends on the old file.
 
 Input : $DATA_DIR/shiao_hvg_2k.h5ad         (619,693 x 2,000, sparse)
 Output: $DATA_DIR/shiao_hvg_2k_scaled.h5ad  (dense by construction, 1.1 GB)
@@ -54,6 +74,11 @@ OUT_PATH = os.path.join(DATA_DIR, "shiao_hvg_2k_scaled.h5ad")
 BATCH_KEY = "cohort"
 N_PCS = 50
 SEED = 0
+
+# UMAP settings, matching uns['neighbors']['params'] of the unscaled object so the
+# two unintegrated baselines are laid out identically.
+N_NEIGHBORS = 15
+UMAP_METRIC = "euclidean"
 
 # scanpy scales to a *sample* standard deviation of 1 (its mean/variance helper
 # applies the ddof=1 correction), so a check written with the numpy default
@@ -139,8 +164,10 @@ for batch in batches:
     assert std_error < STD_TOL, f"batch {batch!r}: max |std - 1| = {std_error:.2e}"
 print(f"  all {len(batches)} batches: |mean| < {MEAN_TOL}, |std - 1| < {STD_TOL}", flush=True)
 
-# Everything derived from the unscaled matrix is now wrong for this object. The
-# PCA is replaced below; the graph and the UMAP are removed rather than rebuilt.
+# Everything derived from the unscaled matrix is now wrong for this object, so it
+# all goes. The PCA and the UMAP are rebuilt on the scaled matrix further down;
+# the graph is not kept. Dropping first means a rebuild that fails leaves nothing
+# stale behind to be mistaken for a valid layout.
 for key in ["X_umap"]:
     if key in adata.obsm:
         del adata.obsm[key]
@@ -161,6 +188,33 @@ sc.pp.pca(adata, n_comps=N_PCS, svd_solver="arpack", random_state=SEED, mask_var
 
 assert "pca" in adata.uns and "variance" in adata.uns["pca"], "PCA metadata not written"
 assert adata.obsm["X_pca"].shape == (adata.n_obs, N_PCS), "unexpected X_pca shape"
+
+# The unintegrated UMAP of *this* object, for 02_3's QC panels.
+
+print(f"\nComputing the unintegrated UMAP (n_neighbors={N_NEIGHBORS}, "
+      f"metric={UMAP_METRIC}, on X_pca) ...", flush=True)
+sc.pp.neighbors(adata, n_neighbors=N_NEIGHBORS, metric=UMAP_METRIC,
+                use_rep="X_pca", random_state=SEED)
+sc.tl.umap(adata, random_state=SEED)
+
+assert adata.obsm["X_umap"].shape == (adata.n_obs, 2), "unexpected X_umap shape"
+assert np.isfinite(adata.obsm["X_umap"]).all(), "UMAP produced non-finite coordinates"
+
+# Keep the layout, drop the graph that produced it: no downstream step reads a
+# neighbour graph off the reference, and it would cost hundreds of MB here.
+adata.uns["unintegrated_umap"] = {
+    "computed_on": "X_pca",
+    "n_neighbors": N_NEIGHBORS,
+    "metric": UMAP_METRIC,
+    "random_state": SEED,
+    "note": ("unintegrated layout of the per-batch scaled matrix; the neighbour "
+             "graph behind it is not persisted"),
+}
+for key in ["neighbors", "umap"]:
+    adata.uns.pop(key, None)
+for key in list(adata.obsp):
+    del adata.obsp[key]
+print("  layout kept in obsm['X_umap']; neighbour graph discarded", flush=True)
 
 # Save the scaled object. The output is dense by construction (much larger).
 

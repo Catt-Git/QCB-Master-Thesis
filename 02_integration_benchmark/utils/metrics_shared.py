@@ -36,6 +36,8 @@ module does it, so importing it first is enough for the caller too.
 
 from __future__ import annotations
 
+import functools
+import inspect
 import os
 import sys
 
@@ -91,6 +93,58 @@ EXPECTED = {
         "graph_conn", "kBET", "iLISI", "cLISI",
     ],
 }
+
+
+def use_igraph_leiden(n_iterations: int = 2, verbose: bool = False) -> bool:
+    """Make scib's optimised clustering use igraph's leiden instead of leidenalg.
+
+    On this benchmark leidenalg spends ~20 h on the ten resolutions of a
+    619,693-cell graph, before a single metric is computed; igraph's
+    implementation is the one scanpy itself recommends (the ``FutureWarning``
+    printed in every log) and is orders of magnitude faster.
+
+    It has to be swapped *here* rather than by pre-computing the clusterings:
+    ``scib.me.metrics`` calls ``cluster_optimal_resolution(..., force=True)``,
+    which reclusters every resolution unconditionally, so existing
+    ``cluster_<res>`` columns are overwritten instead of reused.
+    ``cluster_optimal_resolution`` defaults to ``sc.tl.leiden`` and looks that
+    attribute up when it runs, so rebinding it is enough and needs no change to
+    the metric call itself.
+
+    What this changes: both flavors optimise the same objective (leidenalg's
+    ``RBConfigurationVertexPartition`` *is* modularity with a resolution
+    parameter), but the implementations and the stopping criterion differ
+    (``n_iterations=2`` instead of iterating to convergence), so the partitions
+    are similar but not identical and NMI/ARI move slightly. Nothing else does:
+    the other eleven metrics read the graph or the embedding, not the clustering.
+    That makes this a benchmark-wide switch - every run must be scored with the
+    same flavor, or the NMI/ARI rows cannot be compared across methods.
+
+    :returns: True if the swap happened, False on a scanpy too old to take
+        ``flavor`` (the caller then runs with leidenalg, slowly but correctly).
+    """
+    if "flavor" not in inspect.signature(sc.tl.leiden).parameters:
+        print("[cluster] WARNING: this scanpy's leiden has no `flavor` argument; "
+              "falling back to leidenalg. Expect the clustering to take hours.",
+              flush=True)
+        return False
+
+    original = sc.tl.leiden
+    if getattr(original, "_igraph_flavor", False):  # already patched
+        return True
+
+    @functools.wraps(original)  # keeps __name__ == "leiden", which scib prints
+    def leiden_igraph(adata, **kwargs):
+        kwargs.setdefault("flavor", "igraph")
+        kwargs.setdefault("n_iterations", n_iterations)
+        kwargs.setdefault("directed", False)  # required by the igraph flavor
+        return original(adata, **kwargs)
+
+    leiden_igraph._igraph_flavor = True
+    sc.tl.leiden = leiden_igraph
+    if verbose:
+        print(f"[cluster] leiden flavor=igraph, n_iterations={n_iterations}", flush=True)
+    return True
 
 
 def metric_flags(type_: str) -> dict:

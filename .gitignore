@@ -10,6 +10,8 @@ __pycache__/
 #                              + #SBATCH --output/--error di submit_preprocessing_all.slurm
 #   03_1_subsetting/logs/  -> subsetting_all.sh (uno per invocazione, timestamped)
 #   02_2_integration/logs/ -> #SBATCH --output/--error di submit_integration.slurm
+#                              + submit_drvi.slurm
+#   03_2_drvi_run/logs/    -> idem per submit_drvi_nonimm.slurm
 #   02_4_metrics/logs/     -> idem per submit_metrics.slurm / submit_kbet.slurm
 # ---------------------------------------------------------------------------
 logs/

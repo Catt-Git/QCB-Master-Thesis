@@ -130,7 +130,7 @@ print("Generating normalization diagnostics...", flush=True)
 # script is in 01_preprocessing/01_3_normalization/, figures/ sits in 01_preprocessing/.
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PHASE_DIR = os.path.dirname(SCRIPT_DIR)  # 01_preprocessing/
-FIG_DIR = os.environ.get("FIG_DIR", os.path.join(PHASE_DIR, "figures", "03_normalization"))
+FIG_DIR = os.environ.get("FIG_DIR", os.path.join(PHASE_DIR, "figures", "01_3_normalization"))
 os.makedirs(FIG_DIR, exist_ok=True)
 
 # Guard: scran size factors must be strictly positive (<= 0 breaks the log and

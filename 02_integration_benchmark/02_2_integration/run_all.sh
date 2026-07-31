@@ -22,7 +22,8 @@
 #                            the .rds is then deleted (--keep-rds to keep it):
 #                            nothing downstream reads it and it is the largest
 #                            artefact of the phase (15 GB for fastMNN alone).
-#   notebook                 skipped (DRVI, run by hand to check and adjust n_latent)
+#   notebook                 skipped (DRVI: the latent size is chosen by eye in the
+#                            notebook, then trained by run_drvi.py / submit_drvi.slurm)
 #
 # Embeddings (embed / full,embed rows) are also written to
 # 02_embeddings/<run_id>.npy: small, durable artifacts for the figures step.
@@ -215,7 +216,9 @@ run_slurm() {
   fi
   local j; j="$(sbatch --parsable --export="$exports" --array="$spec" "$SCRIPT_DIR/submit_integration.slurm")"
   echo "submitted integration array: job $j"
-  echo "DRVI is a notebook: run it by hand (shiao_drvi_128.ipynb). Then score with 02_4_metrics/run_all_metrics.sh."
+  echo "DRVI is not in the array: pick the latent size in shiao_drvi_128.ipynb, then run that size"
+  echo "here (python run_drvi.py --n-latent N) or on the cluster (sbatch submit_drvi.slurm --n-latent N)."
+  echo "Then score with 02_4_metrics/run_all_metrics.sh."
 }
 
 # Local mode: run every matching integration here, in sequence.
@@ -277,7 +280,7 @@ run_local() {
           conda_guarded deactivate
           ;;
         notebook)
-          echo "[skip] $run_id is a notebook (DRVI); run it by hand"; n_skip=$((n_skip + 1)); continue ;;
+          echo "[skip] $run_id is a notebook (DRVI); see run_drvi.py"; n_skip=$((n_skip + 1)); continue ;;
         *)
           echo "[error] unknown language '$language' for $run_id" >&2; exit 1 ;;
       esac

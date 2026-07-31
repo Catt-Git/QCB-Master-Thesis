@@ -19,8 +19,22 @@ The integrated embedding is derived from the output type:
     embed  -> neighbours on obsm['X_emb'], then UMAP
     full   -> PCA on the corrected .X, then neighbours + UMAP
     knn    -> UMAP straight on the corrected graph already in the object
-The unintegrated UMAP is the reference's obsm['X_umap'] from 02_1 (the
-unintegrated space); nothing is recomputed for it.
+and is then **cached back into the integrated .h5ad** as obsm['X_umap'], with a
+uns['integrated_umap'] record of the type and seed it came from. A layout on
+619,693 cells costs ~25 min, so recomputing it every time a colour or a panel
+changed was the single most expensive thing this script did. A later run reuses
+the cached array when that record matches the requested --type and --seed, and
+recomputes otherwise; --recompute-umap forces it, --no-cache-umap skips the
+write. Only obsm['X_umap'] and that record are written - never a PCA and never a
+neighbour graph, which scib recomputes for itself in 02_4 and which would cost
+hundreds of MB per object. The match on the provenance record, rather than on the
+mere presence of obsm['X_umap'], is what keeps a layout of unknown origin from
+being drawn: some objects carry one from earlier exploratory work.
+
+The unintegrated UMAP is the reference's obsm['X_umap'] (the unintegrated space);
+nothing is recomputed for it. The reference must be the run's own scaling variant,
+so a scaled run shows the z-scored input as its "before"; the scaled object carries
+its own UMAP, built on the scaled matrix by 02_1_prepare/scale_batch.py.
 
 Colours are shared across every panel and method: cell_type inherits
 uns['cell_type_colors'] from the reference, cohort gets a fixed large palette, so
@@ -42,6 +56,7 @@ from __future__ import annotations
 import argparse
 import os
 
+import h5py
 import numpy as np
 import matplotlib
 
@@ -51,14 +66,23 @@ from matplotlib.lines import Line2D
 
 import scanpy as sc
 
+try:  # anndata >= 0.11
+    from anndata.io import write_elem
+except ImportError:  # older layouts
+    from anndata.experimental import write_elem
+
 RESULT_TYPES = ("full", "embed", "knn")
+
+# uns key holding what the cached obsm['X_umap'] was computed from.
+UMAP_PROV = "integrated_umap"
 
 
 def parse_args():
     p = argparse.ArgumentParser(description="Per-method UMAP QC panels")
     p.add_argument("-i", "--integrated", required=True, help="integrated .h5ad")
     p.add_argument("-u", "--reference", required=True,
-                   help="unintegrated reference .h5ad (must match the scaling variant)")
+                   help="unintegrated reference .h5ad (must match the scaling variant "
+                        "and carry obsm['X_umap'])")
     p.add_argument("-m", "--method", required=True, help="method name, for titles/filenames")
     p.add_argument("--type", required=True, choices=RESULT_TYPES,
                    help="integration output type: full, embed or knn")
@@ -67,6 +91,10 @@ def parse_args():
     p.add_argument("-l", "--label-key", default="cell_type")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--dpi", type=int, default=150)
+    p.add_argument("--recompute-umap", action="store_true",
+                   help="ignore the cached integrated layout and lay it out again")
+    p.add_argument("--no-cache-umap", action="store_true",
+                   help="do not write the layout back into the integrated .h5ad")
     return p.parse_args()
 
 
@@ -85,6 +113,52 @@ def integrated_umap(adata, type_, batch_key, seed):
         )
     sc.tl.umap(adata, random_state=seed)
     return adata
+
+
+def cached_umap_matches(adata, type_, seed):
+    """True if obsm['X_umap'] was cached by this script for the same type and seed.
+
+    Keyed on the uns record rather than on obsm['X_umap'] alone: several
+    integrated objects already carry a UMAP of unknown provenance from earlier
+    exploratory work, and those must be recomputed, not drawn.
+    """
+    prov = adata.uns.get(UMAP_PROV)
+    if prov is None or "X_umap" not in adata.obsm:
+        return False
+    try:
+        return str(prov["type"]) == type_ and int(prov["seed"]) == int(seed)
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def persist_umap(path, xy, type_, seed):
+    """Append obsm['X_umap'] + the provenance record to an existing .h5ad, in place.
+
+    Deliberately not a read-modify-write through AnnData: these objects run to
+    9.9 GB, and rewriting one to add 5 MB would be minutes of I/O plus a second
+    copy on disk. h5py opens the file, replaces the two elements and closes it;
+    .X, .layers, .obs, .var and .obsp are never read, let alone written.
+    """
+    record = {
+        "source": "plot_methods_umaps.py",
+        "type": type_,
+        "seed": int(seed),
+        "note": ("integrated-space layout for the 02_3 QC panels; the neighbour "
+                 "graph and PCA behind it are not persisted"),
+    }
+    with h5py.File(path, "a") as f:
+        stored = f["obs"][f["obs"].attrs["_index"]]
+        n_obs = stored["values"].shape[0] if isinstance(stored, h5py.Group) else stored.shape[0]
+        if n_obs != xy.shape[0]:
+            raise AssertionError(
+                f"{path} holds {n_obs:,} cells but the layout has {xy.shape[0]:,}"
+            )
+        # Objects written from the R side can lack the groups entirely.
+        for group in ("obsm", "uns"):
+            if group not in f:
+                write_elem(f, group, {})
+        write_elem(f["obsm"], "X_umap", np.asarray(xy, dtype=np.float32))
+        write_elem(f["uns"], UMAP_PROV, record)
 
 
 def build_color_map(key, integrated, reference):
@@ -149,15 +223,26 @@ def main():
         assert key in integrated.obs, f"integrated object missing obs[{key!r}]"
         assert key in reference.obs, f"reference object missing obs[{key!r}]"
     assert "X_umap" in reference.obsm, (
-        "reference has no obsm['X_umap']; it should carry the unintegrated UMAP from 02_1"
+        f"reference {args.reference} has no obsm['X_umap']. The unscaled object gets it "
+        "from 01_6, the scaled one from 02_1_prepare/scale_batch.py - a scaled object "
+        "built before that script computed a UMAP has none."
     )
     # Same cells on both sides, so the comparison is honest.
     assert set(integrated.obs_names) == set(reference.obs_names), (
         "integrated and reference hold different cells"
     )
 
-    print(f"[umap] computing integrated embedding (type={args.type})", flush=True)
-    integrated = integrated_umap(integrated, args.type, args.batch_key, seed)
+    if not args.recompute_umap and cached_umap_matches(integrated, args.type, seed):
+        print(f"[umap] reusing cached obsm['X_umap'] (type={args.type}, seed={seed})",
+              flush=True)
+    else:
+        print(f"[umap] computing integrated embedding (type={args.type})", flush=True)
+        integrated = integrated_umap(integrated, args.type, args.batch_key, seed)
+        if args.no_cache_umap:
+            print("[umap] not cached (--no-cache-umap)", flush=True)
+        else:
+            persist_umap(args.integrated, integrated.obsm["X_umap"], args.type, seed)
+            print(f"[umap] cached into {args.integrated}", flush=True)
 
     cmap = {
         args.batch_key: build_color_map(args.batch_key, integrated, reference),

@@ -59,7 +59,7 @@ try:
 except NameError:
     SCRIPT_DIR = os.getcwd()
 PHASE_DIR = os.path.dirname(SCRIPT_DIR)  # 01_pre_processing/
-FIG_DIR = os.path.join(PHASE_DIR, "figures", "05_scib_reduce_data")
+FIG_DIR = os.path.join(PHASE_DIR, "figures", "01_5_scib_reduce_data")
 os.makedirs(FIG_DIR, exist_ok=True)
 sc.settings.figdir = FIG_DIR
 sc.settings.set_figure_params(dpi=300, facecolor="white")

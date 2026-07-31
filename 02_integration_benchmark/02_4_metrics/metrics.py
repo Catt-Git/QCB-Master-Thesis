@@ -15,6 +15,10 @@ Notes:
   * kBET is off here (kBET_=False); it is the slowest metric and gets its own job.
   * ``reduce_data(umap=False)``: no metric reads X_umap.
   * ``trajectory_=False`` always: 13 metrics, not 14.
+  * the NMI/ARI clustering runs on igraph's leiden, not leidenalg (``--cluster-flavor``):
+    on 619,693 cells leidenalg spends ~20 h on the ten resolutions. See
+    ``metrics_shared.use_igraph_leiden`` for what that changes and why the whole
+    benchmark has to agree on one flavor.
   * ``--hvgs 0`` -> no HVG re-selection: the reference is already HVG-restricted,
     and re-selecting on scaled (negative) values is fatal.
   * cell order is a hard assertion, not a silent obs_names rename.
@@ -50,6 +54,10 @@ def parse_args():
     p.add_argument("--organism", default="human")
     p.add_argument("--hvgs", type=int, default=0,
                    help="HVGs for scib; 0 means no re-selection (the reference is already HVG-restricted)")
+    p.add_argument("--cluster-flavor", choices=("igraph", "leidenalg"), default="igraph",
+                   help="leiden implementation for the NMI/ARI clustering. igraph is orders of "
+                        "magnitude faster and is scanpy's recommended backend; leidenalg is scib's "
+                        "own default. Must be the same for every run in the benchmark.")
     p.add_argument("-v", "--verbose", action="store_true")
     return p.parse_args()
 
@@ -67,7 +75,13 @@ def main():
         print(f"  integrated: {args.integrated}", flush=True)
         print(f"  batch/label: {args.batch_key} / {args.label_key}", flush=True)
         print(f"  organism  : {args.organism}   hvgs: {n_hvgs}", flush=True)
+        print(f"  clustering: leiden ({args.cluster_flavor})", flush=True)
         print("=" * 70, flush=True)
+
+    # Before scib is asked for anything: cluster_optimal_resolution resolves
+    # sc.tl.leiden at call time, so the flavor has to be bound now.
+    if args.cluster_flavor == "igraph":
+        shared.use_igraph_leiden(verbose=args.verbose)
 
     adata, adata_int = shared.load_and_align(
         args.uncorrected, args.integrated, args.batch_key, args.label_key, verbose=args.verbose

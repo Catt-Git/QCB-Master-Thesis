@@ -5,18 +5,22 @@
 #SBATCH --partition=normal
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=64G
-#SBATCH --array=1-21%3
+#SBATCH --mem=96G
+#SBATCH --array=1-21%5
 #
 # 02_4 metrics: SLURM array, kBET alone.
 #
-# Same expansion as submit_metrics.slurm (17 runs -> 21 jobs), same `%3` throttle
-# (at most three nodes in `normal` at once) and no `--time` (the partition default
-# applies). Each task patches its kBET value into the CSV metrics.py already wrote,
-# so run this AFTER the metrics array:
+# Same expansion as submit_metrics.slurm (17 runs -> 21 jobs), same `%5` throttle
+# and no `--time` (the partition default applies). No CLUSTER_FLAVOR here: kBET runs
+# with nmi_/ari_ off, so nothing in this job clusters. Each task patches its kBET
+# value into the CSV metrics.py already wrote, so run this AFTER the metrics array:
 #
 #   m=$(sbatch --parsable submit_metrics.slurm)
-#   sbatch --dependency=afterok:$m submit_kbet.slurm
+#   sbatch --dependency=afterany:$m submit_kbet.slurm
+#
+# afterany, not afterok: an array dependency with afterok needs every metrics task to
+# succeed, so a single OOM-killed index would strand this whole array on
+# DependencyNeverSatisfied. kBET reads the integrated object, not metrics.py's CSV.
 
 set -euo pipefail
 mkdir -p logs
@@ -45,6 +49,16 @@ ref_path="$DATA_DIR/$reference"
 csv="$ROOT/$TASK/metrics/$scaling/hvg/${method}_${type}.csv"
 
 echo ">>> [$SLURM_ARRAY_TASK_ID] kBET $run_id ($method, $type)"
+
+# Unbuffered stdout and a disk-backed TMPDIR: same reasons as submit_metrics.slurm.
+# kBET on the two `knn` tasks reads the same 8.7e8-nonzero BBKNN graph, so those two
+# indices need the same bigger --mem here as they do there (sbatch --mem=230G).
+export PYTHONUNBUFFERED=1
+export TMPDIR="${METRICS_TMPDIR:-/tmp}/scib_kbet_${SLURM_JOB_ID:-$$}"
+mkdir -p "$TMPDIR"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+echo "[node] $(hostname)  mem=${SLURM_MEM_PER_NODE:-?}M  cpus=${SLURM_CPUS_PER_TASK:-?}  TMPDIR=$TMPDIR"
 
 # `set -u` off across the whole conda block: see submit_metrics.slurm (openjdk_activate.sh).
 set +u

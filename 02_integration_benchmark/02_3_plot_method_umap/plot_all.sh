@@ -13,7 +13,14 @@
 #
 # Reads the integrated object from the grid's `output` column and the matching
 # unintegrated reference from its `reference` column (which already tracks the
-# scaling variant), so a scaled run is compared against the scaled reference.
+# scaling variant), so a scaled run is compared against the scaled reference: the
+# "before" picture is the input the method actually received, z-scoring included.
+#
+# Both references must therefore carry obsm['X_umap']: the unscaled one gets it
+# from 01_6, the scaled one from 02_1_prepare/scale_batch.py, which rebuilds it on
+# the scaled matrix after dropping the stale 01_6 layout. A scaled object produced
+# before that step existed has no UMAP, and every scaled row aborts on the
+# plotter's assertion.
 #
 # Usage:
 #   export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
@@ -22,6 +29,13 @@
 #   ./plot_all.sh --scaling unscaled    # only the unscaled half
 #   ./plot_all.sh --dry-run             # print what would run, do nothing
 #   ./plot_all.sh --force               # redraw runs whose panels already exist
+#   ./plot_all.sh --force --recompute-umap   # redraw *and* lay the UMAPs out again
+#
+# The integrated layout is cached into each integrated .h5ad the first time it is
+# computed (obsm['X_umap'] + uns['integrated_umap']), so a redraw costs seconds
+# rather than the ~25 min a 620k-cell UMAP takes. --recompute-umap discards that
+# cache; without it a --force redraw reuses the stored layout, which is what you
+# want when only colours, sizes or panel layout changed.
 #
 # Resuming is the default, as in run_all.sh: a run whose five panels are all in
 # figures/<run_id>/ is reported [have] and skipped, so re-running the command
@@ -49,6 +63,7 @@ conda_guarded() { set +u; conda "$@"; set -u; }
 SCALING_FILTER=""
 DRY_RUN=0
 FORCE=0
+RECOMPUTE_UMAP=0
 FILTER=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -56,6 +71,7 @@ while [ $# -gt 0 ]; do
     --scaling=*) SCALING_FILTER="${1#*=}"; shift ;;
     --force|-f) FORCE=1; shift ;;
     --dry-run|-n) DRY_RUN=1; shift ;;
+    --recompute-umap) RECOMPUTE_UMAP=1; shift ;;
     *) FILTER+=("$1"); shift ;;
   esac
 done
@@ -135,9 +151,12 @@ n_have=0
       continue
     fi
 
+    UMAP_ARGS=()
+    [ "$RECOMPUTE_UMAP" -eq 1 ] && UMAP_ARGS+=(--recompute-umap)
+
     if [ "$DRY_RUN" -eq 1 ]; then
       echo "[dry] $run_id  (--type $ptype)  -> $out_dir"
-      echo "      python $PLOTTER -m $method --type $ptype -i $int_path -u $ref_path -o $out_dir"
+      echo "      python $PLOTTER -m $method --type $ptype -i $int_path -u $ref_path -o $out_dir ${UMAP_ARGS[*]}"
       n_done=$((n_done + 1))
       continue
     fi
@@ -146,7 +165,7 @@ n_have=0
     echo ">>> $run_id  ($method, --type $ptype)"
     echo "==================================================================="
     python "$PLOTTER" -m "$method" --type "$ptype" \
-      -i "$int_path" -u "$ref_path" -o "$out_dir"
+      -i "$int_path" -u "$ref_path" -o "$out_dir" "${UMAP_ARGS[@]}"
     n_done=$((n_done + 1))
     echo "[ok] $run_id -> $out_dir"
   done

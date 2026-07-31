@@ -26,7 +26,8 @@
 #
 # scVI/scANVI/scGen run on CPU here (no GPU on `normal`), so they are slower than
 # locally; every other method is CPU-native. DRVI is a notebook and is not in the
-# array (run_all.sh leaves it out; run it by hand).
+# array (run_all.sh leaves it out): its latent size is chosen by eye, and the run at
+# the chosen size is a job of its own, submit_drvi.slurm.
 #
 # Usually launched through run_all.sh --slurm, which submits a filtered subset
 # with the same %3 throttle. Direct use:
@@ -73,7 +74,7 @@ SEURAT_REF_ARG=()
 if [ -n "${SEURAT_REFERENCE:-}" ]; then SEURAT_REF_ARG=(--reference "$SEURAT_REFERENCE"); fi
 
 if [ "$language" = "notebook" ]; then
-  echo "[skip] $run_id is a notebook (DRVI); run it by hand"; exit 0
+  echo "[skip] $run_id is a notebook (DRVI); submit it with submit_drvi.slurm"; exit 0
 fi
 
 # Local env names in the grid map to cluster envs: scGen keeps its own, the rest
