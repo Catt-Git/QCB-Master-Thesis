@@ -108,10 +108,10 @@ The repo keeps only the lightweight figures, one folder per producing step:
 
 | Folder | From | Content |
 |---|---|---|
-| `figures/02_qc_scrublet_filtering/` | 01_2 | QC violins and total-counts/genes scatters, before filtering |
-| `figures/03_normalization/` | 01_3 | scran size-factor distribution and size factors vs library size |
-| `figures/05_scib_reduce_data/` | 01_5 | PCA elbow, PCA and UMAP coloured by `cell_type` |
-| `figures/06_visualization/` | 01_6 | the diagnostic set on the final object (below) |
+| `figures/01_2_qc_scrublet_filtering/` | 01_2 | QC violins and total-counts/genes scatters, before filtering |
+| `figures/01_3_normalization/` | 01_3 | scran size-factor distribution and size factors vs library size |
+| `figures/01_5_scib_reduce_data/` | 01_5 | PCA elbow, PCA and UMAP coloured by `cell_type` |
+| `figures/01_6_visualization/` | 01_6 | the diagnostic set on the final object (below) |
 
 `06_visualization` is the figure set of the phase, all on `shiao.h5ad`:
 

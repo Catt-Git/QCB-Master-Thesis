@@ -36,7 +36,7 @@ One line per script; the details live in the sections linked from the last colum
 | 0 | `utils` | `make_smoke_input.py` | Builds the tiny inputs for the *integration* smoke test. | local | [smoke, integration](#smoke-test-of-the-integration-step) |
 | 0 | `utils` | `smoke_test_metrics_pipeline.sh` | Runs the whole 02_4 *pipeline* over the 5k `smoke_out/` objects. | local | [smoke, metrics](#smoke-test-of-the-metrics-step) |
 | 1 | `02_1_prepare` | `subset_hvg.py` | Subsets `shiao.h5ad` to the 2,000 HVGs → `shiao_hvg_2k.h5ad`. | local | |
-| 2 | `02_1_prepare` | `scale_batch.py` | Per-batch z-scoring + fresh PCA → `shiao_hvg_2k_scaled.h5ad`. | local | [notes](#critical-methodological-notes) |
+| 2 | `02_1_prepare` | `scale_batch.py` | Per-batch z-scoring, then a fresh PCA **and UMAP** on the scaled matrix → `shiao_hvg_2k_scaled.h5ad`. | local | [notes](#critical-methodological-notes) |
 | 3 | `02_1_prepare` | `h5ad_to_rds.R` | Converts each variant to a Seurat v3 `.rds` (`zellkonverter`), for the R methods. | local | |
 | 3 | `02_1_prepare` | `hvg_csv_to_rds.R` | Converts the HVG symbol list to an `.rds` character vector, for the Seurat anchors. | local | |
 | 4 | `02_2_integration` | `run_all.sh` | **Driver of the integration step**: the whole grid, locally or on SLURM. | local + HPC | [drivers](#the-three-drivers) |
@@ -44,10 +44,12 @@ One line per script; the details live in the sections linked from the last colum
 | 4b | `02_2_integration` | `run_integration.R` + `integration_methods.R` | R dispatcher and method bodies: fastMNN, Seurat CCA, Seurat RPCA. | local + HPC | [notes](#critical-methodological-notes) |
 | 4c | `02_2_integration` | `run_scgen.py` | scGen, in its own `scgen-py` / `$SCGEN_ENV` environment. | local + HPC | [models](#trained-models) |
 | 4d | `02_2_integration` | `shiao_drvi_128.ipynb` | DRVI, run interactively: the latent size is chosen by eye. | local (GPU) | [latent size](#choosing-the-latent-size-drvi) |
-| 4e | `02_2_integration` | `rds_to_h5ad.py` | Converts the R outputs back to `.h5ad` for the metrics. | local + HPC | [notes](#critical-methodological-notes) |
-| 4f | `02_2_integration` | `submit_integration.slurm` | The SLURM array task script for step 4. | HPC | [drivers](#the-three-drivers) |
+| 4e | `02_2_integration` | `run_drvi.py` | The same DRVI run headless, once the size is chosen: same parameters, same outputs, same figures. | local + HPC | [latent size](#choosing-the-latent-size-drvi) |
+| 4f | `02_2_integration` | `submit_drvi.slurm` | SLURM wrapper for `run_drvi.py`: one job, partition `long`, CPU. | HPC | [latent size](#choosing-the-latent-size-drvi) |
+| 4g | `02_2_integration` | `rds_to_h5ad.py` | Converts the R outputs back to `.h5ad` for the metrics. | local + HPC | [notes](#critical-methodological-notes) |
+| 4h | `02_2_integration` | `submit_integration.slurm` | The SLURM array task script for step 4. | HPC | [drivers](#the-three-drivers) |
 | 5 | `02_3_plot_method_umap` | `plot_all.sh` | **Driver of the UMAP QC step**: five panels per integrated run. | local | [drivers](#the-three-drivers) |
-| 5a | `02_3_plot_method_umap` | `plot_methods_umaps.py` | The five UMAP QC panels for a single run. | local | [figures](#per-method-umap-panels-02_3_plot_method_umap) |
+| 5a | `02_3_plot_method_umap` | `plot_methods_umaps.py` | The five UMAP QC panels for a single run; caches the integrated layout into the object. | local | [figures](#per-method-umap-panels-02_3_plot_method_umap) |
 | 5b | `utils` | `sync_to_cluster.sh` | **The local → cluster bridge**: uploads the files the grid names. | local | [cluster](#running-the-metrics-on-the-cluster) |
 | 6 | `02_4_metrics` | `run_all_metrics.sh` | **Driver of the metrics step**: every (run, type), locally or on SLURM. | local + HPC | [drivers](#the-three-drivers) |
 | 6a | `02_4_metrics` | `check_integrations.py` | Pre-flight check on one integrated object: cells, order, keys, `obsm`/graph, finiteness. | local + HPC | |
@@ -101,14 +103,17 @@ Per-driver extras:
   once the arrays finish - the driver prints the two commands.
 - `plot_all.sh` picks the `--type` from the grid's `types` column (`embed` wins when a run has
   one, so scanorama/fastmnn are shown on their corrected embedding), matches each run to its
-  scaling reference, and skips rows not yet integrated.
+  scaling reference, and skips rows not yet integrated. Both references must carry
+  `obsm['X_umap']` (01_6 for the unscaled one, `scale_batch.py` for the scaled one) or the run
+  aborts on the plotter's assertion.
 
 **On SLURM.** Both arrays run in partition `normal` (CPU), throttled to 3 concurrent tasks (`%3`),
 with no `--time` (the node's own limit applies); the kBET array is `afterok`-dependent on the
-metrics one. Only the matching rows enter the array spec, so an incomplete grid - the scaled half
-still integrating, say - costs nothing. Every method uses `catalano_env` except scGen
-(`$SCGEN_ENV`); the `.slurm` scripts are runnable directly with `sbatch` too. DRVI is a notebook
-and is always run by hand, in or out of the cluster.
+metrics one. Only the matching rows enter the array spec, so an incomplete grid (the scaled half
+still integrating) costs nothing. Every method uses `catalano_env` except scGen
+(`$SCGEN_ENV`); the `.slurm` scripts are runnable directly with `sbatch` too. DRVI is never in the
+array - the latent size is a decision, not a grid row - but once that size is chosen the run
+itself can go to the cluster as a single job (`submit_drvi.slurm`, partition `long`).
 
 ## Smoke test of the integration step
 
@@ -315,6 +320,32 @@ the latent space live in `$DATA_DIR/02_drvi/`; the benchmark cell writes the sco
 (`obsm['X_emb']` + `.npy`) exactly as `run_integration.py` does, and the notebook also draws the
 DRVI-specific figures into `figures/<run_id>/`.
 
+**The same run, headless (`run_drvi.py`).** Choosing the size needs a pair of eyes; training at a
+chosen size does not, and it is the longest computation of the phase. `run_drvi.py` is the
+notebook without the kernel - same input, same architecture, same seed, same early stopping, the
+same four outputs and the same figures - so a size can be trained wherever it is convenient and
+the notebook re-opened afterwards with `OVERWRITE = False`, which reads model and embedding from
+disk instead of recomputing them. Resuming works the same way: an output already there is
+reported `[have]` and reused, so a crash after training never costs the training.
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+python run_drvi.py                    # n_latent 128, the run in the grid
+python run_drvi.py --n-latent 64      # another size, side by side with it
+python run_drvi.py --overwrite        # retrain and rewrite everything
+
+# on the cluster (CPU: no GPU there, hence partition `long`)
+cd 02_integration_benchmark/02_2_integration && mkdir -p logs
+sbatch --export=ALL,DATA_DIR=$DATA_DIR submit_drvi.slurm --n-latent 128
+```
+
+`submit_drvi.slurm` passes everything after the script path to `run_drvi.py` unchanged, activates
+`$DRVI_ENV` (default `catalano_env`, which pins the same `drvi-py==0.2.7` as the local
+environment) and writes its logs to `02_2_integration/logs/`. The input it needs is
+`$DATA_DIR/shiao_hvg_2k.h5ad`: `utils/sync_to_cluster.sh --what inputs --method drvi` puts it
+there. Since the outputs land in the layout the grid expects, 02_3 and 02_4 can then run on the
+cluster without anything coming back first.
+
 Nothing of the exploratory runs enters the benchmark: their integrated `.h5ad` and `.npy` are
 deleted, so the grid cannot pick them up, and what is kept is `figures/drvi_unscaled_64/` alone,
 as the evidence behind the choice. Their model and latent space under `$DATA_DIR/02_drvi/` are
@@ -356,13 +387,18 @@ $DATA_DIR/
 ├── shiao.h5ad                             # from 01_5, unintegrated reference (all genes)
 ├── shiao_hvg_2k_unintegrated_list.csv          # from 01_5, the 2,000 HVG symbols
 ├── shiao_hvg_2k.h5ad                      # 02_1  (778 MB, sparse, counts preserved)
+│                                          #       carries the 01_6 unintegrated UMAP
 ├── shiao_hvg_2k_scaled.h5ad               # 02_1  (1.1 GB, dense by construction)
+│                                          #       fresh PCA + its own unintegrated UMAP,
+│                                          #       both computed on the scaled matrix
 ├── shiao_hvg_2k.rds                       # 02_1  (2.9 GB, Seurat v3, data slot sparse)
 ├── shiao_hvg_2k_scaled.rds                # 02_1  (11 GB, Seurat v3, data slot dense)
 ├── shiao_hvg_2k_unintegrated_list.rds                  # 02_1  (the HVG symbols, for Seurat anchors)
 ├── 02_integration/<run_id>.h5ad           # 02_2  integrated objects
 │                                          #       the R methods' <run_id>.rds intermediate is
 │                                          #       deleted after conversion (--keep-rds to keep it)
+│                                          # 02_3  appends obsm['X_umap'] in place, so a redraw
+│                                          #       does not re-lay-out 620k cells
 ├── 02_embeddings/<run_id>.npy             # 02_2  latent spaces, kept for the figures
 ├── 02_scvi/<run_id>_model.pt              # 02_2  trained models, one flat file per run, kept
 ├── 02_scanvi/<run_id>_{scvi,scanvi}_model.pt  #      out of 02_integration/ (see "Trained models";
@@ -391,8 +427,9 @@ The usual split is integration **locally** - the local environment is verified a
 and metrics **on the cluster**, with integrated objects transferred as they are produced by
 `utils/sync_to_cluster.sh`. The `--slurm` path exists for running integrations on the cluster
 too: all methods land on partition `normal` (CPU), so scVI/scANVI/scGen are slower there than
-locally, and scGen needs its own `$SCGEN_ENV` (an equivalent of the local `scgen-py`); DRVI stays
-a by-hand notebook.
+locally, and scGen needs its own `$SCGEN_ENV` (an equivalent of the local `scgen-py`). DRVI is the
+one method outside the array: the latent size is chosen in the notebook, and the run at that size
+goes to the cluster - if it goes there at all - through `submit_drvi.slurm`.
 
 Embeddings are also exported on their own (~120 MB each - 619,693 cells x 50 dims, float32 -
 against several GB for a full object),
@@ -472,9 +509,69 @@ These are a visual QC run **after** `run_all.sh` and **before** the metrics: a b
 integration (cohorts unmixed, or cell types destroyed) is obvious here in minutes, well before
 the multi-hour metric jobs. The integrated embedding is derived from the output type
 (`embed` → UMAP on `X_emb`; `full` → PCA on the corrected `.X` then UMAP; `knn` → UMAP on the
-corrected graph); the unintegrated UMAP is the reference's `obsm['X_umap']` from 02_1, not
-recomputed. `cell_type` colours are inherited from `uns['cell_type_colors']` and `cohort` from a 
+corrected graph); the unintegrated UMAP is the reference's `obsm['X_umap']`, not recomputed.
+`cell_type` colours are inherited from `uns['cell_type_colors']` and `cohort` from a 
 fixed palette, so a category keeps its colour across every panel and method.
+
+**The integrated layout is cached back into the integrated object.** Laying out 619,693 cells
+takes ~25 minutes, and recomputing it every time a colour or a panel changed was by far the most
+expensive thing this step did. The first run writes `obsm['X_umap']` plus a
+`uns['integrated_umap']` record of the `--type` and `--seed` it came from; later runs reuse it
+when that record matches and recompute otherwise. `--recompute-umap` forces a fresh layout,
+`--no-cache-umap` suppresses the write.
+
+Three details make this safe rather than merely convenient:
+
+- **Only `obsm['X_umap']` and the record are written** - never a PCA, never a neighbour graph.
+  `metrics_shared.reduce_integrated` rebuilds both for itself, and persisting a graph would add
+  hundreds of MB to objects that already reach 9.9 GB.
+- **02_4 is unaffected**: every metrics path runs `reduce_data(umap=False)`, so no scib metric
+  reads `obsm['X_umap']`. Adding it is inert.
+- **The write is in place**, via h5py, not a read-modify-write through AnnData: rewriting a 9.9 GB
+  object to add 5 MB would be minutes of I/O and a second copy on disk. `.X`, `.layers`, `.obs`,
+  `.var` and `.obsp` are never touched.
+
+The reuse test keys on the provenance record, not on the presence of `obsm['X_umap']`, because
+several integrated objects already carry a layout of unknown origin from earlier exploratory work
+(all six are unscaled Python methods). Those are recomputed and replaced rather than drawn.
+
+**The `-u` reference must match the run's scaling variant here too**, exactly as in the metrics: a
+scaled run is drawn against the scaled reference, so its "before" panel is the input the method
+actually received, z-scoring included. This matters because per-batch scaling is itself a weak
+batch correction. Plotting a scaled run against the *unscaled* baseline would show, as if the
+method had produced it, mixing that the z-scoring had already done - and the two are not a small
+difference: the scaled and unscaled `X_pca` are nearly unrelated spaces (PC1 of one against PC1
+of the other correlates at |r| = 0.10, PC2 at 0.04), so the layouts they generate are genuinely
+different pictures, not two renderings of one.
+
+The scaled object holds that UMAP because `scale_batch.py` builds it - see below. A clean run of
+the pipeline needs no extra step.
+
+### The scaled object's unintegrated UMAP
+
+`scale_batch.py` drops the `obsm['X_umap']`, `uns['neighbors']` and `.obsp` it inherits from
+01_5/01_6, because all three describe the *unscaled* matrix and keeping them would attach a stale
+layout to an object whose `.X` no longer matches. It then rebuilds the PCA **and the UMAP** on the
+scaled matrix. The graph behind the layout is computed and discarded: nothing downstream reads a
+neighbour graph off the reference, and on 619,693 cells it would add hundreds of MB to a file that
+is already 1.1 GB.
+
+The UMAP is there for 02_3 alone - `metrics.py` runs `reduce_data(umap=False)`, so no scib metric
+reads it and 02_4 is indifferent. Its parameters are the ones 01_6 used (`n_neighbors=15`,
+`metric='euclidean'`, `random_state=0`, on `X_pca`), taken from `shiao_hvg_2k.h5ad`'s
+`uns['neighbors']['params']` rather than assumed, so the two unintegrated baselines differ by the
+scaling alone and not by how they were laid out. Provenance is recorded in
+`uns['unintegrated_umap']`.
+
+Budget roughly an hour on 620k cells for the neighbours + layout, on top of the scaling itself.
+
+> **If you already have a `shiao_hvg_2k_scaled.h5ad` from before this step existed**, do not
+> re-run `scale_batch.py` to acquire the UMAP. Re-running rewrites `.X`, and that file is the
+> exact input the scaled integrations consumed - deterministic or not, it must not be re-derived
+> under finished runs. The layout was appended in place instead, reading only the stored
+> `obsm['X_pca']` and leaving `.X`, `.layers`, `.obs` and `.var` byte-identical, so no integration
+> and no metric had to be recomputed. Rebuilding from scratch is for a clean run, where nothing
+> depends on the old file.
 
 `plot_all.sh` drives the whole grid (see "The three drivers"):
 
@@ -484,11 +581,13 @@ cd 02_integration_benchmark/02_3_plot_method_umap
 ./plot_all.sh --dry-run          # preview what would be plotted
 ./plot_all.sh                    # every integrated run
 ./plot_all.sh --scaling unscaled # only the unscaled half
+./plot_all.sh --force            # redraw, reusing the cached layouts (fast)
+./plot_all.sh --force --recompute-umap   # redraw and lay the UMAPs out again (slow)
 ```
 
-### DRVI latent-space panels (`02_2_integration`, notebook)
+### DRVI latent-space panels (`02_2_integration`, notebook or `run_drvi.py`)
 
-The DRVI notebook writes its own figures into the same `figures/<run_id>/` folder, each name
+The DRVI run writes its own figures into the same `figures/<run_id>/` folder, each name
 suffixed with the run id so the 64 and 128 panels stay distinguishable once pulled out of their
 folder. They are *not* the method comparison - that is `02_3` above, identical for every method
 - but the reading of the latent space itself:
@@ -544,9 +643,11 @@ plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`
   1.1.7 uses `np.in1d` (removed in numpy 2.4), `pd.value_counts` (removed in pandas 3.0) and
   the positional `Series[0]` fallback (removed in pandas 3.0). Without the shims the jobs die
   partway through the metric computation, not at import.
-- **The `-u` reference must match the preprocessing variant** (scaled with scaled). Scoring a
-  scaled output against an unscaled reference attributes part of the z-scoring effect to the
-  integration method and makes the two columns non-comparable.
+- **The `-u` reference must match the preprocessing variant** (scaled with scaled), in 02_3 as
+  well as 02_4. Scoring - or plotting - a scaled output against an unscaled reference attributes
+  part of the z-scoring effect to the integration method and makes the two columns
+  non-comparable. Per-batch scaling is a weak batch correction in its own right, so the "before"
+  has to be the input the method was actually handed.
 - **`--hvgs 0` whenever the reference is already restricted to the HVGs.** With reference and
   integrated object at the same gene count, scib would otherwise re-run HVG selection, which
   on scaled (negative) values fails.

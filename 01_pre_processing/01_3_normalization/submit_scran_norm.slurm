@@ -20,7 +20,7 @@ export DATA_DIR="${DATA_DIR:-/users/genomics/albertoc/Tesi/hopes_and_dreams/data
 export OMP_NUM_THREADS=90
 # Data root: the same single DATA_DIR every phase uses (see datasets/README.md), kept
 # overridable with 'sbatch --export=ALL,DATA_DIR=...'. FIG_DIR is deliberately NOT set:
-# scran_norm.py then defaults to the repo's own 01_pre_processing/figures/03_normalization,
+# scran_norm.py then defaults to the repo's own 01_pre_processing/figures/01_3_normalization,
 # so a cluster run fills the same versioned folder a local run does instead of dropping
 # the two diagnostics somewhere under the data root, outside the clone.
 

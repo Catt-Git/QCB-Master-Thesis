@@ -35,7 +35,7 @@
 #   CC_GENES     Tirosh/Regev list                              [default: $DATA_DIR/regev_lab_cell_cycle_genes.txt]
 #   PREPROC_ENV  conda env with the rpy2/scran/scib/celltypist stack       [default: catalano_env]
 #   FIG_DIR      where scran_norm.py drops its two diagnostics             [default: the repo's
-#                figures/03_normalization; --export=ALL forwards it if you export it first]
+#                figures/01_3_normalization; --export=ALL forwards it if you export it first]
 
 set -euo pipefail
 

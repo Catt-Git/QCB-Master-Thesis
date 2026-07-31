@@ -9,10 +9,13 @@
 #   default (local): runs check_integrations.py + metrics.py + metrics_kbet.py for
 #                    each (run, type) here, in sequence, then merges the CSVs.
 #   --slurm        : submits submit_metrics.slurm + submit_kbet.slurm restricted to
-#                    the matching array indices, throttled to 3 concurrent tasks
-#                    (at most 3 nodes in `normal`), kBET afterok-dependent on the
-#                    metrics array. Merge + summary are run by hand once both
-#                    arrays finish (the command is printed at the end).
+#                    the matching array indices, 5 concurrent tasks, kBET
+#                    afterany-dependent on the metrics array. The indices are split
+#                    into two groups by output type - full/embed at MEM_STD, knn at
+#                    MEM_KNN - so each is submitted with the memory it actually
+#                    needs; that is two metrics arrays and two kBET arrays, four
+#                    job ids. Merge + summary are run by hand once they finish
+#                    (the command is printed at the end).
 #
 # CSVs go to $DATA_DIR/02_metrics/<task>/metrics/<scaling>/hvg/<method>_<type>.csv.
 #
@@ -48,7 +51,28 @@ ENV="${METRICS_ENV:-benchmark-py-r}"    # local env; the .slurm files use catala
 BATCH_KEY="cohort"; LABEL_KEY="cell_type"; ORGANISM="human"
 ROOT="$DATA_DIR/02_metrics"
 MERGED="$DATA_DIR/02_metrics_merged.csv"
-MAX_CONCURRENT=3                        # SLURM: at most 3 nodes in `normal`
+
+# SLURM sizing. `normal` has six nodes and a task takes 4 CPUs, not a whole node
+# (two tasks shared node08 on the first run), so five at a time is comfortable.
+MAX_CONCURRENT=5
+
+# Memory is per output type, not per run. full/embed load a dense corrected matrix
+# (5-10 GB), rebuild a 15-neighbour graph and peak somewhere under 64G - 96G is that
+# with margin. knn (BBKNN) is a different animal: its graph carries 8.7e8 nonzeros,
+# scanpy's leiden materialises it as ~1e9 Python tuples, and the job was measured at
+# 197 GiB before finishing the clustering. 300G, which also confines it to node04.
+MEM_STD="${METRICS_MEM:-96G}"
+MEM_KNN="${METRICS_MEM_KNN:-300G}"
+
+# Nodes to keep away from. node02 was accepting jobs and failing them at launch on
+# 2026-07-30 (ExitCode 0:53, no log file written at all) while `sinfo -R` reported
+# nothing wrong; six tasks died there in fourteen seconds. Clear METRICS_EXCLUDE
+# once it is fixed.
+EXCLUDE_NODES="${METRICS_EXCLUDE-node02}"
+
+# leiden implementation for the NMI/ARI clustering, passed through to metrics.py.
+# Benchmark-wide: mixing flavors makes the NMI/ARI rows incomparable across methods.
+CLUSTER_FLAVOR="${CLUSTER_FLAVOR:-igraph}"
 
 [ -f "$GRID" ] || { echo "grid not found: $GRID" >&2; exit 1; }
 
@@ -110,24 +134,70 @@ already_done() {
 
 # SLURM mode: resolve the matching array indices and submit the arrays.
 
+# Submit one group of array indices: the metrics array and, unless --no-kbet, its
+# kBET array. A group exists because `--mem` is a submission-level option and the
+# knn tasks need four times what the others do; everything else about the two
+# submissions is identical.
+#
+# afterany, not afterok: with an array dependency afterok needs EVERY metrics task
+# to succeed, so one OOM-killed index leaves the whole kBET array stuck on
+# DependencyNeverSatisfied and loses the kBET of the tasks that did finish. kBET
+# only needs the integrated object; metrics_kbet.py writes a kBET-only CSV when
+# metrics.py never produced one, so a failed sibling costs nothing here.
+submit_group() {
+  local label="$1" mem="$2"; shift 2
+  [ $# -gt 0 ] || return 0
+
+  local spec; spec="$(IFS=,; echo "$*")%${MAX_CONCURRENT}"
+  local opts=(--export="ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR,CLUSTER_FLAVOR=$CLUSTER_FLAVOR"
+              --array="$spec" --mem="$mem")
+  [ -n "$EXCLUDE_NODES" ] && opts+=(--exclude="$EXCLUDE_NODES")
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[dry] $label: sbatch ${opts[*]} $SCRIPT_DIR/submit_metrics.slurm"
+    [ "$NO_KBET" -eq 0 ] && \
+      echo "[dry] $label: sbatch --dependency=afterany:<jobid> ${opts[*]} $SCRIPT_DIR/submit_kbet.slurm"
+    return 0
+  fi
+
+  local m; m="$(sbatch --parsable "${opts[@]}" "$SCRIPT_DIR/submit_metrics.slurm")"
+  echo "submitted $label metrics array: job $m   (--mem=$mem, tasks $spec)"
+  if [ "$NO_KBET" -eq 0 ]; then
+    local k; k="$(sbatch --parsable --dependency=afterany:"$m" "${opts[@]}" "$SCRIPT_DIR/submit_kbet.slurm")"
+    echo "submitted $label kBET array:    job $k   (afterany:$m)"
+  fi
+}
+
 run_slurm() {
   # Expand the grid exactly as the .slurm scripts do (index = SLURM_ARRAY_TASK_ID).
   # Scored pairs are dropped from the array spec rather than submitted and skipped
   # inside the job: a queued task that exits immediately still costs a slot
-  # against the %3 throttle. Both arrays share the spec, so a pair is resubmitted
+  # against the throttle. Both arrays share the spec, so a pair is resubmitted
   # whole when its kBET is missing - metrics.py is the cheap half of the two.
-  local indices=() total=0 n_have=0
-  while IFS=$'\t' read -r idx run_id method scaling type; do
+  #
+  # The indices are split by output type because the two groups are submitted with
+  # different --mem (see MEM_STD / MEM_KNN).
+  local indices=() indices_knn=() total=0 n_have=0 n_skip=0
+  while IFS=$'\t' read -r idx run_id method scaling type output; do
     total=$((total + 1))
     want_row "$run_id" "$scaling" "$method" || continue
     if already_done "$(csv_path "$method" "$scaling" "$type")"; then
       echo "[have] $run_id $type: already scored, not submitting"
       n_have=$((n_have + 1)); continue
     fi
-    indices+=("$idx")
-  done < <(awk -F'\t' 'NR>1 && $1!="" { n=split($8, ts, ","); for (i=1;i<=n;i++){ idx++; gsub(/[ \t]/,"",ts[i]); print idx"\t"$1"\t"$2"\t"$5"\t"ts[i] } }' "$GRID")
+    # Same check run_local makes. Submitting a task whose input is not on this
+    # machine costs a queue slot to fail two seconds later, and on a shared
+    # DATA_DIR (integration local, metrics on the cluster) half the grid is
+    # routinely absent.
+    if [ ! -f "$DATA_DIR/$output" ]; then
+      echo "[skip] $run_id $type: not integrated yet ($DATA_DIR/$output)"
+      n_skip=$((n_skip + 1)); continue
+    fi
+    if [ "$type" = "knn" ]; then indices_knn+=("$idx"); else indices+=("$idx"); fi
+  done < <(awk -F'\t' 'NR>1 && $1!="" { n=split($8, ts, ","); for (i=1;i<=n;i++){ idx++; gsub(/[ \t]/,"",ts[i]); print idx"\t"$1"\t"$2"\t"$5"\t"ts[i]"\t"$7 } }' "$GRID")
 
-  if [ ${#indices[@]} -eq 0 ]; then
+  local n_sel=$(( ${#indices[@]} + ${#indices_knn[@]} ))
+  if [ "$n_sel" -eq 0 ]; then
     if [ "$n_have" -gt 0 ]; then
       echo "nothing to submit: all $n_have matching task(s) are already scored (--force to re-run)"
       return 0
@@ -135,24 +205,13 @@ run_slurm() {
     echo "no array task matches the given filters" >&2; exit 1
   fi
 
-  local spec; spec="$(IFS=,; echo "${indices[*]}")%${MAX_CONCURRENT}"
-  echo "selected ${#indices[@]}/${total} array task(s), ${n_have} already scored, throttled to ${MAX_CONCURRENT}: $spec"
+  echo "selected ${n_sel}/${total} array task(s), ${n_have} already scored, ${n_skip} not integrated yet, ${MAX_CONCURRENT} at a time"
+  echo "  clustering: leiden ($CLUSTER_FLAVOR)${EXCLUDE_NODES:+   excluding: $EXCLUDE_NODES}"
+  submit_group "full/embed" "$MEM_STD" ${indices[@]+"${indices[@]}"}
+  submit_group "knn       " "$MEM_KNN" ${indices_knn[@]+"${indices_knn[@]}"}
 
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "[dry] sbatch --export=ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR --array=$spec $SCRIPT_DIR/submit_metrics.slurm"
-    [ "$NO_KBET" -eq 0 ] && echo "[dry] sbatch --dependency=afterok:<jobid> --export=ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR --array=$spec $SCRIPT_DIR/submit_kbet.slurm"
-    return 0
-  fi
-
-  local m; m="$(sbatch --parsable --export="ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR" --array="$spec" "$SCRIPT_DIR/submit_metrics.slurm")"
-  echo "submitted metrics array: job $m"
-  if [ "$NO_KBET" -eq 0 ]; then
-    local k; k="$(sbatch --parsable --dependency=afterok:"$m" --export="ALL,DATA_DIR=$DATA_DIR,METRICS_DIR=$SCRIPT_DIR" --array="$spec" "$SCRIPT_DIR/submit_kbet.slurm")"
-    echo "submitted kBET array:    job $k  (afterok:$m)"
-  else
-    echo "kBET array skipped (--no-kbet)"
-  fi
-  echo "when both arrays finish, merge + plot locally:"
+  [ "$NO_KBET" -eq 1 ] && echo "kBET arrays skipped (--no-kbet)"
+  echo "when the arrays finish, merge + plot locally:"
   echo "  python $SCRIPT_DIR/merge_metrics.py -o $MERGED -r $ROOT --glob '$ROOT/$TASK/metrics/*/hvg/*.csv'"
   echo "  Rscript $SCRIPT_DIR/make_summary_table.R -i $MERGED -o figures"
 }
@@ -216,7 +275,7 @@ run_local() {
         echo "--- metrics: $method $t ---"
         python "$SCRIPT_DIR/metrics.py" -u "$ref_path" -i "$int_path" -o "$csv" \
           -m "$method" --type "$t" -b "$BATCH_KEY" -l "$LABEL_KEY" \
-          --organism "$ORGANISM" --hvgs "$hvgs" -v
+          --organism "$ORGANISM" --hvgs "$hvgs" --cluster-flavor "$CLUSTER_FLAVOR" -v
         if [ "$NO_KBET" -eq 0 ]; then
           echo "--- kBET: $method $t ---"
           python "$SCRIPT_DIR/metrics_kbet.py" -u "$ref_path" -i "$int_path" -o "$csv" \
