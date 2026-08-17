@@ -6,16 +6,15 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=96G
-#SBATCH --array=1-21%5
+#SBATCH --array=1-23%5
 #
-# 02_4 metrics: SLURM array, the 13 metrics minus kBET.
+# 02_4 metrics: SLURM array, the 12 metrics.
 #
 # One array task = one (run, output type). The task list is the grid expanded on
-# its `types` column (17 runs -> 21 jobs), so --array=1-21. The `%5` throttle keeps
+# its `types` column (19 rows -> 23 jobs), so --array=1-23. The `%5` throttle keeps
 # at most five tasks running at once; the rest queue and start as those finish. A
 # task takes 4 CPUs, not a whole node, so five fit across `normal` comfortably. No
 # `--time` is set: the partition's own default wall-clock limit applies.
-# kBET is a separate array (submit_kbet.slurm) that runs afterwards and patches in.
 #
 #   sbatch submit_metrics.slurm
 #
@@ -33,14 +32,14 @@
 #   sbatch --mem=300G --array=1 ... submit_metrics.slurm     # bbknn_unscaled knn
 #
 # Usually launched through 02_4_metrics/run_all_metrics.sh --slurm, which submits
-# a filtered subset with the same %3 throttle and wires the kBET dependency.
+# a filtered subset with the same throttle, split by output type so each half gets
+# the memory it needs.
 # Requires DATA_DIR in the environment (or edit the default below) and the
 # catalano_env conda environment on the node.
 
 set -euo pipefail
 mkdir -p logs
 
-: "${DATA_DIR:?set DATA_DIR (sbatch --export=ALL,DATA_DIR=... or export it first)}"
 ENV="${METRICS_ENV:-catalano_env}"
 TASK="shiao"
 BATCH_KEY="cohort"; LABEL_KEY="cell_type"; ORGANISM="human"
@@ -56,6 +55,12 @@ CLUSTER_FLAVOR="${CLUSTER_FLAVOR:-igraph}"
 SCRIPT_DIR="${METRICS_DIR:-${SLURM_SUBMIT_DIR:-$PWD}}"
 GRID="$SCRIPT_DIR/../benchmark_grid.tsv"
 [ -f "$GRID" ] || { echo "grid not found: $GRID (set METRICS_DIR, or sbatch from 02_4_metrics/)" >&2; exit 1; }
+
+# DATA_DIR normally arrives through --export from run_all_metrics.sh; a bare
+# sbatch on the cluster falls back to the same data root sync_to_cluster.sh
+# uploads into. One definition for both, in utils/cluster_env.sh.
+. "$SCRIPT_DIR/../utils/cluster_env.sh"
+resolve_data_dir || exit 1
 ROOT="$DATA_DIR/02_metrics"
 
 # Expand the grid into one line per (run, type): the SLURM_ARRAY_TASK_ID-th line

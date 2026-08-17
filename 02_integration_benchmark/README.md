@@ -2,7 +2,8 @@
 
 Third phase of the thesis (the big one): the **technical benchmark**. Ten batch-correction methods are run
 on the unintegrated object produced by `01_pre_processing`, each output is scored with the
-13 `scib` metrics, and the results are collected into a single summary table.
+12 `scib` metrics against the unintegrated baseline, and the results are collected into a single
+summary table.
 
 Input from phase 01: `shiao.h5ad` (619,693 cells x 30,869 genes) and
 `shiao_hvg_2k_unintegrated_list.csv` (2,000 batch-aware HVGs).
@@ -18,7 +19,7 @@ Integration `batch_key = 'cohort'` (34 patients), biological `label_key = 'cell_
 ├── 02_1_prepare/                 # from shiao.h5ad to the benchmark inputs
 ├── 02_2_integration/             # the ten methods (local or SLURM)
 ├── 02_3_plot_method_umap/        # per-method UMAP QC panels (after 02_2, before metrics)
-├── 02_4_metrics/                 # the 13 metrics (SLURM) + the final summary table
+├── 02_4_metrics/                 # the 12 metrics (SLURM) + the final summary table
 ├── figures/                      # one folder per run: UMAP QC panels (+ DRVI latent-space
 │                                 # figures for the DRVI runs), plus the summary table
 └── utils/                        # smoke tests, cluster upload, shared helpers, vendored scIB
@@ -31,7 +32,7 @@ One line per script; the details live in the sections linked from the last colum
 
 | # | Folder | Script | What it does | Where | More |
 |---|--------|--------|--------------|-------|------|
-| 0 | `utils` | `smoke_test_metrics.py` | Validates the metrics *stack* (scib, rpy2, R kBET, all 13 metrics) on a 5k fixture. | local + HPC | [smoke, metrics](#smoke-test-of-the-metrics-step) |
+| 0 | `utils` | `smoke_test_metrics.py` | Validates the metrics *stack* (scib, rpy2, all 12 metrics) on a 5k fixture. | local + HPC | [smoke, metrics](#smoke-test-of-the-metrics-step) |
 | 0 | `utils` | `submit_smoke_test.slurm` | SLURM wrapper for the stack smoke test. | HPC | |
 | 0 | `utils` | `make_smoke_input.py` | Builds the tiny inputs for the *integration* smoke test. | local | [smoke, integration](#smoke-test-of-the-integration-step) |
 | 0 | `utils` | `smoke_test_metrics_pipeline.sh` | Runs the whole 02_4 *pipeline* over the 5k `smoke_out/` objects. | local | [smoke, metrics](#smoke-test-of-the-metrics-step) |
@@ -53,12 +54,11 @@ One line per script; the details live in the sections linked from the last colum
 | 5b | `utils` | `sync_to_cluster.sh` | **The local → cluster bridge**: uploads the files the grid names. | local | [cluster](#running-the-metrics-on-the-cluster) |
 | 6 | `02_4_metrics` | `run_all_metrics.sh` | **Driver of the metrics step**: every (run, type), locally or on SLURM. | local + HPC | [drivers](#the-three-drivers) |
 | 6a | `02_4_metrics` | `check_integrations.py` | Pre-flight check on one integrated object: cells, order, keys, `obsm`/graph, finiteness. | local + HPC | |
-| 6b | `02_4_metrics` | `metrics.py` | **The 13 metrics** minus kBET, one invocation per (run, type). | local + HPC | [metrics](#metrics) |
-| 6c | `02_4_metrics` | `metrics_kbet.py` | kBET alone, patched into the CSV `metrics.py` wrote. | local + HPC | [notes](#critical-methodological-notes) |
-| 6d | `02_4_metrics` | `merge_metrics.py` | Merges the per-run CSVs into the single table the plotting reads. | local + HPC | |
-| 6e | `02_4_metrics` | `make_summary_table.R` | The final summary table (scIB funky heatmap). | local | [summary table](#final-summary-table-02_4_metrics) |
-| 6f | `02_4_metrics` | `submit_metrics.slurm` + `submit_kbet.slurm` | The two SLURM array task scripts for step 6. | HPC | [drivers](#the-three-drivers) |
-| - | `utils` | `metrics_shared.py` | Shared preparation, so `metrics.py` and `metrics_kbet.py` score identically. | imported | |
+| 6b | `02_4_metrics` | `metrics.py` | **The 12 metrics**, one invocation per (run, type). | local + HPC | [metrics](#metrics) |
+| 6c | `02_4_metrics` | `merge_metrics.py` | Merges the per-run CSVs into the single table the plotting reads. | local + HPC | |
+| 6d | `02_4_metrics` | `make_summary_table.R` | The final summary table (scIB funky heatmap). | local | [summary table](#final-summary-table-02_4_metrics) |
+| 6e | `02_4_metrics` | `submit_metrics.slurm` | The SLURM array task script for step 6. | HPC | [drivers](#the-three-drivers) |
+| - | `utils` | `metrics_shared.py` | Shared preparation, so every (run, type) is scored identically. | imported | |
 | - | `02_2_integration` | `model_paths.py` | The single definition of the checkpoint layout. | imported | [models](#trained-models) |
 | - | `utils` | `scib_compat.py` | Restores the numpy/pandas APIs scib 1.1.7 expects. | imported | [notes](#critical-methodological-notes) |
 | - | `utils` | `h5ad_compat.py` | Writes `.h5ad` files `anndata 0.10` can read too. | imported | [notes](#critical-methodological-notes) |
@@ -91,16 +91,16 @@ The three share the same interface:
 |---|---|---|---|---|
 | `02_2_integration/run_all.sh` | integration | the row's `output` exists | each integration in sequence | `submit_integration.slurm`, one task per row |
 | `02_3_plot_method_umap/plot_all.sh` | UMAP QC | the run's five panels exist | in sequence | - (local only) |
-| `02_4_metrics/run_all_metrics.sh` | metrics | the (run, type) CSV carries a kBET value | check + metrics + kBET in sequence, then merge | `submit_metrics.slurm` + `submit_kbet.slurm`, one task per (run, type) |
+| `02_4_metrics/run_all_metrics.sh` | metrics | the (run, type) CSV exists | check + metrics in sequence, then merge | `submit_metrics.slurm`, one task per (run, type) |
 
 Per-driver extras:
 
 - `run_all.sh` deletes the R methods' `.rds` intermediate once converted; `--keep-rds` keeps it.
-- `run_all_metrics.sh` expands the `types` column (17 runs → 21 jobs) and takes `--no-kbet` /
-  `--no-check`. It resumes **per (run, type)**, so a half-scored `full,embed` row resumes on the
-  missing half; the kBET row is the completeness marker because `metrics.py` writes the CSV and
-  `metrics_kbet.py` fills that row afterwards. The merge and the summary table are run by hand
-  once the arrays finish - the driver prints the two commands.
+- `run_all_metrics.sh` expands the `types` column (19 rows → 23 jobs) and takes `--no-check`. It
+  resumes **per (run, type)**, so a half-scored `full,embed` row resumes on the missing half; the
+  CSV existing is the completeness marker, because `metrics.py` writes it in one go at the end.
+  The merge and the summary table are run by hand once the arrays finish - the driver prints the
+  two commands.
 - `plot_all.sh` picks the `--type` from the grid's `types` column (`embed` wins when a run has
   one, so scanorama/fastmnn are shown on their corrected embedding), matches each run to its
   scaling reference, and skips rows not yet integrated. Both references must carry
@@ -108,8 +108,8 @@ Per-driver extras:
   aborts on the plotter's assertion.
 
 **On SLURM.** Both arrays run in partition `normal` (CPU), throttled to 3 concurrent tasks (`%3`),
-with no `--time` (the node's own limit applies); the kBET array is `afterok`-dependent on the
-metrics one. Only the matching rows enter the array spec, so an incomplete grid (the scaled half
+with no `--time` (the node's own limit applies).
+Only the matching rows enter the array spec, so an incomplete grid (the scaled half
 still integrating) costs nothing. Every method uses `catalano_env` except scGen
 (`$SCGEN_ENV`); the `.slurm` scripts are runnable directly with `sbatch` too. DRVI is never in the
 array - the latent size is a decision, not a grid row - but once that size is chosen the run
@@ -123,8 +123,8 @@ launched.
 
 **Why.** The ten integration methods span three environments (`benchmark-py-r`, `scgen-py`,
 and the R stack via `rpy2`), two languages, a GPU, and a Seurat↔AnnData round-trip. A single
-run on the full 620k-cell object takes from minutes (BBKNN) to hours (scANVI, kBET-scale
-Seurat), so a broken dispatcher, a missing dependency, a Seurat-version API change or a
+run on the full 620k-cell object takes from minutes (BBKNN) to hours (scANVI, Seurat), so a
+broken dispatcher, a missing dependency, a Seurat-version API change or a
 silent cell reordering is expensive to discover late. The smoke test surfaces all of those in
 a couple of minutes on 5,252 cells. It validates the **code path only** - *does the method
 run, is the output the expected type (`knn` graph / `embed` / `full`), and is the input cell
@@ -191,33 +191,32 @@ validates the **stack**, `smoke_test_metrics_pipeline.sh` the **pipeline**.
 **The stack** (`smoke_test_metrics.py`, step 0). Neither test is optional bookkeeping:
 `scib 1.1.7` predates the numpy/pandas versions in the current environment and fails *halfway
 through* the metric computation, not at the start. This one checks that the environment can
-compute every one of the 13 metrics on an identity integration, on a 5k fixture, before any real
+compute every one of the 12 metrics on an identity integration, on a 5k fixture, before any real
 job is launched. It has a SLURM wrapper (`submit_smoke_test.slurm`) so the cluster environment
 can be validated the same way.
 
 **The pipeline** (`smoke_test_metrics_pipeline.sh`). A **local** runner in `utils/`, kept
 separate from the real cluster metrics step so no smoke logic ever leaks into the real run. It
 walks the same grid but scores the tiny `smoke_out/` objects against `smoke_hvg.h5ad` instead of
-the real integrations, running the whole metrics code path - the pre-flight check, both metric
-jobs, the CSV tree, the merge - in a few minutes on 5,252 cells. What it proves, on top of the
-stack test: that `metrics.py` / `metrics_kbet.py` read the real integration outputs (embed /
-full / knn, from five different writers) correctly, that the per-type metric selection is right,
-that kBET patches cleanly into the CSV `metrics.py` wrote, and that the tree merges into the
-shape the plotting expects. Code path only - every expected metric produces a finite value -
-not biological quality, which is meaningless at this size.
+the real integrations, running the whole metrics code path - the pre-flight check, the metric
+job, the CSV tree, the merge - in a few minutes on 5,252 cells. What it proves, on top of the
+stack test: that `metrics.py` reads the real integration outputs (embed / full / knn, from five
+different writers) correctly, that the per-type metric selection is right, and that the tree
+merges into the shape the plotting expects. Code path only - every expected metric produces a
+finite value - not biological quality, which is meaningless at this size.
 
 ```bash
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
-conda activate benchmark-py-r          # so rpy2 can find R (kBET)
+conda activate benchmark-py-r          # so rpy2 can find R
 cd 02_integration_benchmark
 utils/smoke_test_metrics_pipeline.sh --dry-run   # preview the 9 runs / 11 jobs
 utils/smoke_test_metrics_pipeline.sh             # -> $DATA_DIR/smoke_metrics/ + smoke_metrics_merged.csv
-utils/smoke_test_metrics_pipeline.sh --method harmony   # one method; also --no-kbet / --no-check
+utils/smoke_test_metrics_pipeline.sh --method harmony   # one method; also --no-check
 ```
 
 It scores the nine unscaled smoke outputs (DRVI is a notebook, so it has no smoke output),
 which expand into 11 metrics jobs; every expected metric per type must come back finite
-(13 for `full`, 12 for `embed`, 7 for the `knn` graph output). The outputs under
+(12 for `full`, 11 for `embed`, 6 for the `knn` graph output). The outputs under
 `smoke_metrics/` are disposable.
 
 ## Trained models
@@ -253,20 +252,21 @@ single manual invocation.
 
 ## The run grid (`benchmark_grid.tsv`)
 
-Every run is one row (17 rows). The file is the single source of truth: the local drivers and the
-SLURM arrays both read it, so the benchmark matrix stays a readable piece of data instead of
-logic scattered across scripts. A `types` value with two entries expands into two metrics jobs
-downstream, which is how the 17 runs become 21 metrics jobs.
+Every run is one row (19 rows: 17 integrations plus the 2 `unintegrated_*` baselines). The file
+is the single source of truth: the local drivers and the SLURM arrays both read it, so the
+benchmark matrix stays a readable piece of data instead of logic scattered across scripts. A
+`types` value with two entries expands into two metrics jobs downstream, which is how the 19 rows
+become 23 metrics jobs.
 
 | Column | Meaning |
 |---|---|
 | `run_id` | `<method>_<scaling>`, e.g. `scanorama_scaled` - stable key for the output file, the figure folder and the job name. DRVI appends the latent size (`drvi_unscaled_128`), so runs at different `n_latent` do not overwrite each other; only the size kept for the benchmark is a row here (see "Choosing the latent size") |
-| `method` | bbknn, scanorama, harmony, fastmnn, seurat_cca, seurat_rpca, scgen, scvi, scanvi, drvi |
-| `language` | `python`, `R` or `notebook` - selects the dispatcher |
+| `method` | bbknn, scanorama, harmony, fastmnn, seurat_cca, seurat_rpca, scgen, scvi, scanvi, drvi, plus `unintegrated` for the baseline |
+| `language` | `python`, `R`, `notebook` or `baseline` - selects the dispatcher. `notebook` (DRVI) and `baseline` (Unintegrated) have nothing for 02_2 to run and are skipped there |
 | `env` | conda environment (`benchmark-py-r`, `scgen-py`) |
 | `scaling` | `unscaled` / `scaled` |
 | `input` | the prepared object the method reads: `.h5ad` for Python, `.rds` for the R methods |
-| `output` | integrated object under `$DATA_DIR/02_integration/`, named `<run_id>.h5ad` |
+| `output` | integrated object under `$DATA_DIR/02_integration/`, named `<run_id>.h5ad`. On the baseline rows it is the prepared object itself, i.e. the same file as `reference` |
 | `types` | scib output type(s): `knn`, `embed`, `full`, `full,embed` or `embed,full` |
 | `reference` | the `-u` object for the metrics - **must match the scaling variant**. This is an *unintegrated .h5ad*, not the reference *batches* of the anchor-based Seurat methods: those are `run_integration.R`'s `--reference` (default `Patient53,Patient16,Patient43`, the three largest patients), overridable for a whole run with `SEURAT_REFERENCE=...` |
 | `hvgs` | `--hvgs` value. Uniformly `0` here: every reference is already HVG-subset, so scib must not re-select HVGs (fatal on the scaled, negative-valued data). The `2000` case does not arise because the benchmark subsets to HVGs before integrating. |
@@ -291,10 +291,34 @@ no name-translation layer.
 | scANVI | Python | embed | no |
 | DRVI | Python (notebook) | embed | no (`n_latent=128`) |
 
-**17 integration runs, 21 metrics jobs.** Scanorama and fastMNN write both a corrected matrix
+**17 integration runs, 23 metrics jobs.** Scanorama and fastMNN write both a corrected matrix
 and an embedding in a *single* execution, so they are scored twice from the same file by
 changing `--type` only. scVI, scANVI and DRVI read `layers['counts']` and ignore `.X`
-entirely: a scaled variant would be a duplicate run, so it is not in the grid.
+entirely: a scaled variant would be a duplicate run, so it is not in the grid. The remaining
+two jobs are the Unintegrated baseline, below.
+
+### The Unintegrated baseline
+
+`unintegrated_unscaled` and `unintegrated_scaled` are the "before" row of the summary table, the
+`Unintegrated` line of the scIB figures. They are grid rows rather than a special case, because
+scoring the baseline is exactly scoring an object against itself: `output` and `reference` both
+name the prepared object, so `metrics.py` compares it with the version of itself that
+`reduce_data` re-embedded, which is what "no integration was applied" means numerically. Only
+`full` is scored - `embed` would need an `obsm['X_emb']` no one wrote, and on an unintegrated
+object it would be the same PCA `full` computes anyway.
+
+The rows are skipped by 02_2 (`language = baseline`; there is nothing to integrate) and by 02_3
+(all five panels would compare the object with itself; the unintegrated space has its own figures
+from 01_6). 02_4 needs no special case at all.
+
+Two consequences worth knowing before reading the table:
+
+- **Every other method's score moves when the baseline is added.** The summary is computed on
+  min-max scaled metrics, so the baseline usually becomes the new minimum of the batch-correction
+  columns and rescales the whole column. Scores are only comparable within one figure.
+- **Some metrics are 1.0 or 0.0 by construction** on these rows - HVG conservation and cell-cycle
+  conservation are perfect because nothing changed, PCR batch is 0 because no batch variance was
+  removed. That is the baseline behaving correctly, not a failed job.
 
 Harmony runs through `scib.integration.harmony` (Python), not through R - the R `harmony`
 package is not required anywhere in this phase.
@@ -357,15 +381,15 @@ is re-chosen there: 176k cells and 18 labels are not this dataset, so `n_latent 
 
 ## Metrics
 
-Thirteen metrics, in the two groups used for the summary score.
+Twelve metrics, in the two groups used for the summary score.
 
-| Batch correction (5) | Bio conservation (8) |
+| Batch correction (4) | Bio conservation (8) |
 |---|---|
 | PCR batch | NMI cluster/label |
 | batch ASW (`ASW_label/batch`) | ARI cluster/label |
 | graph iLISI | cell type ASW (`ASW_label`) |
 | graph connectivity | isolated label F1 |
-| kBET | isolated label ASW |
+| | isolated label ASW |
 | | graph cLISI |
 | | cell cycle conservation |
 | | HVG conservation |
@@ -442,8 +466,8 @@ Three things have to be there: the **code**, the **objects** and the **environme
 
 The code is a clone - `.gitignore` excludes `datasets/`, so it carries only scripts and figures.
 The whole `02_integration_benchmark/` tree must stay intact: the wrappers resolve
-`benchmark_grid.tsv` and `utils/` relative to their own location, and `metrics.py` /
-`metrics_kbet.py` import `utils/metrics_shared.py` (which must import `utils/scib_compat.py`
+`benchmark_grid.tsv` and `utils/` relative to their own location, and `metrics.py` imports
+`utils/metrics_shared.py` (which must import `utils/scib_compat.py`
 before `scib`). `make_summary_table.R` additionally reads `utils/plotSingleTaskRNA.R`,
 `knit_table.R` and `img/`.
 
@@ -613,9 +637,10 @@ folder. They are *not* the method comparison - that is `02_3` above, identical f
 
 The final summary table is produced by the official scIB plotting code
 (`utils/plotSingleTaskRNA.R` + `utils/knit_table.R` + `utils/img/`, vendored from
-theislab/scib-reproducibility), driven by `make_summary_table.R -i <merged.csv> -o figures`.
+theislab/scib-reproducibility), driven by `make_summary_table.R -i <merged.csv>`.
 If those R packages (`dynutils`, `Hmisc`, `ggimage`) are missing it falls back to a built-in
-scorer.
+scorer. It writes to `figures/02_4_metrics/` — the phase's one figures directory, not a
+second one under `02_4_metrics/` — so it can be run from anywhere; `-o` overrides.
 
 Overall score = 0.6 x bio conservation + 0.4 x batch correction, on min-max scaled metrics.
 
@@ -627,12 +652,6 @@ Overall score = 0.6 x bio conservation + 0.4 x batch correction, on min-max scal
 | local | `scgen-py` | scGen only; old pinned stack that conflicts with the main one. `run_scgen.py` calls `SCGEN` directly, since this env has no scib |
 | HPC | `catalano_env` | metrics, and every integration except scGen when `run_all.sh --slurm` is used (different name for `environments/benchmark-hpc.yml`) |
 | HPC | `$SCGEN_ENV` | scGen only on the cluster; an equivalent of the local `scgen-py` (`submit_integration.slurm` defaults to that name) |
-
-One dependency is **not** declared in the `.yml` files and must be installed explicitly:
-
-```bash
-Rscript -e "remotes::install_github('theislab/kBET')"     # required by the kBET metric
-```
 
 The R packages the funky heatmap needs (`dynutils`, `Hmisc`, `ggimage` and the rest of the
 plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`.
@@ -667,7 +686,7 @@ plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`
   reuses `obsm['X_pca']` together with `uns['pca']['variance']` whenever both are present,
   and it is called with `recompute_pca=False`. On the unscaled object the PCA inherited from
   01_5 is exactly right, because it was computed on these same 2,000 genes, and keeping it
-  gives all 21 jobs an identical baseline for free. Carrying that same PCA into the scaled
+  gives all 23 jobs an identical baseline for free. Carrying that same PCA into the scaled
   object would instead hand PCR batch and cell-cycle conservation a baseline computed on a
   different matrix, so it is recomputed there with the parameters scib itself would use
   (50 components, arpack). The neighbour graph and the UMAP are dropped from the scaled
@@ -692,10 +711,11 @@ plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`
   can be computed. CCA and RPCA are both **reference-based** (largest patients as reference):
   with 34 batches and 620k cells, full pairwise anchoring is not tractable. Both points are
   deviations from Luecken et al. 2022 and are declared as such in Materials & Methods.
-- **kBET is scored in its own job.** `metrics.py` never computes it (`kBET_=False` for every
-  output type); it is by far the slowest metric, so isolating it in `metrics_kbet.py` means a
-  timeout costs one metric instead of thirteen. `metrics_kbet.py --max-cells` can cap it, but
-  the default is `0`: no cap, kBET runs on the full 620k cells in its own job.
+- **The merged table carries the twelve scored metrics and nothing else.**
+  `scib.me.metrics` always returns its whole metric index, whatever flags it was given, so each
+  per-run CSV also holds NaN rows for metrics this benchmark does not compute.
+  `merge_metrics.SCORED_METRICS` is the allowlist that decides what reaches the merged table and
+  therefore the summary figure; the per-run CSVs the jobs wrote are never rewritten.
 - **The leiden resolution sweep is capped at 1.0**, as in `01_5_scib_pp/scib_clustering.py`.
-  NMI and ARI are computed on an optimal-resolution clustering, recomputed for each of the 21
+  NMI and ARI are computed on an optimal-resolution clustering, recomputed for each of the 23
   metrics jobs: it is the single most expensive part of the phase.

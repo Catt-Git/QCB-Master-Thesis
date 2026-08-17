@@ -16,7 +16,7 @@ nothing needs editing.
 
 **2. Create the environment** for the machine you are on - `benchmark-py-r` locally,
 `benchmark-hpc` on the cluster, plus `scgen-py` for the scGen method only. See
-[environments/README.md](environments/README.md), including the mandatory kBET post-install step.
+[environments/README.md](environments/README.md).
 The SLURM wrappers activate this cluster environment under the name it was built with on the HPC
 used for the thesis, `catalano_env`; create it under that name, or override it per phase
 (`DOWNLOAD_ENV`, `PREPROC_ENV`, `METRICS_ENV`).

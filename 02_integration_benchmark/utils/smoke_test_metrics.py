@@ -2,10 +2,9 @@
 02 utils - smoke test for the metrics environment
 
 Verifies on a tiny sample that the whole stack required by 02_4_metrics works:
-scib, rpy2/anndata2ri, the R package kBET and all 13 benchmark metrics, in both
-output modes we will use ('full' and 'embed'). The point is to validate the
-cluster environment BEFORE launching the full grid on it, when an error costs
-days.
+scib, rpy2/anndata2ri and all 12 benchmark metrics, in both output modes we will
+use ('full' and 'embed'). The point is to validate the cluster environment BEFORE
+launching the full grid on it, when an error costs days.
 
 The simulated integration is the identity (the "integrated" object is the input
 object restricted to the HVGs): the metric values carry no biological meaning,
@@ -75,13 +74,13 @@ EXPECTED = {
     "full": [
         "NMI_cluster/label", "ARI_cluster/label", "ASW_label", "ASW_label/batch",
         "PCR_batch", "cell_cycle_conservation", "isolated_label_F1",
-        "isolated_label_silhouette", "graph_conn", "kBET", "iLISI", "cLISI",
+        "isolated_label_silhouette", "graph_conn", "iLISI", "cLISI",
         "hvg_overlap",
     ],
     "embed": [
         "NMI_cluster/label", "ARI_cluster/label", "ASW_label", "ASW_label/batch",
         "PCR_batch", "cell_cycle_conservation", "isolated_label_F1",
-        "isolated_label_silhouette", "graph_conn", "kBET", "iLISI", "cLISI",
+        "isolated_label_silhouette", "graph_conn", "iLISI", "cLISI",
     ],
 }
 
@@ -91,7 +90,7 @@ OUT_CSV = os.path.join(DATA_DIR, "smoke_test_metrics.csv")
 
 
 def report_environment():
-    """Print the stack versions and check the R dependencies."""
+    """Print the stack versions and check that R is reachable through rpy2."""
     import importlib.metadata as md
 
     print("=" * 70, flush=True)
@@ -104,22 +103,12 @@ def report_environment():
         except md.PackageNotFoundError:
             print(f"  {pkg:<11} NOT INSTALLED", flush=True)
 
-    # kBET is an R package installable only from GitHub: it is the dependency
-    # most likely to be missing on a compute node.
-    from rpy2.robjects.packages import isinstalled
-    from rpy2.rinterface_lib.embedded import RRuntimeError
+    # No metric in this benchmark goes through R any more, but scib_compat imports
+    # anndata2ri, which starts an embedded R: if R is unreachable on the node the
+    # import fails before a single metric is computed, so report it here.
     import rpy2.robjects as ro
 
     print(f"  R           {ro.r('R.version.string')[0]}", flush=True)
-    for rpkg in ["kBET", "FNN"]:
-        ok = isinstalled(rpkg)
-        print(f"  R::{rpkg:<8} {'ok' if ok else 'NOT INSTALLED'}", flush=True)
-        if not ok and rpkg == "kBET":
-            print(
-                "    -> install it with: "
-                "Rscript -e \"remotes::install_github('theislab/kBET')\"",
-                flush=True,
-            )
     print(flush=True)
 
 
@@ -232,7 +221,6 @@ def run_metrics(adata_pre, hvg, type_):
         isolated_labels_=True,
         n_isolated=None,
         graph_conn_=True,
-        kBET_=True,
         lisi_graph_=True,
         trajectory_=False,
     )

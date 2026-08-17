@@ -14,9 +14,9 @@ Importing this module BEFORE scib restores the missing APIs.
 What is restored, and where it is needed:
 
 - np.in1d          removed in numpy 2.4 in favour of np.isin.
-                   Used by scib.preprocessing (hvg_batch) and scib.metrics.kbet.
+                   Used by scib.preprocessing (hvg_batch).
 - pd.value_counts  removed in pandas 3.0 in favour of the .value_counts() method.
-                   Used by scib.metrics.graph_connectivity, .kbet and .utils.
+                   Used by scib.metrics.graph_connectivity and .utils.
 
 It also fixes anndata2ri.activate/deactivate, which in recent versions no longer
 register the converter the way scib expects.
@@ -61,8 +61,8 @@ def require_r():
     """
     if not os.environ.get("R_HOME") and shutil.which("R") is None:
         raise SystemExit(
-            "R is not reachable: rpy2 cannot start, and without rpy2 neither kBET "
-            "nor the other metrics that go through R can be computed.\n"
+            "R is not reachable: rpy2 cannot start, so anndata2ri cannot be "
+            "imported and this module fails before any metric runs.\n"
             "Activate the environment before launching the script:\n"
             "    conda activate benchmark-py-r   # locally\n"
             "    conda activate catalano_env     # on the cluster"

@@ -1,6 +1,3 @@
-#     conda activate benchmark-py-r
-#     Rscript -e "remotes::install_github('theislab/kBET')"
-
 name: benchmark-py-r
 channels:
   - pytorch

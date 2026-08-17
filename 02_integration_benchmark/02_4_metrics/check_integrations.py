@@ -6,7 +6,7 @@ Cheap validation that runs in seconds and catches the failures that would
 otherwise surface hours into a metrics job: a reordered or truncated object, a
 missing batch/label column, an absent embedding or graph, non-finite values. It
 does NOT import scib and does NOT compute anything biological; it only checks that
-the file is a valid input for metrics.py / metrics_kbet.py of the given type(s).
+the file is a valid input for metrics.py of the given type(s).
 
 What it enforces, per integrated object:
   * same number of cells as the reference, and the SAME cells in the SAME order

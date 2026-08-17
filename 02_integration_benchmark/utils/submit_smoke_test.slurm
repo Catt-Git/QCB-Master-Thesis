@@ -16,7 +16,7 @@ module load Miniconda3/202411
 eval "$(/soft/system/software/Miniconda3/202411/bin/conda shell.bash hook)"
 conda activate catalano_env
 # Same environment used in 01_3: it needs the rpy2/anndata2ri stack plus R with
-# scran and kBET (see environments/benchmark-hpc.yml).
+# scran (see environments/benchmark-hpc.yml).
 
 export DATA_DIR=/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets
 export OMP_NUM_THREADS=8

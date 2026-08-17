@@ -2,30 +2,29 @@
 #
 # 02 utils - smoke test of the METRICS PIPELINE (local)
 #
-# Companion to smoke_test_metrics.py. That one validates the *stack* (scib, rpy2,
-# R kBET) on an identity integration; this one validates the *pipeline glue* of
+# Companion to smoke_test_metrics.py. That one validates the *stack* (scib, rpy2)
+# on an identity integration; this one validates the *pipeline glue* of
 # 02_4_metrics on real integration outputs, at smoke scale: it runs the actual
-# check_integrations.py / metrics.py / metrics_kbet.py / merge_metrics.py over the
-# nine tiny objects in $DATA_DIR/smoke_out/ (produced by the 02_2 dispatchers),
-# scoring them against $DATA_DIR/smoke_hvg.h5ad.
+# check_integrations.py / metrics.py / merge_metrics.py over the nine tiny objects
+# in $DATA_DIR/smoke_out/ (produced by the 02_2 dispatchers), scoring them against
+# $DATA_DIR/smoke_hvg.h5ad.
 #
 # It walks the same benchmark_grid.tsv as the real run, but LOCAL and on 5,252
-# cells. The real grid runs on the cluster via 02_4_metrics/submit_metrics.slurm + 
-# submit_kbet.slurm, never here.
+# cells. The real grid runs on the cluster via 02_4_metrics/submit_metrics.slurm,
+# never here.
 #
 # It checks the CODE PATH only: every expected metric per type must come back
-# finite (13 for full, 12 for embed, 7 for the knn graph output). DRVI is a
+# finite (12 for full, 11 for embed, 6 for the knn graph output). DRVI is a
 # notebook, so it has no smoke output and is skipped; only the unscaled half is
 # scored (the smoke outputs were integrated unscaled).
 #
 # Usage:
 #   export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
-#   conda activate benchmark-py-r        # so rpy2 can find R (kBET)
+#   conda activate benchmark-py-r        # so rpy2 can find R
 #   02_integration_benchmark/utils/smoke_test_metrics_pipeline.sh --dry-run
 #   02_integration_benchmark/utils/smoke_test_metrics_pipeline.sh
 #   ...pipeline.sh --method harmony      # one method only
 #   ...pipeline.sh bbknn_unscaled        # one run_id only
-#   ...pipeline.sh --no-kbet             # skip the kBET job
 #
 # Outputs (all disposable): $DATA_DIR/smoke_metrics/ + smoke_metrics_merged.csv.
 
@@ -47,12 +46,11 @@ MERGED="$DATA_DIR/smoke_metrics_merged.csv"
 
 conda_guarded() { set +u; conda "$@"; set -u; }
 
-# Parse the command line: --method, run_id filters, --no-kbet, --no-check, --dry-run.
-NO_KBET=0; NO_CHECK=0; DRY_RUN=0
+# Parse the command line: --method, run_id filters, --no-check, --dry-run.
+NO_CHECK=0; DRY_RUN=0
 METHOD_FILTER=(); FILTER=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --no-kbet) NO_KBET=1; shift ;;
     --no-check) NO_CHECK=1; shift ;;
     --dry-run|-n) DRY_RUN=1; shift ;;
     --method) METHOD_FILTER+=("${2:-}"); shift 2 ;;
@@ -126,12 +124,6 @@ n_done=0; n_skip=0
         -u "$ref_path" -i "$int_path" -o "$csv" \
         -m "$method" --type "$t" -b "$BATCH_KEY" -l "$LABEL_KEY" \
         --organism "$ORGANISM" --hvgs "$hvgs" -v
-      if [ "$NO_KBET" -eq 0 ]; then
-        echo "--- kBET: $method $t ---"
-        python "$METRICS_DIR/metrics_kbet.py" \
-          -u "$ref_path" -i "$int_path" -o "$csv" \
-          -m "$method" --type "$t" -b "$BATCH_KEY" -l "$LABEL_KEY"
-      fi
     done
 
     n_done=$((n_done + 1))

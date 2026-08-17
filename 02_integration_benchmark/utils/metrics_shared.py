@@ -1,9 +1,9 @@
 """
-02 utils - shared preparation used by 02_4_metrics' metrics.py and metrics_kbet.py
+02 utils - shared preparation used by 02_4_metrics' metrics.py
 
-Everything the two metric jobs do *before* calling ``scib.me.metrics`` lives here,
-so the main job and the isolated kBET job reduce the data in exactly the same way
-and can never disagree on the graph or embedding they score.
+Everything the metric job does *before* calling ``scib.me.metrics`` lives here, so
+every (run, type) reduces the data in exactly the same way and no two jobs can
+disagree on the graph or embedding they score.
 
 Three things happen, in order:
 
@@ -56,41 +56,39 @@ import scib  # noqa: E402
 PCA_N_COMPS = 50
 SEED = 0
 
-# scib output types, and the metric flags each one enables. kBET is deliberately
-# absent from every set: it is scored in its own job (metrics_kbet.py) so a kBET
-# timeout costs one metric instead of thirteen.
+# scib output types, and the metric flags each one enables.
 RESULT_TYPES = ("full", "embed", "knn")
 
-# Metric-name index scib returns, in order, so the per-type "expected" lists and
-# the smoke report speak the same language as the CSVs.
+# The twelve metrics of this benchmark, in the order scib returns them, so the
+# per-type "expected" lists and the smoke report speak the same language as the
+# CSVs. merge_metrics.SCORED_METRICS repeats this list and must stay in step.
 ALL_METRICS = (
     "NMI_cluster/label", "ARI_cluster/label", "ASW_label", "ASW_label/batch",
     "PCR_batch", "cell_cycle_conservation", "isolated_label_F1",
-    "isolated_label_silhouette", "graph_conn", "kBET", "iLISI", "cLISI",
-    "hvg_overlap", "trajectory",
+    "isolated_label_silhouette", "graph_conn", "iLISI", "cLISI",
+    "hvg_overlap",
 )
 
-# Metrics expected to produce a finite value for each output type, kBET included
-# (it is computed, just in a separate job). Everything not listed is NaN *by
-# construction* for that type and must not be read as a failure.
+# Metrics expected to produce a finite value for each output type. Everything not
+# listed is NaN *by construction* for that type and must not be read as a failure.
 EXPECTED = {
     "full": [
         "NMI_cluster/label", "ARI_cluster/label", "ASW_label", "ASW_label/batch",
         "PCR_batch", "cell_cycle_conservation", "isolated_label_F1",
-        "isolated_label_silhouette", "graph_conn", "kBET", "iLISI", "cLISI",
+        "isolated_label_silhouette", "graph_conn", "iLISI", "cLISI",
         "hvg_overlap",
     ],
     "embed": [
         "NMI_cluster/label", "ARI_cluster/label", "ASW_label", "ASW_label/batch",
         "PCR_batch", "cell_cycle_conservation", "isolated_label_F1",
-        "isolated_label_silhouette", "graph_conn", "kBET", "iLISI", "cLISI",
+        "isolated_label_silhouette", "graph_conn", "iLISI", "cLISI",
     ],
     # knn (BBKNN): only the graph-based metrics; silhouette, PCR, cell cycle and
     # HVG conservation are unavailable, so isolated_label_silhouette and both ASW
     # variants fall away with them.
     "knn": [
         "NMI_cluster/label", "ARI_cluster/label", "isolated_label_F1",
-        "graph_conn", "kBET", "iLISI", "cLISI",
+        "graph_conn", "iLISI", "cLISI",
     ],
 }
 
@@ -148,12 +146,11 @@ def use_igraph_leiden(n_iterations: int = 2, verbose: bool = False) -> bool:
 
 
 def metric_flags(type_: str) -> dict:
-    """The scib.me.metrics flags for one output type, with kBET always off here.
+    """The scib.me.metrics flags for one output type.
 
-    kBET is enabled only in metrics_kbet.py; every other flag matches the
-    scib-pipeline defaults, minus HVG conservation for ``embed`` and minus
-    silhouette/PCR/cell-cycle/HVG for ``knn``. Trajectory is off for the whole
-    benchmark.
+    Every flag matches the scib-pipeline defaults, minus HVG conservation for
+    ``embed`` and minus silhouette/PCR/cell-cycle/HVG for ``knn``. Trajectory
+    conservation is off for the whole benchmark.
     """
     if type_ not in RESULT_TYPES:
         raise ValueError(f"unknown output type {type_!r}, expected one of {RESULT_TYPES}")
@@ -161,7 +158,7 @@ def metric_flags(type_: str) -> dict:
     flags = dict(
         silhouette_=True, nmi_=True, ari_=True, pcr_=True, cell_cycle_=True,
         isolated_labels_=True, hvg_score_=True, graph_conn_=True, lisi_graph_=True,
-        kBET_=False, trajectory_=False,
+        trajectory_=False,
     )
     if type_ == "embed":
         flags["hvg_score_"] = False

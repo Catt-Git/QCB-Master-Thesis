@@ -24,6 +24,9 @@
 #                            artefact of the phase (15 GB for fastMNN alone).
 #   notebook                 skipped (DRVI: the latent size is chosen by eye in the
 #                            notebook, then trained by run_drvi.py / submit_drvi.slurm)
+#   baseline                 skipped (the Unintegrated rows: there is nothing to
+#                            integrate, their `output` IS the prepared object. They
+#                            exist so 02_4 scores the baseline as one more row.)
 #
 # Embeddings (embed / full,embed rows) are also written to
 # 02_embeddings/<run_id>.npy: small, durable artifacts for the figures step.
@@ -180,14 +183,14 @@ drop_rds() {
 
 run_slurm() {
   # One array task = one grid row (integration is per run, not per type). Notebook
-  # rows (DRVI) cannot be submitted, so they are left out of the array spec.
-  # Finished runs are dropped from the array spec rather than submitted and
-  # skipped inside the job: a queued task that exits immediately still costs a
-  # slot against the %3 throttle.
+  # rows (DRVI) and baseline rows (Unintegrated) have no integration to submit, so
+  # they are left out of the array spec. Finished runs are dropped from the array
+  # spec rather than submitted and skipped inside the job: a queued task that exits
+  # immediately still costs a slot against the %3 throttle.
   local indices=() total=0 n_have=0
   while IFS=$'\t' read -r idx run_id method scaling language output; do
     total=$((total + 1))
-    [ "$language" = "notebook" ] && continue
+    { [ "$language" = "notebook" ] || [ "$language" = "baseline" ]; } && continue
     want_row "$run_id" "$scaling" "$method" || continue
     if already_done "$DATA_DIR/$output"; then
       echo "[have] $run_id: already integrated, not submitting ($DATA_DIR/$output)"
@@ -233,6 +236,16 @@ run_local() {
     while IFS=$'\t' read -r run_id method language env scaling input output types ref_h5ad hvgs; do
       [ -n "$run_id" ] || continue
       if ! want_row "$run_id" "$scaling" "$method"; then n_skip=$((n_skip + 1)); continue; fi
+
+      # Checked before already_done(), which would otherwise report the baseline
+      # rows as "already integrated": their `output` is the prepared object, so it
+      # exists by construction and nothing here ever produced it. Under --force
+      # that check does not fire at all and re-"integrating" them would mean
+      # overwriting an input of the whole phase.
+      if [ "$language" = "baseline" ]; then
+        echo "[skip] $run_id is the Unintegrated baseline; nothing to integrate (02_4 scores it)"
+        n_skip=$((n_skip + 1)); continue
+      fi
 
       local in_path="$DATA_DIR/$input" out_path="$DATA_DIR/$output"
       local emb_path="$DATA_DIR/02_embeddings/${run_id}.npy"

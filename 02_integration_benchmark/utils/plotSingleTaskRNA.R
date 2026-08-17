@@ -41,7 +41,10 @@ plotSingleTaskRNA <- function(csv_metrics_path, outdir = ".", weight_batch = 0.4
   
   
   # metrics names as they are supposed to be ordered
-  group_batch <- c("PCR batch", "Batch ASW", "graph iLISI", "graph connectivity", "kBET")
+  # The batch group lists the four batch-correction metrics this benchmark
+  # scores; the upstream scIB code had a fifth, which merge_metrics.py does not
+  # carry into the merged table.
+  group_batch <- c("PCR batch", "Batch ASW", "graph iLISI", "graph connectivity")
   group_bio <- c("NMI cluster/label", "ARI cluster/label", "Cell type ASW", 
                  "isolated label F1", "isolated label silhouette", "graph cLISI", "CC conservation", "HVG conservation", "trajectory conservation")
   # set original values of number of metrics

@@ -33,16 +33,11 @@ Then run the code as described in each phase's README (`export DATA_DIR=...` fir
 > `benchmark-hpc` and override it per phase via the environment variables the wrappers read:
 > `DOWNLOAD_ENV`, `PREPROC_ENV`, `INTEGRATION_ENV`, `METRICS_ENV`.
 
-## Required post-install step: kBET
+## R inside the metrics environment
 
-`kBET` is one of the 13 benchmark metrics, but it is only distributed on GitHub,
-so no `.yml` can declare it. Run this once per environment that computes metrics
-(`benchmark-py-r` locally, `benchmark-hpc` on the cluster):
-
-```bash
-Rscript -e "remotes::install_github('theislab/kBET')"
-```
-
-Skipping it does not raise an error - the metrics jobs simply come back without
-kBET. `02_integration_benchmark/utils/smoke_test_metrics.py` reports whether the
-package is present before computing anything, which is the cheap way to find out.
+No metric of the 12 in `02_integration_benchmark` is computed through R, but the
+metrics code imports `anndata2ri`, which starts an embedded R: the environment
+still has to be *activated* (not just its `bin/python` invoked directly) so that
+rpy2 can find R. `02_integration_benchmark/utils/smoke_test_metrics.py` prints
+the R version it reaches, which is the cheap way to check this before launching
+anything long.

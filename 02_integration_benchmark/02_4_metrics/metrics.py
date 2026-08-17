@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 """
-02_4 metrics - the 13 scib metrics minus kBET, one job per (run, output type)
+02_4 metrics - the 12 scib metrics, one job per (run, output type)
 
 Scores one integrated object against its matching reference and writes a single
-CSV whose one column is named ``<method>_<type>``. Twelve metrics are computed
-here; kBET is scored separately by metrics_kbet.py, which patches its value into
-this same CSV. Everything the two jobs share (cell-order enforcement, reference
-PCA, the reduce_data options per type) lives in _metrics_shared.py.
+CSV whose one column is named ``<method>_<type>``. Everything the job does before
+calling scib (cell-order enforcement, reference PCA, the reduce_data options per
+type) lives in ../utils/metrics_shared.py.
 
 Notes:
-  * ``scib_compat`` is imported before scib (via _metrics_shared), so the job does
+  * ``scib_compat`` is imported before scib (via metrics_shared), so the job does
     not die partway through the computation on a numpy/pandas API scib 1.1.7 no
     longer finds.
-  * kBET is off here (kBET_=False); it is the slowest metric and gets its own job.
   * ``reduce_data(umap=False)``: no metric reads X_umap.
-  * ``trajectory_=False`` always: 13 metrics, not 14.
+  * scib returns its whole metric index whatever the flags say, so this CSV also
+    carries NaN rows for metrics the benchmark does not compute; merge_metrics.py
+    keeps only the twelve scored ones.
   * the NMI/ARI clustering runs on igraph's leiden, not leidenalg (``--cluster-flavor``):
     on 619,693 cells leidenalg spends ~20 h on the ten resolutions. See
     ``metrics_shared.use_igraph_leiden`` for what that changes and why the whole
@@ -43,7 +43,7 @@ import scib  # noqa: E402
 
 
 def parse_args():
-    p = argparse.ArgumentParser(description="Compute the 13 scib metrics minus kBET")
+    p = argparse.ArgumentParser(description="Compute the 12 scib metrics")
     p.add_argument("-u", "--uncorrected", required=True, help="reference .h5ad (matching scaling)")
     p.add_argument("-i", "--integrated", required=True, help="integrated .h5ad")
     p.add_argument("-o", "--output", required=True, help="output CSV")
@@ -98,7 +98,7 @@ def main():
 
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
 
-    print(f"computing metrics for {setup} (kBET in a separate job)", flush=True)
+    print(f"computing metrics for {setup}", flush=True)
     results = scib.me.metrics(
         adata,
         adata_int,
