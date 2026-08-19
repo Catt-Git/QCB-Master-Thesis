@@ -12,7 +12,7 @@ __pycache__/
 #   02_2_integration/logs/ -> #SBATCH --output/--error di submit_integration.slurm
 #                              + submit_drvi.slurm
 #   03_2_drvi_run/logs/    -> idem per submit_drvi_nonimm.slurm
-#   02_4_metrics/logs/     -> idem per submit_metrics.slurm / submit_kbet.slurm
+#   02_4_metrics/logs/     -> idem per submit_metrics.slurm
 # ---------------------------------------------------------------------------
 logs/
 
@@ -31,6 +31,11 @@ logs/
 !/datasets/README.md
 !/datasets/Cells_Adult_Breast.pkl
 !/datasets/regev_lab_cell_cycle_genes.txt
+# signatures/: le liste di Helena lette da 04_3 (SIG_DIR). Stessa classe delle due
+# eccezioni qui sopra - input esterni, pochi KB, non rigenerabili dal codice - quindi
+# versionate: tutto cio' che 04_3 produce dipende dall'essere esattamente questi file.
+!/datasets/signatures/
+!/datasets/signatures/*.txt
 
 # ---------------------------------------------------------------------------
 # Modelli DRVI addestrati (cartella temporanea, ~1.3 GB di embedding e pesi)

@@ -6,12 +6,12 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=96G
-#SBATCH --array=1-23%5
+#SBATCH --array=1-22%5
 #
 # 02_4 metrics: SLURM array, the 12 metrics.
 #
 # One array task = one (run, output type). The task list is the grid expanded on
-# its `types` column (19 rows -> 23 jobs), so --array=1-23. The `%5` throttle keeps
+# its `types` column (18 rows -> 22 jobs), so --array=1-22. The `%5` throttle keeps
 # at most five tasks running at once; the rest queue and start as those finish. A
 # task takes 4 CPUs, not a whole node, so five fit across `normal` comfortably. No
 # `--time` is set: the partition's own default wall-clock limit applies.

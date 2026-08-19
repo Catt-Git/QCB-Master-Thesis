@@ -19,6 +19,14 @@
 # Usage:
 #   Rscript make_summary_table.R -i <merged.csv>
 #   Rscript make_summary_table.R -i <merged.csv> -o <outdir> --viz-dir <path>
+#   Rscript make_summary_table.R -i <merged.csv> --exclude scgen,scanvi --tag unsup
+#
+# The last form is the unsupervised-only table: scGen and scANVI are the two
+# semi-supervised methods, they see the cell-type labels the bio-conservation
+# metrics are computed against, so they are the two starred rows at the top of the
+# full figure. `--tag` keeps that run in its own files next to the full one; the
+# two tables are NOT comparable row by row, because the scores are means of
+# min-max scaled metrics and dropping methods rescales the remaining ones.
 #
 # TO RUN THIS LOCALLY:
 #   #   D=/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets
@@ -45,7 +53,16 @@ opt <- parse_args(OptionParser(option_list = list(
   make_option("--viz-dir", type = "character", default = NULL,
               dest = "viz_dir", help = "directory with plotSingleTaskRNA.R + knit_table.R + img/"),
   make_option("--weight-batch", type = "double", default = 0.4, dest = "weight_batch",
-              help = "weight of the batch-correction score [default %default]")
+              help = "weight of the batch-correction score [default %default]"),
+  make_option("--exclude", type = "character", default = NULL,
+              help = paste("comma-separated method names to drop before scoring,",
+                           "e.g. 'scgen,scanvi'. Matched on the <method> token of",
+                           "<method>_<type>, so it drops every output type and both",
+                           "scalings of that method")),
+  make_option("--tag", type = "character", default = NULL,
+              help = paste("suffix added to the task label, and so to every output",
+                           "file name (<task>_<tag>_summary_*), so a filtered run",
+                           "does not overwrite the full one"))
 )))
 stopifnot(!is.null(opt$input))
 
@@ -62,6 +79,21 @@ out_dir <- if (!is.null(opt$output)) opt$output else
   file.path(script_dir, "..", "figures", "02_4_metrics")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 opt$output <- out_dir
+
+# Excluding methods is not a display filter: the scores are means of *min-max
+# scaled* metrics, so the scaling range - and therefore every score in the table -
+# depends on which methods are in it. The rows are dropped before the scorer sees
+# them, so the filtered table is rescaled over the methods that remain, and its
+# numbers are not comparable with the full table's.
+excluded <- if (is.null(opt$exclude)) character(0) else
+  trimws(strsplit(opt$exclude, ",")[[1]])
+excluded <- excluded[nzchar(excluded)]
+
+# The vendored plotter names its files after the task (the first component of the
+# run label) and has no other handle on the output name, so the tag rides along on
+# the task label rather than being passed to it.
+tag_suffix <- if (is.null(opt$tag) || !nzchar(opt$tag)) "" else paste0("_", opt$tag)
+
 
 # Metric groups, the split declared in the README, for the fallback scorer.
 BATCH_METRICS <- c("PCR_batch", "ASW_label/batch", "iLISI", "graph_conn")
@@ -95,6 +127,24 @@ run_scib_plot <- function() {
   # make it read "cca"/"rpca" as the output type. Normalise only the label handed
   # to the plotter (a display fix; the CSV tree keeps the readable run names).
   fixed <- read.csv(opt$input, check.names = FALSE)
+
+  raw_method <- vapply(as.character(fixed[[1]]), function(lbl) {
+    parts <- strsplit(lbl, "/")[[1]]
+    toks <- strsplit(parts[length(parts)], "_")[[1]]
+    paste(toks[-length(toks)], collapse = "_")
+  }, character(1), USE.NAMES = FALSE)
+
+  if (length(excluded) > 0) {
+    drop <- raw_method %in% excluded
+    unknown <- setdiff(excluded, unique(raw_method))
+    if (length(unknown) > 0)
+      message("[summary] --exclude names no run: ", paste(unknown, collapse = ", "))
+    message("[summary] excluding ", sum(drop), " run(s): ",
+            paste(sort(unique(raw_method[drop])), collapse = ", "))
+    fixed <- fixed[!drop, , drop = FALSE]
+    if (nrow(fixed) == 0) stop("--exclude removed every run")
+  }
+
   fixed[[1]] <- vapply(as.character(fixed[[1]]), function(lbl) {
     parts <- strsplit(lbl, "/")[[1]]
     toks <- strsplit(parts[length(parts)], "_")[[1]]
@@ -105,9 +155,12 @@ run_scib_plot <- function() {
                      "seurat_rpca" = "seuratrpca",  # -> "Seurat v3 RPCA"
                      gsub("_", "", method))
     parts[length(parts)] <- paste0(method, "_", type)
+    parts[1] <- paste0(parts[1], tag_suffix)
     paste(parts, collapse = "/")
   }, character(1))
-  in_abs <- file.path(normalizePath(opt$output), ".plot_input.csv")
+
+  in_abs <- file.path(normalizePath(opt$output),
+                      paste0(".plot_input", tag_suffix, ".csv"))
   write.csv(fixed, in_abs, row.names = FALSE)
 
   out_abs <- normalizePath(opt$output)
@@ -130,6 +183,17 @@ run_fallback <- function() {
 
   tab <- read.csv(opt$input, row.names = 1, check.names = FALSE)
   run_label <- sub(".*/", "", rownames(tab))
+
+  if (length(excluded) > 0) {
+    raw_method <- vapply(strsplit(run_label, "_"), function(toks)
+      paste(toks[-length(toks)], collapse = "_"), character(1))
+    keep <- !(raw_method %in% excluded)
+    message("[summary] excluding ", sum(!keep), " run(s): ",
+            paste(sort(unique(raw_method[!keep])), collapse = ", "))
+    tab <- tab[keep, , drop = FALSE]
+    run_label <- run_label[keep]
+    if (nrow(tab) == 0) stop("--exclude removed every run")
+  }
 
   present <- function(cols) cols[cols %in% colnames(tab)]
   batch_cols <- present(BATCH_METRICS)
@@ -157,7 +221,8 @@ run_fallback <- function() {
                        batch_correction = round(batch_score, 4),
                        overall = round(overall, 4), check.names = FALSE)
   scores <- scores[order(-scores$overall), ]
-  write.csv(scores, file.path(opt$output, "summary_scores.csv"), row.names = FALSE)
+  write.csv(scores, file.path(opt$output, paste0("summary", tag_suffix, "_scores.csv")),
+            row.names = FALSE)
 
   long <- data.frame(
     run = factor(rep(run_label, ncol(scaled)), levels = rev(scores$run)),
@@ -172,9 +237,10 @@ run_fallback <- function() {
          title = "Integration benchmark (overall = 0.6 bio + 0.4 batch)") +
     theme_minimal(base_size = 10) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  ggsave(file.path(opt$output, "summary_heatmap.png"), p,
+  ggsave(file.path(opt$output, paste0("summary", tag_suffix, "_heatmap.png")), p,
          width = 9, height = 0.4 * nrow(scores) + 2, dpi = 150)
-  message("[summary] wrote summary_scores.csv + summary_heatmap.png to ", opt$output)
+  message("[summary] wrote summary", tag_suffix, "_scores.csv + summary",
+          tag_suffix, "_heatmap.png to ", opt$output)
 }
 
 

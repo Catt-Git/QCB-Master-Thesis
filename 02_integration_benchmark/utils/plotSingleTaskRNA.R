@@ -3,7 +3,7 @@
 #' Integration methods are ranked from top to bottom based on an 'Overall Score', calculated as weighted
 #' sum of 'Batch correction' (default w:0.4) and 'Bio conservation' (default w:0.6).
 #'
-#' @return \code{plotSingleTaskRNA} saves in `outdir` one overview table for each task in three formats (.pdf/.tiff/.png)
+#' @return \code{plotSingleTaskRNA} saves in `outdir` one overview table for each task in two formats (.pdf/.png)
 #' and a .csv file for each task containing the ranked summary table scores. 
 #'
 #' @param csv_metrics_path path to a .csv file output of scib that contains the metrics calculated 
@@ -188,7 +188,6 @@ plotSingleTaskRNA <- function(csv_metrics_path, outdir = ".", weight_batch = 0.4
     g <- scIB_knit_table(data = metrics_tab, column_info = column_info, row_info = row_info, palettes = palettes, usability = F)  
     now <- Sys.time()
     ggsave(paste0(outdir, "/", format(now, "%Y%m%d_%H%M%S_"), dt.sc, "_summary_metrics.pdf"), g, device = cairo_pdf, width = 297, height = 420, units = "mm")
-    ggsave(paste0(outdir, "/", format(now, "%Y%m%d_%H%M%S_"), dt.sc, "_summary_metrics.tiff"), g, device = "tiff", dpi = "retina", width = 297, height = 420, units = "mm")
     ggsave(paste0(outdir, "/", format(now, "%Y%m%d_%H%M%S_"), dt.sc, "_summary_metrics.png"), g, device = "png", dpi = "retina", width = 297, height = 420, units = "mm")
     
     

@@ -5,7 +5,7 @@ Repository with the full code used and curated for the analysis carried out duri
 Dataset: Shiao et al., *Cancer Cell* 2024 (DOI 10.1016/j.ccell.2023.12.012), BioProject
 **PRJNA1032700** / GEO **GSE246613** - 149 human 10x 5' GEX libraries from 34 breast cancer
 patients, from FASTQ to an integration benchmark and a DRVI interpretation of the non-immune
-compartment.
+and epithelial compartments.
 
 ## Reproducing the analysis
 
@@ -49,10 +49,12 @@ they run (local vs SLURM) and on the parameters used for the thesis run.
 | [00_raw_data_processing](00_raw_data_processing/) | FASTQ → Cell Ranger → `all_samples_combined.h5ad` | cluster (SLURM) |
 | [01_pre_processing](01_pre_processing/) | QC, Scrublet, scran, cell cycle, CellTypist, HVG/PCA/UMAP → `shiao.h5ad` | mixed |
 | [02_integration_benchmark](02_integration_benchmark/) | 10 integration methods × 13 metrics | integration local, metrics on SLURM |
-| [03_drvi_interpretation](03_drvi_interpretation/) | non-immune subset + DRVI latent space | local |
+| [03_drvi_non_immune](03_drvi_non_immune/) | non-immune subset + DRVI latent space | local |
+| [04_epithelial](04_epithelial/) | epithelial subset (one lineage deeper than 03) | local |
 
 Phase 00 is skippable if the counts are obtained another way: everything downstream needs only
-`$DATA_DIR/all_samples_combined.h5ad`, and phases 01→03 chain from there.
+`$DATA_DIR/all_samples_combined.h5ad`, and phases 01→04 chain from there. 03 and 04 are two
+independent branches off `shiao.h5ad`: 04 does not read anything 03 wrote.
 
 **What is not in git.** Everything under `datasets/` except three small non-regenerable inputs
 (the CellTypist model, the Tirosh/Regev cell cycle list, and that README), plus the run logs.

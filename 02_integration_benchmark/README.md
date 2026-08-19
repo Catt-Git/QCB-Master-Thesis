@@ -96,7 +96,7 @@ The three share the same interface:
 Per-driver extras:
 
 - `run_all.sh` deletes the R methods' `.rds` intermediate once converted; `--keep-rds` keeps it.
-- `run_all_metrics.sh` expands the `types` column (19 rows → 23 jobs) and takes `--no-check`. It
+- `run_all_metrics.sh` expands the `types` column (18 rows → 22 jobs) and takes `--no-check`. It
   resumes **per (run, type)**, so a half-scored `full,embed` row resumes on the missing half; the
   CSV existing is the completeness marker, because `metrics.py` writes it in one go at the end.
   The merge and the summary table are run by hand once the arrays finish - the driver prints the
@@ -377,7 +377,7 @@ disposable too - deleting them only means a retraining if that size is ever revi
 
 DRVI on the **non-immune compartment** is a different question in a different phase, and the size
 is re-chosen there: 176k cells and 18 labels are not this dataset, so `n_latent = 64` is the run of
-`03_drvi_interpretation` (run ids `drvi_nonimm_<N>`, nothing to do with this grid row).
+`03_drvi_non_immune` (run ids `drvi_nonimm_<N>`, nothing to do with this grid row).
 
 ## Metrics
 
@@ -644,6 +644,26 @@ second one under `02_4_metrics/` — so it can be run from anywhere; `-o` overri
 
 Overall score = 0.6 x bio conservation + 0.4 x batch correction, on min-max scaled metrics.
 
+Two tables are produced, both in `figures/02_4_metrics/`:
+
+| Run | Files |
+|---|---|
+| all methods | `Rscript make_summary_table.R -i <merged.csv>` -> `shiao_summary_scores.csv`, `<ts>_shiao_summary_metrics.pdf/png` |
+| unsupervised only | `Rscript make_summary_table.R -i <merged.csv> --exclude scgen,scanvi --tag unsup` -> `shiao_unsup_summary_scores.csv`, `<ts>_shiao_unsup_summary_metrics.pdf/png` |
+
+scGen and scANVI are the two semi-supervised methods: they are handed the cell-type labels
+during training, the same labels the bio-conservation metrics score against, so they rank first
+and second in the full table by construction (the plotter already stars them). The second table
+drops them to rank the methods that only ever saw the expression matrix. `--exclude` matches the
+method token of `<method>_<type>`, so it drops every output type and both scalings of a method,
+and `--tag` rides on the task label, which is the only handle the vendored plotter gives on its
+output names - so the two runs never overwrite each other.
+
+**The two tables are not comparable row by row.** Every score is a mean of *min-max scaled*
+metrics, so the scaling range depends on which methods are in the table: removing the two best
+bio-conservation runs re-stretches the remaining ones upward (Harmony goes 0.57 -> 0.66 without
+its numbers changing). Read each table's ranking, not its absolute values across tables.
+
 ## Environments
 
 | Where | Environment | Notes |
@@ -686,7 +706,7 @@ plotting stack) **are** declared in `benchmark-py-r.yml` and `benchmark-hpc.yml`
   reuses `obsm['X_pca']` together with `uns['pca']['variance']` whenever both are present,
   and it is called with `recompute_pca=False`. On the unscaled object the PCA inherited from
   01_5 is exactly right, because it was computed on these same 2,000 genes, and keeping it
-  gives all 23 jobs an identical baseline for free. Carrying that same PCA into the scaled
+  gives all 22 jobs an identical baseline for free. Carrying that same PCA into the scaled
   object would instead hand PCR batch and cell-cycle conservation a baseline computed on a
   different matrix, so it is recomputed there with the parameters scib itself would use
   (50 components, arpack). The neighbour graph and the UMAP are dropped from the scaled
