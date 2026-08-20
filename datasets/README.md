@@ -7,7 +7,7 @@ Where every heavy object of the thesis lives. The scripts never hardcode this pa
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 ```
 
-**One `DATA_DIR` for the whole pipeline.** Phases 00 to 03 read and write the *same* root, in
+**One `DATA_DIR` for the whole pipeline.** Phases 00 to 05 read and write the *same* root, in
 the per-phase subfolders listed below, and each phase's first input is the previous phase's
 output at that same root. The value changes between machines, never between phases: a second
 root anywhere in the chain breaks the 00 → 01 and 01 → 02 hand-offs, since 01_2 looks for
@@ -93,7 +93,7 @@ The R methods also write a `02_integration/<run_id>.rds` intermediate, deleted o
 | **`03_nonimm/shiao_nonimm.h5ad`** | 03_1, + leiden - the definitive non-immune object (176,610 cells) |
 | `03_nonimm/model_drvi_nonimm_<N>.pt` / `embed_drvi_nonimm_<N>.h5ad` | 03_2, the DRVI model and latent space on this compartment |
 
-### 04_epithelial
+### 04_drvi_epithelial
 
 | Path | Step |
 |---|---|
@@ -105,6 +105,23 @@ The R methods also write a `02_integration/<run_id>.rds` intermediate, deleted o
 | `04_epi/embed_drvi_epi_<N>.h5ad` | 04_2, latent space + per-dimension stats + OOD/IND scores - what 04_3 reads |
 | `04_epi/shiao_epi_drvi_epi_<N>.h5ad` | 04_2, the 04_1 object (all genes) + `obsm['X_drvi']` |
 | **`signatures/*.txt`** | **input**, not written by any phase: the curated gene lists from the collaborator, one symbol per line, read by 04_3 via `SIG_DIR` (default `$DATA_DIR/signatures/`). Versioned in git, like `regev_lab_cell_cycle_genes.txt`. |
+
+### 05_epi_treatment
+
+One folder per treatment split, `<split>` being `base`, `pd1` or `rtpd1`.
+
+| Path | Step |
+|---|---|
+| `05_epi_treat/<split>/shiao_epi_<split>_raw.h5ad` | 05_1, the split of `04_epi/shiao_epi_raw.h5ad` + refilter |
+| `05_epi_treat/<split>/shiao_epi_<split>_norm.h5ad`, `..._norm_cc.h5ad`, `..._reduced.h5ad` | 05_1 |
+| `05_epi_treat/<split>/shiao_epi_<split>_hvg_2k_list.csv` / `shiao_epi_<split>_hvg_2k.h5ad` | 05_1, the DRVI input, HVGs reselected inside the split |
+| **`05_epi_treat/<split>/shiao_epi_<split>.h5ad`** | 05_1, + leiden - the definitive object of the split |
+| `05_epi_treat/<split>/model_drvi_epi_<split>_<N>.pt` | 05_2, the trained DRVI model, one flat file per run |
+| `05_epi_treat/<split>/embed_drvi_epi_<split>_<N>.h5ad` | 05_2, latent space + per-dimension stats + OOD/IND scores - what `drvi_treat.ipynb` reads |
+| `05_epi_treat/<split>/shiao_epi_<split>_drvi_epi_<split>_<N>.h5ad` | 05_2, the 05_1 object (all genes) + `obsm['X_drvi']` |
+
+The three splits together are the 74,441 cells of `04_epi/shiao_epi.h5ad` minus the per-split
+cohort drops, so this folder roughly doubles the epithelial footprint on disk.
 
 ## Smoke-test artifacts
 

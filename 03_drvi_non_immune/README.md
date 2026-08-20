@@ -19,6 +19,7 @@ Integration `batch_key = 'cohort'` (34 patients), biological `label_key = 'cell_
 ├── README.md
 ├── 03_1_subsetting/               # from shiao.h5ad to the non-immune object
 ├── 03_2_drvi_run/                 # DRVI on that object, n_latent = 64 (notebook + headless run)
+│                                 #   + the vanished-dimension pruning check
 ├── 03_3_enrichment/               # what the latent dimensions mean: GSEApy / Enrichr
 └── figures/                       # one folder per step: 03_1_*, 03_2_<run_id>, 03_3_*
 ```
@@ -64,6 +65,43 @@ The jittered version strips a random 20,000-cell subsample (fixed seed), not the
 compartment: at 176k points the strip becomes a solid black band that hides the violin it is
 supposed to annotate. Plus `scatter_nonimm_counts_vs_genes_unintegrated.png`, the complexity
 scatter coloured by mitochondrial content.
+
+### The low-complexity tail (step 1, `low_gene_table`)
+
+The cell filter is a single cut at `n_genes_by_counts > 100`, and a single cut says nothing about
+how close the surviving cells sit to it. The notebook prints the distribution in ranges just
+before applying the filter, so the threshold is defended by the shape of the tail rather than
+inherited:
+
+| n_genes_by_counts | cells | % | cum % | median pct_mt |
+|---|---:|---:|---:|---:|
+| ≤ 100 | **0** | 0.00 | 0.00 | - |
+| 101-150 | 548 | 0.31 | 0.31 | 0.22 |
+| 151-200 | 394 | 0.22 | 0.53 | 0.40 |
+| 201-250 | 653 | 0.37 | 0.90 | 1.57 |
+| 251-300 | 906 | 0.51 | 1.42 | 2.83 |
+| 301-400 | 8,464 | 4.79 | 6.21 | 3.34 |
+| 401-500 | 13,547 | 7.67 | 13.88 | 3.09 |
+| 501-750 | 26,727 | 15.13 | 29.01 | 3.32 |
+| 751-1,000 | 19,260 | 10.91 | 39.92 | 3.35 |
+| 1,001-2,000 | 52,662 | 29.82 | 69.74 | 3.36 |
+| 2,001-4,000 | 43,551 | 24.66 | 94.40 | 3.31 |
+| > 4,000 | 9,898 | 5.60 | 100.00 | 4.34 |
+
+176,610 cells; min 101, median 1,289, max 9,355 detected genes.
+
+Two things to read out of it:
+
+- **The top row is empty.** Not one non-immune cell carries 100 genes or fewer, so re-applying the
+  01_2 cell filter removes nothing on this compartment - the subset inherits a population 01_2 had
+  already cleaned. The filter stays in the notebook as a re-applied check, not as a step that does
+  work here.
+- **The gene-poorest ranges are also the mitochondria-poorest** (0.22% and 0.40% median, against
+  ~3.3% for the bulk). A gene-poor cell is usually a dying one and dying cells are mt-rich, so the
+  inversion says these ~950 cells are shallow droplets - few reads of everything, mitochondrial
+  transcripts included - rather than damaged cells. That is also why `pct_counts_mt < 10` does not
+  catch them: there is nothing mitochondrial there to flag. They are 0.53% of the compartment and
+  are kept.
 
 ### Usage
 
@@ -182,6 +220,59 @@ folders:
   comes from the decoder reconstructions (fast, favours the genes *specific* to a dimension,
   `OOD_min/max` being its two halves); IND averages each factor's effect over all cells (broader,
   a gene shared by several dimensions keeps a high score in all of them).
+
+### Pruning the vanished dimensions (`plot_pruned_umap_nonimm.py`)
+
+The DRVI paper defines a latent dimension as **vanished** when its maximum absolute value is
+below 1, and Supplemental Note 7 assumes the vanished ones are pruned *before* anything else is
+evaluated. `run_drvi_nonimm.py` does not prune: it builds its neighbour graph with `use_rep='X'`
+on all 64 dimensions, so every UMAP in the folder above is an unpruned one. This script is the
+check on that, the phase-03 counterpart of `02_3_plot_method_umap/plot_drvi_pruned_umap.py`
+(kept self-contained rather than imported across phases, as everything else here is).
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+cd 03_drvi_non_immune/03_2_drvi_run
+python plot_pruned_umap_nonimm.py --report-only   # the numbers, in seconds
+python plot_pruned_umap_nonimm.py                 # + the figure
+python plot_pruned_umap_nonimm.py --no-prune      # the control, see below
+```
+
+**The result on `drvi_nonimm_64`: pruning changes nothing measurable**, exactly as on the full
+dataset at 128.
+
+- The threshold is not a judgement call. 12 dimensions vanish and 52 are kept, separated by two
+  orders of magnitude - vanished at max |z| ≤ 0.034, kept at max |z| ≥ 3.80 - so 0.1, the 0.5
+  `set_latent_dimension_stats` was called with, and the paper's 1 select the identical set. The
+  stored `var['vanished']` needed no correction.
+- The 12 vanished dimensions carry **1.4e-05 of the total latent variance**.
+- Pairwise euclidean distances move by at most **2.8e-04 relative** (mean 8.0e-06), and the
+  **exact 15-NN overlap is 0.99997** on 20,000 sampled cells.
+
+**The figures cannot settle this; the numbers do.** UMAP's approximate neighbour search and its
+spectral initialisation are sensitive enough that the same data laid out again lands in a globally
+different arrangement, at the same seed and on the same cells in the same order. `--no-prune`
+re-runs the identical code path on all 64 dimensions as a control, and the Procrustes disparity
+between 50,000-cell layouts shows how little any of it means:
+
+| pair | disparity, this run (nonimm 64) | disparity, 02 (drvi 128) |
+|---|---|---|
+| pruned ↔ its own control | 0.648 | 0.176 |
+| pruned ↔ the pre-existing UMAP | 0.203 | 0.426 |
+| control ↔ the pre-existing UMAP | 0.663 | 0.385 |
+
+The ordering **reverses between the two phases**: here the pruned/control pair is the furthest
+apart of the three, in 02 it is the closest. Run-to-run variation swamps whatever the pruning
+does, so no pair of these layouts can be read as a before/after - including the control pair. The
+control's job is to demonstrate that instability, not to supply a matching picture.
+
+The evidence that pruning is inert is the 15-NN overlap and the distance deviation above, both
+computed on the embedding itself. The figures only show that the biology survives: cohorts mixed,
+cell types separated, in every version.
+
+The script **writes nothing over anything**: it reads `03_nonimm/embed_drvi_nonimm_64.h5ad`,
+caches each layout as `03_nonimm/umap_<run_id>_{rmVanished,allDims_control}.npy` rather than
+inside an `.h5ad`, and only adds files to `figures/03_2_<run_id>/`.
 
 ## 03_3_enrichment
 

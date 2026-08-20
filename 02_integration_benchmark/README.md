@@ -19,6 +19,7 @@ Integration `batch_key = 'cohort'` (34 patients), biological `label_key = 'cell_
 ├── 02_1_prepare/                 # from shiao.h5ad to the benchmark inputs
 ├── 02_2_integration/             # the ten methods (local or SLURM)
 ├── 02_3_plot_method_umap/        # per-method UMAP QC panels (after 02_2, before metrics)
+│                                 # (+ the DRVI vanished-dimension pruning check)
 ├── 02_4_metrics/                 # the 12 metrics (SLURM) + the final summary table
 ├── figures/                      # one folder per run: UMAP QC panels (+ DRVI latent-space
 │                                 # figures for the DRVI runs), plus the summary table
@@ -51,6 +52,7 @@ One line per script; the details live in the sections linked from the last colum
 | 4h | `02_2_integration` | `submit_integration.slurm` | The SLURM array task script for step 4. | HPC | [drivers](#the-three-drivers) |
 | 5 | `02_3_plot_method_umap` | `plot_all.sh` | **Driver of the UMAP QC step**: five panels per integrated run. | local | [drivers](#the-three-drivers) |
 | 5a | `02_3_plot_method_umap` | `plot_methods_umaps.py` | The five UMAP QC panels for a single run; caches the integrated layout into the object. | local | [figures](#per-method-umap-panels-02_3_plot_method_umap) |
+| 5c | `02_3_plot_method_umap` | `plot_drvi_pruned_umap.py` | DRVI only: the same UMAP with the *vanished* latent dimensions pruned, plus the report that says whether it matters. | local | [pruning](#pruning-the-vanished-dimensions-drvi-only) |
 | 5b | `utils` | `sync_to_cluster.sh` | **The local → cluster bridge**: uploads the files the grid names. | local | [cluster](#running-the-metrics-on-the-cluster) |
 | 6 | `02_4_metrics` | `run_all_metrics.sh` | **Driver of the metrics step**: every (run, type), locally or on SLURM. | local + HPC | [drivers](#the-three-drivers) |
 | 6a | `02_4_metrics` | `check_integrations.py` | Pre-flight check on one integrated object: cells, order, keys, `obsm`/graph, finiteness. | local + HPC | |
@@ -570,6 +572,69 @@ different pictures, not two renderings of one.
 
 The scaled object holds that UMAP because `scale_batch.py` builds it - see below. A clean run of
 the pipeline needs no extra step.
+
+### Pruning the vanished dimensions (DRVI only)
+
+The DRVI paper defines a latent dimension as **vanished** when its maximum absolute value is
+below 1, and Supplemental Note 7 assumes the vanished ones are pruned *before* anything else is
+evaluated. Nothing in this phase does that: the five panels above and all 12 metrics read the
+full 128-dimensional `obsm['X_emb']`, vanished dimensions included. Since the scib metrics are
+meant to be computed on the pruned embedding, the assumption had to be tested rather than
+asserted.
+
+`plot_drvi_pruned_umap.py` is that test. It re-applies the paper's threshold to the latent space
+in `02_drvi/embed_<run_id>.h5ad`, drops the vanished dimensions, and lays out the rest with the
+same seed, the same `n_neighbors=15` and the same colours `plot_methods_umaps.py` uses:
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+cd 02_integration_benchmark/02_3_plot_method_umap
+python plot_drvi_pruned_umap.py --report-only    # the numbers, in seconds
+python plot_drvi_pruned_umap.py                  # + the figure, ~25 min
+python plot_drvi_pruned_umap.py --no-prune       # the control, see below
+```
+
+**The result on `drvi_unscaled_128`: pruning changes nothing measurable.**
+
+- The threshold is not a judgement call here. 63 dimensions vanish and 65 are kept, and the two
+  groups are separated by two orders of magnitude - vanished at max |z| ≤ 0.020, kept at
+  max |z| ≥ 2.92 - so 0.1, the 0.5 that `set_latent_dimension_stats` was called with, and the
+  paper's 1 all select the identical set. The stored `var['vanished']` needed no correction.
+- The 63 vanished dimensions carry **8.6e-06 of the total latent variance**.
+- Pairwise euclidean distances move by at most **4.3e-05 relative** (mean 4.7e-06); the full and
+  pruned distance vectors correlate at 0.999999999946.
+- **Exact 15-NN overlap is 0.99997** on 60,000 sampled cells (50-NN: 0.99998). Every scib metric
+  is built on that neighbour graph, so the 02_4 scores for `drvi_unscaled_128` are the
+  pruned-embedding scores already and no metric has to be recomputed.
+
+**The figures cannot settle this; the numbers do.** This is the trap in the whole exercise.
+`drvi_cohort_celltype_integrated_rmVanished.png` looks different from
+`drvi_cohort_celltype_integrated.png`, and none of that difference is the pruning: UMAP's
+approximate neighbour search and its spectral initialisation are sensitive enough that the same
+data laid out again lands in a globally different arrangement, even at the same seed and on the
+same cells in the same order. `--no-prune` re-runs the identical code path on all 128 dimensions
+as a control, and the Procrustes disparity between 50,000-cell layouts shows how little any of it
+means:
+
+| pair | disparity, this phase (128) | disparity, 03_2 (nonimm 64) |
+|---|---|---|
+| pruned ↔ its own control | 0.176 | 0.648 |
+| pruned ↔ the pre-existing panel | 0.426 | 0.203 |
+| control ↔ the pre-existing panel | 0.385 | 0.663 |
+
+The ordering **reverses between the two phases**: here the pruned/control pair is the closest, in
+03_2 it is the furthest apart of the three. Run-to-run variation swamps whatever the pruning does,
+so no pair of these layouts can be read as a before/after - including the control pair. The
+control's job is to demonstrate that instability, not to supply a matching picture.
+
+The evidence that pruning is inert is the 15-NN overlap and the distance deviation above, both
+computed on the embedding itself. The figures only show that the biology survives: cohorts mixed,
+cell types separated, in every version.
+
+The script **writes nothing over anything**: it reads the latent object rather than the scored
+`02_integration/drvi_unscaled_128.h5ad` (whose cached `obsm['X_umap']` backs the five existing
+panels), caches each layout as `02_drvi/umap_<run_id>_{rmVanished,allDims_control}.npy` instead
+of inside an `.h5ad`, and only adds files to `figures/<run_id>/`.
 
 ### The scaled object's unintegrated UMAP
 

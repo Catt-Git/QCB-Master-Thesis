@@ -1,0 +1,15 @@
+# confounder_checks | DRVI run drvi_epi_64 | 04_3 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+check,value
+phase_pct_G1_target,28.777694797112275
+phase_pct_G1_rest,56.52334431443826
+n_target_all_phases,4017.0
+n_target_within_G1_recomputed,1919.0
+jaccard_target_vs_G1_recomputed,0.5982328482328483
+median_depth_immunogenic_low,1007.0
+median_depth_rest,1335.0
+mannwhitney_p_depth,7.033026731382757e-132
+auroc_depth_predicts_immunogenic_low,0.5597084286810519
