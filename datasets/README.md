@@ -104,7 +104,7 @@ The R methods also write a `02_integration/<run_id>.rds` intermediate, deleted o
 | `04_epi/model_drvi_epi_<N>.pt` | 04_2, the trained DRVI model, one flat file per latent size |
 | `04_epi/embed_drvi_epi_<N>.h5ad` | 04_2, latent space + per-dimension stats + OOD/IND scores - what 04_3 reads |
 | `04_epi/shiao_epi_drvi_epi_<N>.h5ad` | 04_2, the 04_1 object (all genes) + `obsm['X_drvi']` |
-| **`signatures/*.txt`** | **input**, not written by any phase: the curated gene lists from the collaborator, one symbol per line, read by 04_3 via `SIG_DIR` (default `$DATA_DIR/signatures/`). Versioned in git, like `regev_lab_cell_cycle_genes.txt`. |
+| **`signatures/*.txt`** | **input**, not written by any phase: the curated gene lists from the collaborator, one symbol per line, read by 04_3 via `SIG_DIR` (default `$DATA_DIR/signatures/`). Versioned in git, like `regev_lab_cell_cycle_genes.txt`. Two collections live here: the 11 stemness/immunogenicity lists (`--collection scie`) and the 9 `EMT_[ABC]_*` ones (`--collection emt`), the latter documented in `signatures/EMT_LISTS_NOTES.md`. |
 
 ### 05_epi_treatment
 

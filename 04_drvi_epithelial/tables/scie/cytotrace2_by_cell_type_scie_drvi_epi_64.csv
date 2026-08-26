@@ -1,0 +1,16 @@
+# cytotrace2_by_cell_type | DRVI run drvi_epi_64 | 04_3 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+cell_type,mean,median,size
+LummHR-SCGB,0.08941524789193246,0.08172950236917048,5964
+LummHR-active,0.04832977687656058,0.04267276171630971,1085
+LummHR-major,0.07266640339672012,0.06921558626809703,18175
+Lumsec-HLA,0.21710382225127364,0.21652210602095903,97
+Lumsec-KIT,0.12258700063326511,0.11303923922192918,1315
+Lumsec-basal,0.17150646804845435,0.14803768685806334,17422
+Lumsec-major,0.10551654909942773,0.09487457477954729,1401
+Lumsec-myo,0.21265476779286094,0.21835342574292912,1396
+Lumsec-prol,0.16876594969786118,0.14115109480102128,24442
+basal,0.22404126282862916,0.16236820951310182,3144

@@ -34,12 +34,20 @@ API, read from the package documentation rather than assumed
     preKNN_CytoTRACE2_Score, preKNN_CytoTRACE2_Potency. Potency categories are
     Differentiated / Unipotent / Oligopotent / Multipotent / Pluripotent / Totipotent.
 
-The package is NOT part of `benchmark-py-r` as of this writing. It installs in one command
-(`pip install cytotrace2-py`, 1.1.0.4 on PyPI), and this script checks for it and stops with
-that instruction rather than failing halfway. Everything else in 04_3 runs without it;
-cell_first_epi.py simply drops the CytoTRACE2 quadrant definition if the output is missing.
+The package needs an environment of its own, and this is not a preference. cytotrace2-py
+1.1.0.4 declares `numpy<2.0.0` as a hard pin, so `pip install cytotrace2-py` into
+`benchmark-py-r` does not add a package - it silently rolls the whole stack back
+(numpy 2.4 -> 1.26, pandas 3.0 -> 2.3, scanpy 1.12 -> 1.11, anndata 0.13 -> 0.12, plus
+scipy and zarr) and leaves fast-array-utils and tifffile with unsatisfiable requirements.
+That was done once and undone; the two stacks cannot coexist. Install it into a dedicated
+env instead (`environments/cytotrace2-py.yml`, or the two commands in the README), which is
+cheap because this step touches nothing else: it reads one .h5ad, writes .txt matrices, and
+writes one .csv. This script checks for the package and stops with that instruction rather
+than failing halfway. Everything else in 04_3 runs without it; cell_first_epi.py simply drops
+the CytoTRACE2 quadrant definition if the output is missing.
 
-Usage:
+Usage (in the cytotrace2-py env, NOT in benchmark-py-r):
+    conda activate cytotrace2-py
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python cytotrace2_epi.py --dry-run     # export the per-patient matrices, do not score
     python cytotrace2_epi.py               # export + score + concatenate
@@ -65,6 +73,7 @@ import scipy.sparse as sp
 UTILS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils")
 sys.path.insert(0, UTILS_DIR)
 import signature_common as C  # noqa: E402
+import sig_collections as SC  # noqa: E402
 
 CT2_SEED = 14          # the package default, pinned here so it is on the record
 CT2_SPECIES = "human"  # NOT the package default, which is "mouse"
@@ -113,8 +122,12 @@ def main():
             except ImportError:
                 sys.exit(
                     "[STOP] cytotrace2 is not installed in this environment.\n"
-                    "       pip install cytotrace2-py\n"
-                    "       (1.1.0.4 on PyPI; see also "
+                    "       It pins numpy<2 and must NOT be installed into benchmark-py-r,\n"
+                    "       which it would roll back to numpy 1.26 / pandas 2 / scanpy 1.11.\n"
+                    "       Use the dedicated env:\n"
+                    "           conda env create -f environments/cytotrace2-py.yml\n"
+                    "           conda activate cytotrace2-py\n"
+                    "       (cytotrace2-py 1.1.0.4 on PyPI; see also "
                     "https://github.com/digitalcytometry/cytotrace2)\n"
                     "       Re-run with --dry-run to export the per-patient matrices without it."
                 )
@@ -204,7 +217,11 @@ def main():
         print("\nmean potency per cell type (the sanity read: Lumsec-prol should NOT be the "
               "only thing at the top - if it is, potency is tracking the cycle)")
         print(by_ct.sort_values("mean", ascending=False).to_string(float_format="%.3f"))
-        C.write_table(by_ct, "cytotrace2_by_cell_type")
+        # CytoTRACE2 is the stemness readout of the scie collection - the only one in the
+        # stage that does not come from a gene list - so its summary table belongs there.
+        # The per-cell csv above is NOT collection-scoped: it is a measurement, and 04_5
+        # joins it only when the collection asks for it.
+        C.write_table(by_ct, "cytotrace2_by_cell_type", SC.SCIE)
 
     if args.write_obs:
         target = C.EPI_DIR / f"shiao_epi_{C.RUN_ID}.h5ad"

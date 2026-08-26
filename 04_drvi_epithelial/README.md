@@ -44,22 +44,47 @@ carries over unchanged into 05.
 ├── README.md
 ├── signature_interpretation_all.sh   # phase-level driver for 04_3 -> 04_7
 ├── utils/
-│   └── signature_common.py           # paths, signature registry, writers, DRVI accessor
+│   ├── signature_common.py           # paths, writers, DRVI accessor - collection-agnostic
+│   └── sig_collections.py            # the scie and emt collections: lists, axes, target region
 ├── 04_1_subsetting/                  # from shiao.h5ad to the epithelial object
 ├── 04_2_drvi_run/                    # DRVI on that object, n_latent 64
-├── 04_3_signatures/                  # the lab's lists -> one .gmt, coverage, Jaccard
-├── 04_4_cytotrace2/                  # per-patient potency (the one HPC step)
+├── 04_3_signatures/                  # the lists of one collection -> .gmt, coverage, Jaccard
+├── 04_4_cytotrace2/                  # per-patient potency (own conda env, see below)
 ├── 04_5_cell_first/                  # Route A
 ├── 04_6_factor_first/                # Route B
 ├── 04_7_convergence/                 # Route C, the main result
-├── tables/                           # every result table of 04_3 - 04_7
-└── figures/                          # one folder per step: 04_1_*, 04_2_<run_id>, 04_3_*, 04_5_* ...
+├── tables/{scie,emt}/                # every result table of 04_3 - 04_7, one folder per collection
+└── figures/                          # one folder per step, then one per collection
 ```
 
 `utils/` follows 00 and 02: helpers shared by several steps live there, imported with the idiom
 `02_2_integration/run_integration.py` uses. `tables/` is phase-level for the same reason
 `figures/` is - 04_7 reads what 04_5 and 04_6 wrote, so a per-step `tables/` would mean steps
 reaching into each other's folders.
+
+### The two collections
+
+04_3 - 04_7 are **one procedure applied to two independent bodies of prior knowledge**. The step
+folders are one per *method step*, not one per readout; which lists are being interpreted is a
+flag, `--collection`, declared in `utils/sig_collections.py`:
+
+| | `scie` (the default) | `emt` |
+|---|---|---|
+| question | is there an epithelial state that is stem-like **and** immune-evasive? | which cells sit in the **hybrid**, partial-EMT state? |
+| lists | 11, on `immune` / `stemness`, plus CytoTRACE2 | 9, on `epithelial` / `hybrid` / `mesenchymal`, plus a derived E-to-M score per list version |
+| primary | no primary stemness list; `IMMUNOGENIC_CONSENSUS` is the primary immune one | list **B**; A and C are robustness replicates of it |
+| hybrid lists | - | scored and reported, but they **validate** the call rather than making it - see `sig_collections.py` |
+| target region | stem-**high** x immunogenic-**low** | epithelial **high** x mesenchymal **high**, i.e. co-expression |
+| named risks | cell cycle, sequencing depth | cell cycle, fibroblast ambient RNA / doublets |
+
+They share no output. Every table goes to `tables/<collection>/<name>_<collection>_<run_id>.csv`
+and every figure to `figures/<step>/<collection>/<name>_<collection>_<run_id>.png`, and **04_6
+corrects its FDR inside one collection**, so running one cannot move a single number of the
+other. `04_4_cytotrace2` is the one step that is not collection-scoped: it computes a
+measurement, and it is the `scie` collection that declares it wants to use it.
+
+Adding a third collection means appending a `Collection` to `sig_collections.py`. No step script
+changes.
 
 ## 04_1_subsetting
 
@@ -239,7 +264,7 @@ the two directions answer different questions and fail differently.
 | | Route A, cell-first (04_5) | Route B, factor-first (04_6) |
 |---|---|---|
 | unit of analysis | the **cell** | the **gene** |
-| question | do the cells prior knowledge calls stem-like or immune-evasive sit anywhere in particular along a latent dimension? | what program does this dimension encode, irrespective of what I was looking for? |
+| question | do the cells prior knowledge calls stem-like, immune-evasive or hybrid-EMT sit anywhere in particular along a latent dimension? | what program does this dimension encode, irrespective of what I was looking for? |
 | why it is needed | the **only** route that assigns cells to states - the project's deliverable | the **only** discovery route, and the corrective for A's confirmation bias |
 | how it fails | noisy per-cell scores, correlated with depth and cycle and with each other; confirmatory by construction | gene overlap with no cellular counterpart; long signatures under-enrich against a truncated top-gene list |
 
@@ -257,21 +282,25 @@ are reported separately. Nothing is promoted on a single route.**
 
 | # | Step | What it does | Where |
 |---|------|--------------|-------|
-| 1 | `04_3_signatures/build_signatures_epi.py` | Ingest the 11 text files; write `lab_signatures.gmt` with the provenance in the description field; coverage table; pairwise Jaccard. | local |
-| 2 | `04_4_cytotrace2/cytotrace2_epi.py` | CytoTRACE2 potency, one patient at a time, from raw counts; concatenate. **Not in the default chain.** | HPC |
-| 3 | `04_5_cell_first/cell_first_epi.py` | Route A: scoring, confounder table, within-patient standardisation, quadrant definitions, dimension x signature association. | local |
-| 4 | `04_6_factor_first/factor_first_epi.py` | Route B: top genes per dimension **and direction**, offline ORA, signed significance matrix. | local |
-| 5 | `04_7_convergence/convergence_epi.py` | Route C: the convergence table and the comparative figures. | local |
+| 1 | `04_3_signatures/build_signatures_epi.py` | Ingest the collection's text files; write `signatures_<collection>.gmt` with the provenance in the description field; coverage table; pairwise Jaccard. | local |
+| 2 | `04_4_cytotrace2/cytotrace2_epi.py` | CytoTRACE2 potency, one patient at a time, from raw counts; concatenate. **Not in the default chain** - needs the `cytotrace2-py` env. | local |
+| 3 | `04_5_cell_first/cell_first_epi.py` | Route A: scoring, within-patient standardisation, derived readouts, confounder table, target-region definitions, dimension x signature association. | local |
+| 4 | `04_3_signatures/signature_composition_epi.py` | Which genes actually carry each score, and whether they are detectable: per-gene contribution, effective gene count, flags. Feeds nothing - a diagnostic. Lives in 04_3 but runs after 04_5 so it can use the real scores. | local |
+| 5 | `04_6_factor_first/factor_first_epi.py` | Route B: top genes per dimension **and direction**, offline ORA, signed significance matrix. | local |
+| 6 | `04_7_convergence/convergence_epi.py` | Route C: the convergence table and the comparative figures. | local |
+| 7 | `04_8_cycle_confound/cycle_confound_epi.py` | How much of "stemness" is the cell cycle: gene content of each list, variance it explains, what the consensus vote does to it, and the cycle loading of every dimension. Feeds nothing - a diagnostic. | local |
 
 ```bash
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 cd 04_drvi_epithelial
 
-./signature_interpretation_all.sh                  # steps 1, 3, 4, 5 - resuming
+./signature_interpretation_all.sh                  # steps 1, 3, 4, 5, 6, 7 on scie - resuming
+./signature_interpretation_all.sh --collection emt # the same six steps on the EMT lists
 ./signature_interpretation_all.sh --force          # re-run everything
 ./signature_interpretation_all.sh --dry-run        # print what would run
 ./signature_interpretation_all.sh cellfirst convergence   # only the named steps
-./signature_interpretation_all.sh cytotrace        # the HPC step, locally
+PYTHON=~/miniconda3/envs/cytotrace2-py/bin/python \
+  ./signature_interpretation_all.sh cytotrace      # the one step under a different interpreter
 ```
 
 Step names: `signatures`, `cytotrace`, `cellfirst`, `factorfirst`, `convergence`. A step whose
@@ -317,13 +346,13 @@ runtime in both routes rather than assumed. Nothing needed reindexing.
 
 ## 04_3_signatures
 
-Eleven files, one gene symbol per line, in `$DATA_DIR/signatures/` (override with
-`SIGNATURE_DIR`). Ingested into `tables/lab_signatures.gmt`, whose **description field carries the
+Ten files, one gene symbol per line, in `$DATA_DIR/signatures/` (override with
+`SIGNATURE_DIR`). Ingested into `tables/<collection>/signatures_<collection>.gmt`, whose **description field carries the
 provenance**, so the collection that feeds both routes is also the Appendix table. The `.gmt`
 holds the **mapped** genes, i.e. the collection as actually used, so the Appendix and the tested
 sets cannot drift apart.
 
-Five of the eleven files are **CRLF** and at least one carries a **UTF-8 BOM**; the reader opens
+Several of the files are **CRLF** and at least one carries a **UTF-8 BOM**; the reader opens
 with `encoding='utf-8-sig'` and strips whitespace. Without that, `B2M\r` matches no `var_name` and
 the immune signatures silently score zero.
 
@@ -339,14 +368,131 @@ The registry - name, file on disk, axis, provenance - is `signature_common.SIGNA
 | `BENPORATH_ES1` | stemness | MSigDB `BENPORATH_ES_1` |
 | `ESC_ASSOU` | stemness | PMC1906587, Table S3 |
 | `ESC_WONG` | stemness | MSigDB `WONG_EMBRYONIC_STEM_CELL_CORE` |
-| `EMP` | stemness | Embryonic Multipotent Progenitors, PMID 29784918 |
 | `LIM_STEM` | stemness | MSigDB `LIM_MAMMARY_STEM_CELL_UP` |
 | `FMASC` | stemness | fetal mammary stem cells, PMC3277444, Suppl. Table 2 |
 
 Two file names differ from the signature name: `Immune consensus.txt` → `IMMUNOGENIC_CONSENSUS`,
 `fMaSC.txt` → `FMASC`.
 
-How much of each list is actually measured is in `tables/coverage_*.csv`, against two universes:
+### Why `EMP` was dropped
+
+The stemness axis carried six lists until now. The sixth, `EMP` (Embryonic Multipotent
+Progenitors, PMID 29784918, `EMP.txt`, 15 symbols), has been removed; five remain. `EMP.txt` is
+still on disk and the restoring change is one line in `utils/sig_collections.py`, where the same
+reasoning is repeated for whoever reads the code rather than this file.
+
+Every number below was measured on the six-list run, and the re-run has overwritten its tables -
+**this section and that code comment are the record of it.** (The last *committed* with-`EMP`
+tables are the earlier 104-row ones from before `PRUNE_VANISHED` was turned off, so they are not
+a like-for-like comparison.)
+
+**It is not a coverage failure.** 13 of the 15 symbols map, 87 %, comfortably above the 60 %
+floor. The problem is what those 13 measure on *this* data.
+
+*Three genes carry 92 % of the score.* Of the total EMP signal across the 74,441 cells, `RPSA`
+carries **64.8 %**, `FN1` 16.7 % and `MFAP2` 10.6 %; the remaining ten together carry 7.9 %.
+`RPSA` is a 40S ribosomal protein, ubiquitous and depth-sensitive, and the score follows it -
+Spearman **0.70** with `RPSA` expression against **0.11** with `SOX11`, the progenitor marker the
+list is actually named for. `FN1` and `MFAP2` are ECM genes, which is why the EMP score tracked
+the mesenchymal axis of the `emt` collection (ρ 0.27-0.31 on `EMT_A/B/C_MESENCHYMAL`) as closely
+as it tracked the other stemness lists (ρ 0.21-0.27) - an unwanted coupling between two
+collections that are supposed to be independent bodies of prior knowledge.
+
+*The genes that make it an EMP list are below the droplet noise floor.* Detection rates: `NDNF`
+0.2 % of cells, `IGF2BP1` 0.3 %, `FRAS1` 1.1 %, `EPHA7` 1.2 %, `UNC5B` 1.7 %, `GPC3` 2.0 %,
+`CCND2` 2.3 %, `LEF1` 2.4 %, `SOX11` 3.3 %. **20.9 % of cells have zero counts across all 13
+genes.** Its `hvg_fraction_of_mapped` of 0.46 was the highest of the stemness lists and looked
+like a point in its favour; it is 6 genes out of 13, too few for the Route B hypergeometric test
+to be informative, which is exactly what happened.
+
+*It contributed no evidence.* Across all 128 dimension-directions of
+`convergence_scie_drvi_epi_64.csv`, `EMP` was **never significant on either route**: best-of-row
+3× on Route A (ρ 0.019 / 0.054 / 0.056, bar 0.20) and 3× on Route B (FDR 0.11 / 0.87 / 0.11,
+bar 0.05). Its maximum |ρ| over all dimensions was **0.104**, against 0.30-0.35 for every other
+stemness readout and 0.29 for CytoTRACE2. It produced no `convergent` verdict and changed none.
+
+*And it cost stability.* In `quadrant_stability_*.csv` it sat at Jaccard 0.11-0.14 with the ESC
+block and 0.14 with CytoTRACE2. Removing it raises the **median pairwise Jaccard of the stemness
+quadrants from 0.184 to 0.255**. 374 cells entered the seven-readout consensus on the strength of
+the EMP vote alone.
+
+*What is deliberately not claimed.* `LIM_STEM` is the other readout that disagrees with the ESC
+block - it holds the minimum pairwise Jaccard (0.073, against `ESC_WONG`) with or without EMP -
+and it is **kept**. It maps 465 of 479 symbols, reaches |ρ| 0.31 and is the best Route A readout
+of 26 dimension-directions: its disagreement is a documentable biological one, not an artefact of
+what happens to be measurable. Only EMP fails on measurability.
+
+### What is inside each score (`signature_composition_epi.py`)
+
+`coverage_*.csv` answers *how many symbols map*. It does not answer *what the score then
+measures*, and the two come apart badly. `sc.tl.score_genes` averages the mapped genes, so a gene
+expressed an order of magnitude above the rest of its list sets the average no matter how many
+other genes are in it, and a gene under the droplet detection floor contributes nothing but its
+zeros. A list can map 87 % of its symbols and still produce a score that is, on this object, a
+proxy for one ribosomal gene - that is exactly what `EMP` was, and it is why this step exists.
+
+Two tables come out of it. `signature_gene_contribution_*.csv`, one row per (signature, gene):
+
+| Column | What it says |
+|---|---|
+| `detection_rate` | fraction of cells with a non-zero count. Under 1 % the gene is at the noise floor and measures nothing per cell |
+| `share_of_mean_signal` | the gene's share of its list's summed expression - how much of the score's **level** it sets. Sums to 1 |
+| `share_of_score_variance` | `Cov(x_g / n, m) / Var(m)` with `m` the list mean - how much of the score's **spread across cells** it sets. Sums to 1, and is negative for a gene that moves against its own list |
+| `spearman_with_score` | the gene against the score Route A actually uses, joined from 04_5 |
+
+`share_of_score_variance` is the sharper of the two: every quadrant and every Spearman downstream
+is built on the *ranking* of cells, not on the level.
+
+And `signature_concentration_*.csv`, one row per signature, whose headline column is
+**`effective_n_genes`** - inverse Simpson on the contribution shares, `1 / Σ share²`, i.e. the
+number of genes the score behaves as if it had. A list of equally-contributing genes scores its
+own length; `EMP` scored **2.17 of 13**.
+
+Three flags, all reported and none enforced - this step drops nothing and stops nothing:
+
+| Flag | Threshold | Reading |
+|---|---|---|
+| `dominated_by_one_gene` | top gene > 30 % of the score's variance | the other genes are decoration |
+| `low_effective_n` | `effective_n_genes` < 10 | too few effective genes to average away any single one |
+| `undetectable_in_many_cells` | > 10 % of cells with zero counts across the whole list | for those cells the score is its control set, not a measurement |
+
+**`effective_n_fraction` is reported and deliberately not flagged.** Thresholding it looked like
+the right way to measure the *shape* of a list independently of its length, and it does not work:
+every long list on this object sits at 0.18-0.28 - `FMASC` at 0.27 with 457 effective genes,
+`ESC_ASSOU` at 0.18 with 146 - because expression is heterogeneous across any few hundred genes,
+not because those lists are defective. A threshold there flags the collection's most robust
+scores. What separated `EMP` was the **absolute** effective count, 2.17, together with a single
+dominant gene, which the two flags above already catch. Read the fraction next to the absolute
+number; do not read it alone.
+
+**A flag is not a verdict.** The thresholds are chosen here, not derived from anything, and a
+concentrated list can still be the right instrument - `IMMUNOGENIC_CONSENSUS` is 25 curated genes
+and is *supposed* to be dominated by the HLA locus. Acting on a flag means editing the registry in
+`utils/sig_collections.py` with the reasoning written next to it, which has happened exactly once.
+
+**What it says about the two collections.** On `scie` only `ISDS` is flagged, and mildly: 8.3
+effective genes of 27, `CD74` at 13.5 % of its variance. Everything else is clean, the five
+stemness lists at 77-457 effective genes. The immune four share their top genes - `CD74`, `HLA-B`,
+`HLA-A` in every one of them - which is the Jaccard matrix's nesting story arriving by a second
+route. `IMMUNOGENIC_CONSENSUS` behaves as ~10 genes of 25 and is *not* flagged, which is the
+intended shape for a curated list built around the HLA locus.
+
+`emt` is the weaker collection by this measure. All nine lists are short, so `low_effective_n`
+fires on eight of them and is not informative on its own; what is informative is that
+**`EMT_B_HYBRID` and `EMT_A_MESENCHYMAL` trip all three flags** - `YBX1` at 31.9 % and `VIM` at
+38.0 % of their variance, with 15.7 % and 25.6 % of cells scoring on nothing - and that
+`EMT_A_HYBRID` has the worst detectability in the phase at **36.1 % of cells with zero counts
+across the whole list**. That is an independent reason for something 04_5 had already found the
+hard way: the first, quantile-band definition of the hybrid state was unstable across list
+versions (Jaccard 0.08-0.13) and had to be replaced by co-expression. The hybrid lists are the
+least reliable instruments here, and the co-expression definition leans on them least.
+
+For the record, `EMP` scored **2.17 effective genes of 13** and tripped all three flags - the only
+list in either collection to do so. Re-deriving that on the current code is a `sc.tl.score_genes`
+call on `$DATA_DIR/signatures/EMP.txt`, which is still on disk; it is not in the registry and no
+step reads it.
+
+How much of each list is actually measured is in `tables/<collection>/coverage_*.csv`, against two universes:
 all genes of the epithelial object (what Route A scores on) and the 2,000 HVGs (the Route B ORA
 background). The step **stops** below a 60 % mapping floor (`--allow-low-coverage` to override):
 these lists date from 2007-2012 and carry deprecated symbols, and a gene that does not map is
@@ -385,21 +531,155 @@ The package's API is not what an `.h5ad` pipeline expects - tab-delimited genes 
 non-log-transformed counts, `species` defaulting to `"mouse"` - and the script's header documents
 every point of it; the parameters used are in *Key parameters* below.
 
-**This is the only part of the chain with a SLURM wrapper**, and the reason it is its own step:
-the dependency is not in `benchmark-py-r`, and the runtime is minutes per patient across 29
-patients rather than seconds.
+**This is its own step because of the environment, not because of the machine.** The dependency
+cannot live in `benchmark-py-r`, so it runs under a different interpreter; it was tried on the
+cluster first and that turned out to be unnecessary (see *Runtime, measured* below).
+
+### The environment, which is not optional
+
+`cytotrace2-py` 1.1.0.4 declares **`numpy<2.0.0`** as a hard requirement. `pip install
+cytotrace2-py` inside `benchmark-py-r` therefore does not add a package, it rolls the analysis
+stack back - numpy 2.4 → 1.26, pandas 3.0 → 2.3, scipy 1.18 → 1.17, zarr 3.2 → 3.1, anndata
+0.13 → 0.12, scanpy 1.12 → 1.11 - and leaves `fast-array-utils` and `tifffile` unsatisfiable.
+It gets its own environment, exactly as scGen does in phase 02:
 
 ```bash
-cd 04_drvi_epithelial/04_4_cytotrace2 && mkdir -p logs
-sbatch --export=ALL,DATA_DIR=$DATA_DIR submit_cytotrace2_epi.slurm --cores 8
+conda env create -f environments/cytotrace2-py.yml     # Python 3.11, numpy 1.26, CPU-only torch
+conda activate cytotrace2-py
 ```
 
-> **Not yet run.** `cytotrace2-py` (1.1.0.4 on PyPI, `pip install cytotrace2-py`) is **not** in
-> `benchmark-py-r` and is not pinned in `environments/benchmark-py-r.yml`. The script checks for
-> it and stops with that instruction rather than failing halfway; `--dry-run` exports the
-> per-patient matrices without it. Re-run 04_5 afterwards and it picks the `.csv` up automatically,
-> adding CytoTRACE2 as a seventh stemness readout. Without it Route A runs on the six signature
-> lists alone **and says so in its output**.
+The isolation costs nothing here: this step reads `shiao_epi.h5ad`, writes tab-delimited
+matrices and writes one `.csv`, and anndata 0.12 reads the 0.13-written file without complaint.
+Two details the `.yml` pins for a reason - `setuptools<81`, because `cytotrace2_py` still
+imports `pkg_resources`, which setuptools 81 removed (install succeeds, import fails); and the
+CPU torch index, because the predictor runs on the CPU and the CUDA wheels would duplicate
+~2.5 GB for nothing.
+
+On first use the package downloads **17 model files (~8 MB each) from Google Drive** into its own
+`site-packages/cytotrace2_py/resources/models/`, so the first call needs network access.
+
+```bash
+conda activate cytotrace2-py
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+cd 04_drvi_epithelial/04_4_cytotrace2
+python cytotrace2_epi.py --cores 12          # or --dry-run to export the matrices only
+```
+
+### Runtime, measured
+
+The full run, 29 cohorts / 74,441 cells, on 12 cores: **47 min of scoring + 6 min of export**,
+0 cells unscored. The cost is almost entirely *fixed per call* - the package reloads its 17
+models every time - so it is ~68 s for a 209-cell cohort and 196 s for the 9,243-cell one,
+about 0.012 s per cell on top of the constant. Peak memory is a few GB (one cohort densified
+at a time, the largest being 9,243 x 26,371) and the temporary `.txt` matrices total ~4 GB and
+are deleted at the end unless `--keep-work`. Nothing here needs a scheduler, and the SLURM
+wrapper this step used to carry was removed once the local run measured it.
+
+### Result
+
+Run on all 29 cohorts; `cytotrace2_<run_id>.csv` exists. 74,441 cells scored, none missing, none
+unknown. Gene mapping is stable across cohorts: 14,043 input gene names map to mouse orthologs
+and 14,042 of them are in the model's feature set.
+
+| Potency | cells |
+|---|---|
+| Differentiated | 53,025 |
+| Unipotent | 17,576 |
+| Oligopotent | 3,379 |
+| Multipotent | 461 |
+| Pluripotent / Totipotent | 0 |
+
+**The cycle check passes.** The worry written into the script was that potency would just be
+proliferation: it is not. `basal` has the highest mean score (0.224), and `Lumsec-prol` -
+the cycling population and by far the largest cell type at 24,442 cells - ranks **5th of 10**
+(0.169), below `Lumsec-HLA`, `Lumsec-myo` and `Lumsec-basal`. Full table in
+`tables/scie/cytotrace2_by_cell_type_scie_<run_id>.csv`.
+
+> **But it is not depth-free.** CytoTRACE2's own premise is that the number of expressed genes
+> tracks potency, so it inherits the coupling the lab's lists have: rho **+0.445** against
+> `n_genes_by_counts` in `confounders_<run_id>.csv`, and **+0.39 median rho even within
+> `(cohort, cell_type)`** (IQR [+0.16, +0.61], 42% of the 108 groups of >=50 cells above 0.5),
+> which is to say the within-stratum standardisation 04_5 applies does **not** remove it.
+> 18 of the 29 cohorts also raised the package's `<500 genes per cell` warning, up to 54.2% of
+> cells in `Patient64`. CytoTRACE2 is therefore evidence independent *of the lab's lists* -
+> which is what the non-circularity claim actually says - but not independent *of sequencing
+> depth*: a second opinion on the stemness axis, not an arbiter.
+>
+> The ranking is the useful part, though: at +0.445 CytoTRACE2 is **less** depth-coupled than
+> `ESC_ASSOU` (+0.642), `ESC_WONG` (+0.503) and `BENPORATH_ES1` (+0.484), and its cell-cycle
+> coupling (+0.262 on `S_score`) is below theirs too. It is the least confounded of the four
+> readouts that agree with each other, not another equally bad one.
+>
+> Per-patient scoring worked on the batch side but not completely: `cohort` still explains
+> R^2 = 0.16 of the raw score, which is exactly what the 04_5 standardisation is for.
+
+### What it changed downstream
+
+> **Historical.** Every number in this subsection was measured on the **seven-readout**
+> configuration, i.e. with `EMP` still in the registry. It is the record of what CytoTRACE2
+> changed at the time and is left as measured. `EMP` has since been dropped (see *Why `EMP` was
+> dropped* under 04_3, and *What dropping `EMP` changed* below); the current tables carry six
+> readouts and a ≥ 3-of-6 bar.
+
+04_5, 04_6 and 04_7 were re-run in that order with the `.csv` in place. In short: CytoTRACE2
+changed the stemness consensus and changed **no** Route C verdict.
+
+*Route A.* CytoTRACE2 lands in the middle of the readouts on every axis. Its own quadrant is
+4,651 cells (6.25% of the compartment), squarely inside the 4,295-5,206 range the six lists
+span. On the pairwise Jaccard it sits with the ESC block - 0.41 with `ESC_ASSOU`, 0.39 with
+`ESC_WONG`, 0.35 with `BENPORATH_ES1` - and far from `LIM_STEM` (0.14) and `EMP` (0.14); the
+median pairwise Jaccard across the 7 is 0.184. It agrees with 57 of the 61 cells the six lists
+had called unanimously, which is the strongest single piece of support the stemness axis has.
+
+*The consensus quadrant shrank from 4,017 to 2,854 cells, and not because CytoTRACE2
+disagreed.* The rule is `>= ceil(n_readouts/2)`, so the bar moved from 3 votes of 6 to 4 of 7.
+At the old bar of 3, the seven readouts would call 4,918 cells. Worth knowing before reading
+the drop as a tightening of evidence: it is a change of threshold, and it is arithmetic.
+
+*The cycle check got slightly worse, and that is the honest cost.* The stricter consensus is
+more cycling, not less: G1 share of the target quadrant 28.8% → 21.0%, and the Jaccard between
+the quadrant and the quadrant recomputed inside G1 alone 0.598 → **0.538**. Raising the vote bar
+concentrates on cells that many readouts agree on, and those are disproportionately cycling.
+
+*Route C is unchanged where it can be compared.* Of the 104 rows both the old and the new
+`convergence_<run_id>.csv` have, **0 changed verdict**. CytoTRACE2 has no Route B counterpart by
+construction, so it enters Route C only through the effect sizes, and it did not move any across
+a bar.
+
+### What dropping `EMP` changed
+
+04_3, 04_5, 04_6 and 04_7 were re-run in that order after the removal (see *Why `EMP` was
+dropped* under 04_3 for the reasoning). Every table and figure under `tables/scie/` and
+`figures/*/scie/` in the repo is from that run. In short: it **changed no Route C verdict**, and
+it improved the two things the stemness axis was weakest on.
+
+*Route A - the axis got more coherent.* The **median pairwise Jaccard of the stemness quadrants
+rose from 0.184 to 0.255**, and the range tightened to 0.073-0.541. The consensus quadrant grew
+from 2,854 to **4,145 cells**, but read that as arithmetic before biology: the bar is
+`>= ceil(n_readouts/2)`, so six readouts move it from 4-of-7 to **3-of-6**. Held at a matched bar
+of 4 the two consensus sets agree at Jaccard 0.87, and 374 cells had been entering the old
+consensus on the EMP vote alone. 12,559 cells are now called by at least one definition, 181 by
+all six.
+
+*The cycle check improved, which partly reverses the cost CytoTRACE2 imposed.* G1 share of the
+target quadrant **21.0% → 28.5%**, and the Jaccard between the quadrant and the quadrant
+recomputed inside G1 alone **0.538 → 0.594**. That is still not a clean pass - the target is
+enriched for G2M and S - but it is back above where the seven-readout consensus had pushed it.
+The depth check on the immune axis is untouched, as it must be: median `n_genes_by_counts` 1,007
+in the `IMMUNOGENIC_CONSENSUS`-low group vs 1,335 in the rest, AUROC 0.560.
+
+*Route B - one fewer gene set in the denominator.* BH now runs over 128 directions x 60 gene sets
+= **7,680 pairs** (was 7,808), of which 6,813 return a non-empty overlap and **693 are significant
+at global FDR < 0.05**. Loosening the denominator by 128 pairs cannot make an already-significant
+result go away, and none did.
+
+*Route C - nothing moved.* The verdict distribution is **identical**: 54 `neither`, 43
+`factor_only_candidate_patient_or_technical`, 18 `convergent`, 9 `cell_only_state_not_on_one_axis`,
+4 `both_routes_different_family`, and 9 of the 18 convergent rows still carry a confounder flag.
+`EMP` had been best-of-row in 6 of the 128 dimension-directions (DR 13-, 19-, 21+, 45+, 54-, 55+)
+and significant in none of them; in the new table the second-best readout steps in and all six
+keep their verdict. The `stem_rho AND immunogenic_low_rho` test still finds no single axis
+carrying both at |ρ| ≥ 0.20.
 
 ## 04_5_cell_first (Route A)
 
@@ -420,8 +700,8 @@ value for a stratum of one.
 **Quadrant.** stem-high (z ≥ q0.75) and immunogenic-low (z ≤ q0.25) against
 `IMMUNOGENIC_CONSENSUS`. Quantile cutoffs rather than fixed z values: the scores are not normal,
 and a fixed z would give wildly different group sizes across readouts and make the stability
-comparison meaningless. The quadrant is defined **once per stemness readout** (six signatures,
-plus CytoTRACE2 when present) and the consensus cell set is the majority vote across them; the
+comparison meaningless. The quadrant is defined **once per stemness readout** (five signatures
+plus CytoTRACE2, now present) and the consensus cell set is the majority vote across them; the
 **stability of that set across the definitions is itself a reported result**, in
 `quadrant_stability_*.csv`, not something to be averaged away.
 
@@ -457,13 +737,13 @@ model, no GPU, no `scvi-tools`); reading each dimension in its **two directions 
 - **every test runs offline** (`gp.enrich`, hypergeometric) against an explicit background, never
   Enrichr's implicit all-human-genes universe;
 - **BH is applied once across all dimension-direction / gene-set pairs**, not per query. 128
-  directions x 61 gene sets = **7,808 pairs**, the pairs with no overlap included: they are p = 1
+  directions x 60 gene sets = **7,680 pairs**, the pairs with no overlap included: they are p = 1
   and cannot become significant, but they belong in the denominator. With 100+ directions a
   per-query FDR is far too permissive;
 - **no direction is pruned.** 03_3 let DRVI's accessor drop the directions it had marked vanished;
   here all 2 x 64 are tested (see *Vanished dimensions are not pruned* above);
 - the output is a matrix on the **same row order as Route A**, read from
-  `tables/dimension_row_order_*.csv`, so the two heatmaps are directly comparable.
+  `tables/<collection>/dimension_row_order_*.csv`, so the two heatmaps are directly comparable.
 
 **The gene universe, for the Methods.** DRVI was trained on the 2,000 batch-aware HVGs of 04_1, so
 a gene outside that set could never have entered a top-gene list: the ORA background is the
@@ -499,35 +779,60 @@ stemness **and** immunogenic-low at the same time, above the same bar. If any do
 **intersection of two axes** in the latent space rather than a direction of it, which is what the
 Route A quadrant assumed by crossing two scores in the first place.
 
-### Result tables (`tables/`)
+> **Run 04_5 → 04_6 → 04_7 in that order, always.** 04_6 does not merely follow 04_5, it *reads*
+> `dimension_row_order_<run_id>.csv` and builds its signed matrix on exactly the dimensions listed
+> there. Re-run 04_5 alone and 04_6's matrix is left indexed on the previous dimension list, after
+> which 04_7 raises a bare `KeyError` on the first dimension the two disagree about - not a
+> warning, a crash mid-table. This had already happened in this phase: the row order moved to 64
+> dimensions while 04_6's matrix stayed at the 52 of the run before it, so `convergence_*.csv` on
+> disk covered 104 of the 128 rows and could not be regenerated until 04_6 was re-run. The driver's
+> `--force` chain does the three in order for this reason; the failure mode is only reachable by
+> asking for steps by name.
 
-One `.csv` per file, the caveat in the `#` header, the run id in the name.
+**Coverage note.** Route C now covers all 64 dimensions (128 rows); the previous table covered 52
+(104 rows). The 12 that were missing are the dimensions flagged `vanished`, and they are not
+inert: the 24 new rows contribute 3 `convergent` verdicts and all 4 `both_routes_different_family`
+ones - a category that literally could not appear before, since no row had both routes to compare.
+`PRUNE_VANISHED = False` is doing real work.
+
+### Result tables (`tables/<collection>/`)
+
+One `.csv` per file, the caveat in the `#` header, the collection and the run id in the name:
+`tables/scie/convergence_scie_drvi_epi_64.csv`, `tables/emt/convergence_emt_drvi_epi_64.csv`.
+The `*` below stands for `_<collection>_<run_id>`.
 
 | File | Contents |
 |---|---|
-| `lab_signatures.gmt` | the collection, provenance in the description field |
-| `coverage_*.csv` | signature, axis, provenance, n genes, n mapped, fraction, n in HVG background |
+| `signatures_<collection>.gmt` | the collection, provenance in the description field |
+| `coverage_*.csv` | signature, axis, primary/robustness, provenance, n genes, n mapped, fraction, n in HVG background |
 | `jaccard_*.csv`, `shared_genes_*.csv` | pairwise overlap of the collection |
+| `signature_concentration_*.csv` | per signature: effective gene count, dominant gene, detectability, flags |
+| `signature_gene_contribution_*.csv` | per (signature, gene): detection rate, share of the score's level and of its variance, ρ with the score |
+| `cycle_confound_by_readout_*.csv` | per readout: cell-cycle genes it contains, the variance they carry, and the R² of the cycle on its score |
+| `cycle_confound_by_vote_*.csv` | per vote threshold: AUROC of the cycle predicting membership, % G1, % G2M |
+| `cycle_confound_by_dimension_*.csv` | per dimension: ρ with S and G2M, cycle loading, strongest readout association, convergent flag |
 | `confounders_*.csv` | Spearman of each raw score vs depth, mito, S, G2M (ρ and p) |
-| `confounder_checks_*.csv` | the G1 and depth checks as scalars |
-| `quadrant_stability_*.csv` | Jaccard of the called cell set across stemness definitions |
+| `confounder_checks_*.csv` | the named risks of the collection as scalars: G1, and depth (`scie`) or doublet (`emt`) |
+| `quadrant_stability_*.csv` | Jaccard of the called cell set across the collection's definitions of the target |
 | `quadrant_vote_distribution_*.csv` | how many definitions call each cell |
 | `quadrant_per_patient_*.csv`, `quadrant_per_cell_type_*.csv` | group sizes, per patient and per label |
 | `dim_signature_spearman_*.csv` | 64 dimensions x every readout, Route A |
 | `dim_target_effect_size_*.csv` | AUROC and standardised mean difference per dimension |
 | `dimension_row_order_*.csv` | the row order both routes share, with the `vanished` flag |
-| `dim_geneset_signed_significance_*.csv` | 64 x 11 signed −log10 FDR, Route B |
+| `dim_geneset_signed_significance_*.csv` | 64 dimensions x the collection's gene sets, signed −log10 FDR, Route B |
 | `factor_first_significant_*.csv`, `factor_first_hallmark_significant_*.csv` | every significant pair |
 | `target_axes_*.csv` | axes carrying both halves of the target, when there are any |
 | **`convergence_*.csv`** | **the main result: 128 rows, one per dimension-direction** |
 
-### Figures
+### Figures (`figures/<step>/<collection>/`)
 
-`figures/04_3_signatures/`: `signature_coverage`, `jaccard_signature_overlap`.
-`figures/04_5_cell_first/`: `confounder_heatmap`, `stemness_immunogenicity_plane`,
-`quadrant_stability`, `dim_signature_heatmap`.
-`figures/04_6_factor_first/`: `dim_geneset_signed_heatmap`.
-`figures/04_7_convergence/`: `routes_side_by_side`, `convergence_scatter`.
+`04_3_signatures/`: `signature_coverage`, `jaccard_signature_overlap`, `signature_composition`.
+`04_5_cell_first/`: `confounder_heatmap`, `quadrant_stability`, `dim_signature_heatmap`, and the
+plane, whose name is the collection's: `stemness_immunogenicity_plane` for `scie`,
+`emt_coexpression_plane` for `emt`.
+`04_6_factor_first/`: `dim_geneset_signed_heatmap`.
+`04_8_cycle_confound/`: `cycle_behind_stemness`.
+`04_7_convergence/`: `routes_side_by_side`, `convergence_scatter`.
 
 ### Rules that keep the two routes independent
 
@@ -537,8 +842,12 @@ One `.csv` per file, the caveat in the `#` header, the run id in the name.
 - **No dimension is dropped before the analysis.** The vanished flags are read programmatically
   from `var['vanished']` / `var['vanished_*_direction']` - never from a plot - and reported
   alongside the results instead of filtering them.
-- **The signatures are not independent** and the BH correction is not presented as eleven
-  independent tests. See the Jaccard matrix.
+- **The signatures are not independent** and the BH correction is not presented as that many
+  independent tests. See the Jaccard matrix - on the EMT collection the block structure is
+  extreme, list B vs list C reaching 0.76 on the mesenchymal axis.
+- **The two collections are corrected separately.** 04_6 applies BH inside one collection, so a
+  SCIE p-value cannot move because the EMT lists were added, and neither run may be read as
+  having been corrected for the other.
 - **Nothing is promoted on a single route.** All three categories are reported separately.
 
 ## Data location (`DATA_DIR`)
@@ -563,13 +872,14 @@ epithelial chain is never confused with the non-immune one of 03:
         ├── shiao_epi_drvi_epi_64.h5ad         # 04_2 (the 04_1 object + obsm['X_drvi'])
         #  the discarded 32 run keeps the same three names with _32
         │
-        ├── signature_scores_drvi_epi_64.csv   # 04_5 per cell, raw + within-stratum z scores
-        ├── cytotrace2_drvi_epi_64.csv         # 04_4 per cell (once that step has run)
-        ├── factor_first_top200_genes_drvi_epi_64.tsv  # 04_6 ranked list per dimension-direction
-        ├── factor_first_top200_drvi_epi_64.tsv        # 04_6 every tested pair (the cache)
+        ├── signature_scores_<coll>_drvi_epi_64.csv    # 04_5 per cell, raw + within-stratum z scores
+        ├── cytotrace2_drvi_epi_64.csv                 # 04_4 per cell, 74,441 rows (not collection-scoped)
+        ├── factor_first_top200_genes_drvi_epi_64.tsv  # 04_6 ranked list per dimension-direction,
+        │                                              #    read off the decoder, so shared by both collections
+        ├── factor_first_top200_<coll>_drvi_epi_64.tsv # 04_6 every tested pair (the cache), per collection
         └── msigdb_hallmark_2020.json          # 04_6 cached library, so a re-run needs no network
 
-`$DATA_DIR/signatures/` holds the lab's eleven `.txt` files, the input to 04_3 (override the
+`$DATA_DIR/signatures/` holds the lab's `.txt` files, the input to 04_3 (override the
 location with `SIGNATURE_DIR`). The small result tables do **not** live here: they are versioned
 in `04_drvi_epithelial/tables/`, because they are Appendix material rather than heavy objects.
 
@@ -660,11 +970,12 @@ dimension-directions enter both routes; `var['vanished']` is reported, not appli
 *04_5, Route A.* `sc.tl.score_genes(use_raw=False, ctrl_size=len(signature), n_bins=25,
 random_state=0)` on the all-genes object. Standardisation `groupby(['cohort','cell_type'])`,
 z-score, `ddof=0`. Quadrant `high_q=0.75`, `low_q=0.25`; consensus = majority of the stemness
-definitions (≥ 3 of 6). Minimum signature size 10 mapped genes; minimum mapping fraction 0.60.
+definitions (≥ 3 of 6: `BENPORATH_ES1`, `ESC_ASSOU`, `ESC_WONG`, `LIM_STEM`, `FMASC`, CytoTRACE2).
+Minimum signature size 10 mapped genes; minimum mapping fraction 0.60.
 
 *04_6, Route B.* `OOD_combined` scores, `N_TOP_GENES=200`, both directions of every dimension.
 `gp.enrich` (offline hypergeometric), background = the 2,000 HVGs of `shiao_epi_hvg_2k.h5ad`. BH
-(`fdr_bh`) across all 7,808 dimension-direction / gene-set pairs at once, α = 0.05. Sanity-check
+(`fdr_bh`) across all 7,680 dimension-direction / gene-set pairs at once, α = 0.05. Sanity-check
 collection `MSigDB_Hallmark_2020`.
 
 *04_7, Route C.* Route A bar `|ρ| ≥ 0.20`; Route B bar global FDR < 0.05; confounder flags at
@@ -683,7 +994,7 @@ or a CLI flag, so it can be changed and the chain re-run.
 | # | Gap | Chosen | Where |
 |---|---|---|---|
 | 1 | Quadrant cutoffs - "stem-high / immunogenic-low" defines no threshold | q0.75 / q0.25 on within-stratum z | `cell_first_epi.py --high-q/--low-q` |
-| 2 | How to combine the six stemness definitions into one cell set | majority vote (≥ 3 of 6) | `cell_first_epi.py` |
+| 2 | How to combine the stemness definitions into one cell set | majority vote, `n_defs >= max(2, ceil(n_readouts/2))` - **≥ 3 of 6** (5 lists + CytoTRACE2). It was ≥ 4 of 7 while `EMP` was in the registry and ≥ 3 of 6 before CytoTRACE2; the bar is arithmetic, so a change in the number of readouts moves it | `cell_first_epi.py` |
 | 3 | Route A significance bar - no effect size was specified | `|ρ| ≥ 0.20` | `convergence_epi.py --rho-min` |
 | 4 | Confounder flag thresholds | `|ρ| ≥ 0.30` for depth and for cycle | `convergence_epi.py` |
 | 5 | "Effect size (AUROC **or** standardised mean difference)" - requested as alternatives | both computed and reported | `dim_target_effect_size_*.csv` |
@@ -693,13 +1004,17 @@ or a CLI flag, so it can be changed and the chain re-run.
 | 9 | Where small tables live - 03_3 wrote its tables to `$DATA_DIR` | versioned in `tables/`, per-cell matrices in `$DATA_DIR`; they are Appendix material | `signature_common.write_table` |
 | 10 | Signature name ↔ file name for two files | `Immune consensus.txt` → `IMMUNOGENIC_CONSENSUS`, `fMaSC.txt` → `FMASC` | `signature_common.SIGNATURES` |
 | 11 | `timepoint` `.obs` key | does not exist; `treatment` carries it. Nothing used it, so nothing was invented | above |
-| 12 | CytoTRACE2 version | not installed; `cytotrace2-py` 1.1.0.4 is current on PyPI and **not** pinned in `benchmark-py-r.yml` | `environments/` |
+| 12 | CytoTRACE2 version | `cytotrace2-py` 1.1.0.4, pinned in its **own** env (`environments/cytotrace2-py.yml`) because it requires `numpy<2` and cannot coexist with `benchmark-py-r` | `environments/cytotrace2-py.yml` |
 
-**Not a gap but a limitation to carry:** CytoTRACE2 has **not been run**. Until it is, the
-stemness axis rests entirely on the lab's six lists, which are heavily depth- and cycle-coupled
-and disagree with each other - both measured in `confounders_*.csv` and `quadrant_stability_*.csv`.
-There is currently **no non-circular evidence on the stemness axis**, and this is the single
-largest weakness of the stage. The immune axis does not have this problem.
+**Not a gap but a limitation to carry:** CytoTRACE2 has now been run on all 29 cohorts, so the
+stemness axis no longer rests on the lab's five lists alone - but the sixth readout is not the
+clean arbiter it was hoped to be. It is independent of the lists (which is what non-circularity
+claims) and it clears the cycle check, `Lumsec-prol` ranking 5th of 10 cell types; it is **not**
+independent of sequencing depth, rho +0.39 median even within `(cohort, cell_type)`, so it shares
+the confounder that makes the five lists hard to read rather than adjudicating between them. The
+stemness axis is therefore better evidenced than before and still weaker than the immune axis,
+which has neither problem. See *04_4_cytotrace2 → Result*, and `confounders_*.csv` once 04_5 is
+re-run with the `.csv` in place.
 
 ## Established numbers
 

@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""04_3: ingest lab's signature files into one .gmt, and characterise the collection.
+"""04_3: ingest one collection's signature files into a .gmt, and characterise the collection.
 
-Reads the eleven plain-text files in `$DATA_DIR/signatures/` (one gene symbol per line)
-and writes a single `.gmt` whose description field carries the provenance string, so the
-identical collection feeds both routes and doubles as the Appendix table.
+Reads the plain-text files of the requested collection from `$DATA_DIR/signatures/` (one gene
+symbol per line) and writes a single `.gmt` whose description field carries the provenance
+string, so the identical collection feeds both routes and doubles as the Appendix table.
+
+Which files, on which axes, is declared in `utils/sig_collections.py`: `--collection scie` is
+the ten stemness/immunogenicity lists, `--collection emt` the nine EMT lists. The step is
+the same either way, and so is every check below.
 
 Two tables come out of it, both of which have to be read before any result of this stage
 is believed:
@@ -25,7 +29,8 @@ Route B. The second column is a warning, not a filter - see the README.
 
 Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
-    python build_signatures_epi.py
+    python build_signatures_epi.py                        # the scie collection, the default
+    python build_signatures_epi.py --collection emt       # the same, on the EMT lists
     python build_signatures_epi.py --allow-low-coverage   # report, do not stop
 """
 
@@ -47,10 +52,12 @@ import seaborn as sns
 UTILS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils")
 sys.path.insert(0, UTILS_DIR)
 import signature_common as C  # noqa: E402
+import sig_collections as SC  # noqa: E402
 
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    SC.add_argument(p)
     p.add_argument("--allow-low-coverage", action="store_true",
                    help="report signatures below the coverage floor instead of stopping")
     return p.parse_args()
@@ -58,14 +65,17 @@ def parse_args():
 
 def main():
     args = parse_args()
+    coll = SC.get(args.collection)
 
-    C.banner("04_3 - signature collection")
+    C.banner(f"04_3 - signature collection: {coll.title}")
+    print(f"question    {coll.question}")
     print(f"signatures  {C.SIG_DIR}")
     print(f"object      {C.FULL_H5AD}")
 
-    raw = C.load_signatures()
+    raw = C.load_signatures(coll)
     for name, genes in raw.items():
-        print(f"  {name:24s} {len(genes):5d} unique symbols  [{C.SIG_AXIS[name]}]")
+        role = "primary" if name in coll.primary_names() else "robustness"
+        print(f"  {name:24s} {len(genes):5d} unique symbols  [{coll.axis_of[name]}, {role}]")
 
     # ---------------------------------------------------------------- universes
     adata = ad.read_h5ad(C.FULL_H5AD, backed="r")
@@ -89,8 +99,9 @@ def main():
         in_hvg = [g for g in m if g in hvg_genes]
         rows.append({
             "signature": name,
-            "axis": C.SIG_AXIS[name],
-            "provenance": C.SIG_PROVENANCE[name],
+            "axis": coll.axis_of[name],
+            "primary": name in coll.primary_names(),
+            "provenance": coll.provenance[name],
             "n_genes": len(genes),
             "n_mapped": len(m),
             "mapped_fraction": len(m) / len(genes),
@@ -99,10 +110,10 @@ def main():
         })
 
     coverage = pd.DataFrame(rows).set_index("signature")
-    coverage = coverage.loc[[n for n, _, _, _ in C.SIGNATURES]]
+    coverage = coverage.loc[coll.names]
 
     print("\ncoverage")
-    print(coverage[["axis", "n_genes", "n_mapped", "mapped_fraction",
+    print(coverage[["axis", "primary", "n_genes", "n_mapped", "mapped_fraction",
                     "n_in_hvg_background"]].to_string(float_format="%.3f"))
 
     # ------------------------------------------------------------- stop checks
@@ -130,10 +141,10 @@ def main():
     # ------------------------------------------------------------------- .gmt
     # The .gmt carries the MAPPED genes: it is the collection as actually used, so the
     # Appendix table and the tested sets cannot drift apart.
-    C.write_gmt(mapped, C.GMT_PATH, C.SIG_PROVENANCE)
-    print(f"\n[write] {C.GMT_PATH}")
+    C.write_gmt(mapped, C.gmt_path(coll), coll.provenance)
+    print(f"\n[write] {C.gmt_path(coll)}")
 
-    C.write_table(coverage, "coverage")
+    C.write_table(coverage, "coverage", coll)
 
     # ---------------------------------------------------------------- jaccard
     names = list(mapped)
@@ -149,8 +160,8 @@ def main():
             O.loc[a, b] = O.loc[b, a] = inter
         O.loc[a, a] = len(A)
 
-    C.write_table(J.round(4), "jaccard")
-    C.write_table(O, "shared_genes")
+    C.write_table(J.round(4), "jaccard", coll)
+    C.write_table(O, "shared_genes", coll)
 
     off = J.where(~np.eye(len(names), dtype=bool))
     print(f"\npairwise Jaccard: max {np.nanmax(off.values):.3f}, "
@@ -162,7 +173,7 @@ def main():
     print(pairs.head(8).to_string(index=False, float_format="%.3f"))
 
     # ----------------------------------------------------------------- figure
-    order = C.IMMUNE_SIGS + C.STEMNESS_SIGS
+    order = coll.order(list(mapped))
     # The size of each set goes in the tick label: Jaccard is a ratio, and 0.05 between a
     # 25-gene list and a 1,698-gene one does not mean what the same number means between
     # two lists of equal size. The count is the MAPPED one, which is what J is built on.
@@ -175,25 +186,29 @@ def main():
                 cbar_kws={"label": "Jaccard index", "shrink": 0.7}, ax=ax)
     # `pad` leaves room for the two block labels below the title: at the default the
     # title sits where "immune" and "stemness" are drawn and the three overlap.
-    ax.set_title("Pairwise overlap of the signature collection\n"
+    ax.set_title(f"Pairwise overlap of the {coll.title} collection\n"
                  "(mapped genes; the block structure is why these are not independent tests)",
                  fontsize=10, pad=30)
-    n_imm = len(C.IMMUNE_SIGS)
-    for pos in (n_imm,):
+    # One separator per axis boundary, and the axis name centred over its block. On the EMT
+    # collection there are three blocks rather than two, so both are derived from the order
+    # rather than hard-coded.
+    edges = coll.block_edges(order)
+    for pos in edges:
         ax.axhline(pos, color="black", lw=2)
         ax.axvline(pos, color="black", lw=2)
-    ax.text(n_imm / 2, -0.15, "immune", ha="center", va="bottom", fontsize=9, weight="bold")
-    ax.text(n_imm + len(C.STEMNESS_SIGS) / 2, -0.15, "stemness", ha="center", va="bottom",
-            fontsize=9, weight="bold")
+    for start, stop in zip([0] + edges, edges + [len(order)]):
+        ax.text((start + stop) / 2, -0.15, coll.axis_of[order[start]], ha="center",
+                va="bottom", fontsize=9, weight="bold")
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
-    C.savefig("jaccard_signature_overlap", "04_3_signatures", fig, caveat=False)
+    C.savefig("jaccard_signature_overlap", "04_3_signatures", coll, fig, caveat=False)
     plt.close(fig)
 
     # coverage barplot
     fig, ax = plt.subplots(figsize=(8, 4.5))
     cov = coverage.loc[order]
-    colors = ["#4C72B0" if a == "immune" else "#DD8452" for a in cov["axis"]]
+    axis_colors = dict(zip(coll.axes, sns.color_palette("deep", len(coll.axes))))
+    colors = [axis_colors[a] for a in cov["axis"]]
     ax.bar(range(len(cov)), cov["mapped_fraction"], color=colors)
     ax.axhline(C.MIN_MAPPED_FRACTION, color="crimson", ls="--", lw=1,
                label=f"floor ({C.MIN_MAPPED_FRACTION:.0%})")
@@ -204,11 +219,15 @@ def main():
     ax.set_xticklabels(cov.index, rotation=45, ha="right", fontsize=8)
     ax.set_ylabel("fraction of symbols mapped")
     ax.set_ylim(0, 1.18)   # headroom: at 1.08 the legend box sits on the LIM_STEM bar label
-    ax.set_title("Signature coverage on the epithelial object "
-                 f"({n_all:,} genes)\nblue = immune, orange = stemness", fontsize=10)
-    ax.legend(fontsize=8)
+    handles = [plt.Rectangle((0, 0), 1, 1, color=axis_colors[a]) for a in coll.axes
+               if a in set(cov["axis"])]
+    labels = [a for a in coll.axes if a in set(cov["axis"])]
+    ax.set_title(f"{coll.title}: signature coverage on the epithelial object "
+                 f"({n_all:,} genes)", fontsize=10)
+    ax.legend(handles + [ax.get_lines()[0]], labels + [f"floor ({C.MIN_MAPPED_FRACTION:.0%})"],
+              fontsize=8)
     sns.despine(ax=ax)
-    C.savefig("signature_coverage", "04_3_signatures", fig, caveat=False)
+    C.savefig("signature_coverage", "04_3_signatures", coll, fig, caveat=False)
     plt.close(fig)
 
     print("\ndone.")

@@ -1,0 +1,16 @@
+# quadrant_per_cell_type | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+cell_type,n_cells,n_target,pct
+LummHR-SCGB,5964,241,4.040912139503689
+LummHR-active,1085,57,5.253456221198157
+LummHR-major,18175,677,3.7248968363136177
+Lumsec-HLA,97,3,3.0927835051546393
+Lumsec-KIT,1315,74,5.6273764258555135
+Lumsec-basal,17422,867,4.976466536562967
+Lumsec-major,1401,64,4.5681655960028555
+Lumsec-myo,1396,61,4.369627507163324
+Lumsec-prol,24442,1110,4.541363227231814
+basal,3144,112,3.5623409669211195

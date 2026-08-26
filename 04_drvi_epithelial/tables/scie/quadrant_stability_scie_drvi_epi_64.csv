@@ -1,0 +1,12 @@
+# quadrant_stability | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+,BENPORATH_ES1,ESC_ASSOU,ESC_WONG,LIM_STEM,FMASC,CytoTRACE2
+BENPORATH_ES1,1.0,0.5393,0.4034,0.0946,0.2668,0.3459
+ESC_ASSOU,0.5393,1.0,0.5411,0.0789,0.2549,0.411
+ESC_WONG,0.4034,0.5411,1.0,0.0733,0.1838,0.3925
+LIM_STEM,0.0946,0.0789,0.0733,1.0,0.1971,0.1369
+FMASC,0.2668,0.2549,0.1838,0.1971,1.0,0.249
+CytoTRACE2,0.3459,0.411,0.3925,0.1369,0.249,1.0

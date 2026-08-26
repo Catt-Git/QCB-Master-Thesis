@@ -1,0 +1,19 @@
+# confounder_checks | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+check,value
+phase_pct_G1_target,60.83894672382119
+phase_pct_G1_rest,54.759395855286265
+n_target_all_phases,3266.0
+n_target_within_G1_recomputed,1787.0
+jaccard_target_vs_G1_recomputed,0.8785465405674465
+auroc_doublet_predicts_EMT_B_MESENCHYMAL_high,0.546192788229018
+rho_doublet_score_EMT_B_MESENCHYMAL,0.14293430330886978
+auroc_doublet_predicts_EMT_A_MESENCHYMAL_high,0.5473284795633881
+rho_doublet_score_EMT_A_MESENCHYMAL,0.14785413323797514
+auroc_doublet_predicts_EMT_C_MESENCHYMAL_high,0.5546637318379781
+rho_doublet_score_EMT_C_MESENCHYMAL,0.17534925538243418
+pct_predicted_doublet_target,0.09185548071034905
+pct_predicted_doublet_rest,0.20512820512820512

@@ -1,0 +1,16 @@
+# jaccard | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+,HALLMARK_IFNA,HALLMARK_IFNG,ISDS,KEGG_APM,IMMUNOGENIC_CONSENSUS,BENPORATH_ES1,ESC_ASSOU,ESC_WONG,LIM_STEM,FMASC
+HALLMARK_IFNA,1.0,0.3258,0.2812,0.0449,0.0614,0.0022,0.0056,0.0,0.0018,0.0022
+HALLMARK_IFNG,0.3258,1.0,0.1256,0.056,0.0622,0.0089,0.0101,0.002,0.0122,0.008
+ISDS,0.2812,0.1256,1.0,0.0217,0.04,0.0025,0.0024,0.0,0.0,0.0
+KEGG_APM,0.0449,0.056,0.0217,1.0,0.3731,0.0069,0.0058,0.0028,0.0,0.0006
+IMMUNOGENIC_CONSENSUS,0.0614,0.0622,0.04,0.3731,1.0,0.0,0.0012,0.0,0.0,0.0
+BENPORATH_ES1,0.0022,0.0089,0.0025,0.0069,0.0,1.0,0.3414,0.1008,0.0134,0.0476
+ESC_ASSOU,0.0056,0.0101,0.0024,0.0058,0.0012,0.3414,1.0,0.1353,0.0267,0.079
+ESC_WONG,0.0,0.002,0.0,0.0028,0.0,0.1008,0.1353,1.0,0.012,0.0358
+LIM_STEM,0.0018,0.0122,0.0,0.0,0.0,0.0134,0.0267,0.012,1.0,0.0344
+FMASC,0.0022,0.008,0.0,0.0006,0.0,0.0476,0.079,0.0358,0.0344,1.0

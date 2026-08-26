@@ -31,7 +31,8 @@ per direction. That is what makes the two joinable at all.
 
 Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
-    python convergence_epi.py
+    python convergence_epi.py                     # the scie collection, the default
+    python convergence_epi.py --collection emt    # the same procedure on the EMT lists
     python convergence_epi.py --rho-min 0.30      # a stricter cell-level bar
 """
 
@@ -52,6 +53,7 @@ import seaborn as sns
 UTILS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils")
 sys.path.insert(0, UTILS_DIR)
 import signature_common as C  # noqa: E402
+import sig_collections as SC  # noqa: E402
 
 FDR = 0.05
 
@@ -64,24 +66,25 @@ CYCLE_FLAG = 0.30
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    SC.add_argument(p)
     p.add_argument("--rho-min", type=float, default=0.20,
                    help="|Spearman rho| above which Route A counts as an association (default 0.20)")
     return p.parse_args()
 
 
-def read_table(name: str) -> pd.DataFrame:
-    return pd.read_csv(C.TABLE_DIR / f"{name}_{C.RUN_ID}.csv", comment="#", index_col=0)
-
-
 def main():
     args = parse_args()
-    C.banner("04_7 - Route C, convergence")
+    coll = SC.get(args.collection)
+    C.banner(f"04_7 - Route C, convergence: {coll.title}")
+    print(f"question  {coll.question}")
 
-    rho = read_table("dim_signature_spearman")
-    eff = read_table("dim_target_effect_size")
-    signed = read_table("dim_geneset_signed_significance")
-    conf = read_table("confounders")
-    order = read_table("dimension_row_order")
+    # All five come from tables/<collection>/, so a run can only ever join a collection with
+    # itself: the SCIE and EMT results are never in the same table to begin with.
+    rho = C.read_table("dim_signature_spearman", coll)
+    eff = C.read_table("dim_target_effect_size", coll)
+    signed = C.read_table("dim_geneset_signed_significance", coll)
+    conf = C.read_table("confounders", coll)
+    order = C.read_table("dimension_row_order", coll)
 
     dims = order.index.tolist()
     # Reported, never used as a filter: a dimension DRVI flagged vanished is in the table
@@ -128,7 +131,7 @@ def main():
             a_hit = a_rho >= args.rho_min
             b_hit = b_neglog >= thr
 
-            same_family = (C.SIG_AXIS.get(a_best) == C.SIG_AXIS.get(b_best)) if (a_hit and b_hit) else False
+            same_family = (coll.axis_of.get(a_best) == coll.axis_of.get(b_best)) if (a_hit and b_hit) else False
             same_signature = (a_best == b_best) if (a_hit and b_hit) else False
 
             if a_hit and b_hit:
@@ -150,8 +153,7 @@ def main():
                 flags.append("depth")
             if not np.isnan(cyc) and cyc >= CYCLE_FLAG:
                 flags.append("cell_cycle")
-            if C.SIG_AXIS.get(claimed) == "immune" and a_rho < 0:
-                flags.append("immune_low_is_absence_of_signal")
+            flags += coll.extra_flags(coll, claimed, a_rho)
 
             rows.append({
                 "dimension": d, "direction": direction, "dim_direction": f"{d}{direction}",
@@ -162,7 +164,7 @@ def main():
                 "B_best_signature": b_best, "B_neglog10_fdr": b_neglog, "B_fdr": b_fdr,
                 "A_significant": a_hit, "B_significant": b_hit,
                 "same_signature": same_signature, "same_family": same_family,
-                "A_family": C.SIG_AXIS.get(a_best), "B_family": C.SIG_AXIS.get(b_best),
+                "A_family": coll.axis_of.get(a_best), "B_family": coll.axis_of.get(b_best),
                 "verdict": verdict,
                 "dimension_vanished": bool(vanished[d]),
                 "confounder_flags": ",".join(flags) or "none",
@@ -178,7 +180,7 @@ def main():
           "cell state; the two single-route categories are candidates for the OTHER thing\n"
           "each of them can be, and are listed here for that reason, not as weaker hits.")
 
-    C.write_table(conv, "convergence")
+    C.write_table(conv, "convergence", coll)
 
     conv_rows = conv[conv["verdict"] == "convergent"].sort_values("A_rho", ascending=False)
     print(f"\nCONVERGENT ({len(conv_rows)}): both routes, same signature family")
@@ -206,36 +208,51 @@ def main():
     print(f"\n{len(flagged)} of the {len(conv_rows)} convergent rows carry a confounder flag "
           "from A3 and cannot be read as clean.")
 
-    # the project's actual target: immune-evasive AND stem-high on the same axis
-    C.banner("the project's target: immune-evasive and stem-high on the same axis")
+    # the project's actual target: both criteria of the collection on the SAME axis
+    crit_names = " AND ".join(c.label for c in coll.criteria)
+    C.banner(f"the project's target for {coll.name}: {crit_names} on the same axis")
+
+    def criterion_value(crit, d: str, side: float) -> float:
+        """The strongest Route A correlation satisfying one criterion, oriented to one side.
+
+        `sign` is +1 for a readout that must be HIGH in the target state, -1 for one that must
+        be LOW (immune evasion is the absence of the signal, so the correlation has to be
+        negative to count), and 0 for one whose magnitude matters but whose direction does not
+        - an axis is an E-to-M axis whichever way round the model happened to orient it.
+        """
+        names = [n for n in (crit.names or coll.by_axis(crit.axis)) if n in rho.columns]
+        if not names:
+            return np.nan
+        v = rho.loc[d, names].astype(float) * side
+        return float(v.abs().max()) if crit.sign == 0 else float((v * crit.sign).max())
+
     tgt = []
     for d in dims:
         for direction in ("+", "-"):
-            s = 1.0 if direction == "+" else -1.0
-            stem = (rho.loc[d, [x for x in C.STEMNESS_SIGS if x in rho.columns]].astype(float) * s).max()
-            imm = (rho.loc[d, C.PRIMARY_IMMUNE].astype(float) * s) * -1.0   # evasion = LOW immunogenicity
-            if stem >= args.rho_min and imm >= args.rho_min:
-                tgt.append({"dim_direction": f"{d}{direction}", "stem_rho": stem,
-                            "immunogenic_low_rho": imm,
-                            "auroc_target": conv.loc[f"{d}{direction}", "A_auroc_target_this_side"],
+            side = 1.0 if direction == "+" else -1.0
+            vals = {c.label: criterion_value(c, d, side) for c in coll.criteria}
+            if all(v >= args.rho_min for v in vals.values()):
+                row = {"dim_direction": f"{d}{direction}", **vals}
+                row.update({"auroc_target": conv.loc[f"{d}{direction}", "A_auroc_target_this_side"],
                             "verdict": conv.loc[f"{d}{direction}", "verdict"],
                             "flags": conv.loc[f"{d}{direction}", "confounder_flags"]})
+                tgt.append(row)
     tgt_df = pd.DataFrame(tgt)
     if len(tgt_df):
         tgt_df = tgt_df.set_index("dim_direction").sort_values("auroc_target", ascending=False)
-        print("axes on which stemness is high AND immunogenicity is low at the same time:")
+        print(f"axes on which {crit_names} hold at the same time:")
         print(tgt_df.to_string(float_format="%.3f"))
-        C.write_table(tgt_df, "target_axes")
+        C.write_table(tgt_df, "target_axes", coll)
     else:
         print(f"No single axis carries both at |rho| >= {args.rho_min}.\n"
               "That is a result: the target state is an INTERSECTION of two axes in the latent\n"
-              "space rather than a direction of it, which is what the Route A quadrant already\n"
-              "assumed by crossing two independent scores.")
+              "space rather than a direction of it, which is what the Route A target region\n"
+              "already assumed by crossing two independent scores.")
 
     # ------------------------------------------------------------------ figures
     C.banner("figures")
 
-    sigs_ord = [s for s in C.IMMUNE_SIGS + C.STEMNESS_SIGS if s in sigs]
+    sigs_ord = coll.order(list(sigs))
     fig, axes = plt.subplots(1, 2, figsize=(2 * (0.9 * len(sigs_ord) + 3.5), 0.24 * len(dims) + 3.5),
                              sharey=True)
     sns.heatmap(rho.loc[dims, sigs_ord].astype(float), cmap="vlag", center=0, vmin=-0.6, vmax=0.6,
@@ -246,17 +263,18 @@ def main():
                 vmin=-vmax, vmax=vmax,
                 cbar_kws={"label": "signed -log10 FDR", "shrink": 0.4}, ax=axes[1])
     axes[1].set_title("Route B - factor-first\ntop-gene ORA, HVG background", fontsize=10)
-    n_imm = len([c for c in C.IMMUNE_SIGS if c in sigs_ord])
+    edges = coll.block_edges(sigs_ord)
     for a in axes:
-        a.axvline(n_imm, color="k", lw=1.5)
+        for pos in edges:
+            a.axvline(pos, color="k", lw=1.5)
         plt.setp(a.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(axes[0].get_yticklabels(), fontsize=6)
-    fig.suptitle("The two routes side by side, same row order "
+    fig.suptitle(f"The two routes side by side, {coll.title}, same row order "
                  f"(all {len(dims)} dimensions of {C.RUN_ID}, nothing pruned)\n"
                  "convergence, not either panel alone, is the criterion for a cell state",
                  fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
-    C.savefig("routes_side_by_side", "04_7_convergence", fig)
+    C.savefig("routes_side_by_side", "04_7_convergence", coll, fig)
     plt.close(fig)
 
     # A strength vs B strength, one point per dimension-direction
@@ -276,12 +294,13 @@ def main():
                     xytext=(3, 3), textcoords="offset points")
     ax.set_xlabel(f"Route A: strongest signature association on this side (Spearman rho)")
     ax.set_ylabel(f"Route B: strongest enrichment on this side (-log10 global FDR)")
-    ax.set_title("Convergence of the two routes, one point per dimension-direction\n"
+    ax.set_title(f"Convergence of the two routes, {coll.title}\n"
+                 "one point per dimension-direction; "
                  "top-right quadrant = both routes; only its same-family members are "
                  "called cell states", fontsize=10)
     ax.legend(fontsize=7, loc="upper left", frameon=False)
     sns.despine(ax=ax)
-    C.savefig("convergence_scatter", "04_7_convergence", fig)
+    C.savefig("convergence_scatter", "04_7_convergence", coll, fig)
     plt.close(fig)
 
     print("\ndone.")

@@ -1,0 +1,15 @@
+# jaccard | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+,EMT_B_EPITHELIAL,EMT_B_HYBRID,EMT_B_MESENCHYMAL,EMT_A_EPITHELIAL,EMT_A_HYBRID,EMT_A_MESENCHYMAL,EMT_C_EPITHELIAL,EMT_C_HYBRID,EMT_C_MESENCHYMAL
+EMT_B_EPITHELIAL,1.0,0.0,0.0,0.5357,0.0,0.0,0.7273,0.0167,0.0
+EMT_B_HYBRID,0.0,1.0,0.0392,0.0,0.6,0.0263,0.0426,0.4722,0.0339
+EMT_B_MESENCHYMAL,0.0,0.0392,1.0,0.0,0.0227,0.5758,0.0,0.1,0.7619
+EMT_A_EPITHELIAL,0.5357,0.0,0.0,1.0,0.0,0.0,0.4194,0.0213,0.0
+EMT_A_HYBRID,0.0,0.6,0.0227,0.0,1.0,0.0,0.0513,0.3235,0.0192
+EMT_A_MESENCHYMAL,0.0,0.0263,0.5758,0.0,0.0,1.0,0.0,0.0833,0.4634
+EMT_C_EPITHELIAL,0.7273,0.0426,0.0,0.4194,0.0513,0.0,1.0,0.0508,0.0
+EMT_C_HYBRID,0.0167,0.4722,0.1,0.0213,0.3235,0.0833,0.0508,1.0,0.0882
+EMT_C_MESENCHYMAL,0.0,0.0339,0.7619,0.0,0.0192,0.4634,0.0,0.0882,1.0

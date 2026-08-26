@@ -1,0 +1,16 @@
+# signature_concentration | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+signature,axis,primary,n_mapped,effective_n_genes,effective_n_fraction,top_gene,top_gene_share_of_variance,top_gene_share_of_mean_signal,top_gene_detection_rate,top_gene_spearman_with_score,share_top3_of_variance,median_detection_rate,n_genes_below_noise_floor,frac_genes_below_noise_floor,frac_cells_all_zero,gini_of_mean_signal,flags
+HALLMARK_IFNA,immune,True,96,25.6278,0.267,CD74,0.0563,0.0589,0.6183,0.6979,0.1576,0.1153,2,0.0208,0.0039,0.666,none
+HALLMARK_IFNG,immune,True,197,49.3876,0.2507,HLA-B,0.0422,0.0415,0.6957,0.7244,0.1184,0.092,23,0.1168,0.0009,0.6786,none
+ISDS,immune,True,27,8.2943,0.3072,CD74,0.1348,0.1396,0.6183,0.7124,0.3773,0.1535,0,0.0,0.0266,0.6544,low_effective_n
+KEGG_APM,immune,True,67,22.8478,0.341,HLA-B,0.068,0.0609,0.6957,0.7618,0.1916,0.1799,15,0.2239,0.0017,0.6648,none
+IMMUNOGENIC_CONSENSUS,immune,True,25,10.4533,0.4181,HLA-B,0.1025,0.1155,0.6957,0.8038,0.2929,0.2568,2,0.08,0.0207,0.5931,none
+BENPORATH_ES1,stemness,True,369,77.159,0.2091,HSPD1,0.0234,0.0183,0.5689,0.4596,0.065,0.0801,51,0.1382,0.0001,0.6569,none
+ESC_ASSOU,stemness,True,802,146.2966,0.1824,TUBB,0.0121,0.0091,0.6716,0.5137,0.0337,0.0832,107,0.1334,0.0,0.7071,none
+ESC_WONG,stemness,True,297,82.5838,0.2781,UQCRH,0.0163,0.0128,0.6944,0.5357,0.0459,0.1984,6,0.0202,0.0,0.6287,none
+LIM_STEM,stemness,True,465,98.2105,0.2112,VIM,0.0347,0.0448,0.586,0.4719,0.0852,0.0366,84,0.1806,0.0037,0.6692,none
+FMASC,stemness,True,1698,456.8255,0.269,YBX1,0.0078,0.013,0.7023,0.0047,0.0227,0.0456,352,0.2073,0.0,0.6297,none

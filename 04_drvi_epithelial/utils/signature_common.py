@@ -12,8 +12,15 @@ Kept inside this phase rather than shared with 03, as everywhere else in Part 2:
 04_2's outputs but shares no code with 03_3, so the phase still reads as a self-contained
 Materials & Methods section.
 
-Nothing here computes anything on its own; it is the paths, the signature registry, the
-figure/table writers and the interpretability-score accessor the five steps all need.
+Nothing here computes anything on its own; it is the paths, the figure/table writers and the
+interpretability-score accessor the five steps all need.
+
+What is NOT here, deliberately: which signatures exist, which axes they sit on, and what the
+target region looks like on the cell-first plane. That differs between the two readouts the
+phase runs - `scie` (stemness x immunogenicity) and `emt` - and lives in `sig_collections.py`,
+so the step scripts stay single files taking `--collection` instead of being duplicated. Every
+writer below therefore takes a collection and scopes its output to it: nothing the EMT run
+writes can land on a filename the SCIE run owns.
 """
 
 from __future__ import annotations
@@ -68,10 +75,35 @@ FULL_H5AD = EPI_DIR / "shiao_epi.h5ad"                  # 04_1: all genes, log-n
 HVG_H5AD = EPI_DIR / "shiao_epi_hvg_2k.h5ad"            # 04_1: the DRVI training features
 EMBED_H5AD = EPI_DIR / f"embed_{RUN_ID}.h5ad"           # 04_2: latent space + scores
 
-# Outputs written next to the objects they come from (per-cell, heavy).
-GMT_PATH = TABLE_DIR / "lab_signatures.gmt"
-SCORES_CSV = EPI_DIR / f"signature_scores_{RUN_ID}.csv"        # per cell, raw + z
-CYTOTRACE_CSV = EPI_DIR / f"cytotrace2_{RUN_ID}.csv"           # per cell, 04_3 step 02
+# Outputs. Everything a step writes is scoped to its collection, both in the folder and in
+# the filename, so `scie` and `emt` can be re-run in any order without one touching the
+# other's results - and so a table pulled out of the repo still says which readout it is from.
+CYTOTRACE_CSV = EPI_DIR / f"cytotrace2_{RUN_ID}.csv"   # per cell, 04_4: a readout, not a collection
+
+
+def gmt_path(coll) -> Path:
+    """The collection as actually used - mapped genes only - which is also the Appendix table."""
+    return TABLE_DIR / coll.name / f"signatures_{coll.name}.gmt"
+
+
+def scores_csv(coll) -> Path:
+    """Per-cell raw + within-stratum z scores, 04_5. Heavy, so it lives outside the repo."""
+    return EPI_DIR / f"signature_scores_{coll.name}_{RUN_ID}.csv"
+
+
+def enrichment_tsv(coll, n_top: int) -> Path:
+    """The full ORA output of 04_6: every pair tested, before any significance filter."""
+    return EPI_DIR / f"factor_first_top{n_top}_{coll.name}_{RUN_ID}.tsv"
+
+
+def top_genes_tsv(n_top: int) -> Path:
+    """The top-gene list per dimension-direction.
+
+    Read off the DRVI decoder alone, so this one is deliberately NOT collection-scoped: both
+    collections are tested against the same gene lists, and writing it twice would invite the
+    two copies to drift apart.
+    """
+    return EPI_DIR / f"factor_first_top{n_top}_genes_{RUN_ID}.tsv"
 
 # --------------------------------------------------------------------------- #
 # The caveat that has to travel with every output of this step
@@ -91,42 +123,12 @@ CAVEAT_SHORT = (
 )
 
 # --------------------------------------------------------------------------- #
-# The lab's signature collection
+# Floors that apply to every collection
 # --------------------------------------------------------------------------- #
 #
-# One plain-text file per signature, one gene symbol per line. `file` is the name on
-# disk (two of them do not match the signature name), `axis` is which of the two
-# readouts it belongs to, `provenance` goes verbatim into the .gmt description field
-# and doubles as the Appendix table.
-#
-# NOTE. There is deliberately NO stemness consensus signature. The intersection of
-# BENPORATH_ES1 / ESC_WONG / ESC_ASSOU was tested by the lab and captures
-# proliferation only, which the existing S_score / G2M_score already cover. Each
-# stemness signature is used on its own and none of them is primary at this stage.
-
-SIGNATURES = [
-    # name,                  file,                    axis,       provenance
-    ("HALLMARK_IFNA",         "HALLMARK_IFNA.txt",      "immune",   "Interferon Alpha response, MSigDB Hallmark"),
-    ("HALLMARK_IFNG",         "HALLMARK_IFNG.txt",      "immune",   "Interferon Gamma response, MSigDB Hallmark"),
-    ("ISDS",                  "ISDS.txt",               "immune",   "IFN-Stem Cell-Down signature, PMC5481166"),
-    ("KEGG_APM",              "KEGG_APM.txt",           "immune",   "Antigen Presentation Machinery, KEGG"),
-    ("IMMUNOGENIC_CONSENSUS", "Immune consensus.txt",   "immune",   "Curated by the lab from the KEGG APM signature, retaining only immunogenic genes and immunomodulators; primary immune readout"),
-    ("BENPORATH_ES1",         "BENPORATH_ES1.txt",      "stemness", "MSigDB BENPORATH_ES_1"),
-    ("ESC_ASSOU",             "ESC_ASSOU.txt",          "stemness", "PMC1906587, Table S3"),
-    ("ESC_WONG",              "ESC_WONG.txt",           "stemness", "MSigDB WONG_EMBRYONIC_STEM_CELL_CORE"),
-    ("EMP",                   "EMP.txt",                "stemness", "Embryonic Multipotent Progenitors, PMID 29784918"),
-    ("LIM_STEM",              "LIM_STEM.txt",           "stemness", "MSigDB LIM_MAMMARY_STEM_CELL_UP"),
-    ("FMASC",                 "fMaSC.txt",              "stemness", "Fetal mammary stem cells, PMC3277444, Supplementary Table 2"),
-]
-
-# The immune axis is expected to be LOW in the states of interest: the project looks for
-# immune *evasion*, not immunogenicity.
-PRIMARY_IMMUNE = "IMMUNOGENIC_CONSENSUS"
-
-IMMUNE_SIGS = [n for n, _, ax, _ in SIGNATURES if ax == "immune"]
-STEMNESS_SIGS = [n for n, _, ax, _ in SIGNATURES if ax == "stemness"]
-SIG_AXIS = {n: ax for n, _, ax, _ in SIGNATURES}
-SIG_PROVENANCE = {n: p for n, _, _, p in SIGNATURES}
+# The signature registries themselves are in `sig_collections.py`. These two numbers are not
+# collection-specific: they are what "this list is still the list it is named after" means on
+# this object, and they are enforced identically for the SCIE lists and the EMT ones.
 
 MIN_SIGNATURE_GENES = 10      # below this a signature is skipped and reported
 MIN_MAPPED_FRACTION = 0.60    # below this the step stops: low coverage means NOT MEASURED
@@ -139,7 +141,7 @@ MIN_MAPPED_FRACTION = 0.60    # below this the step stops: low coverage means NO
 def read_signature_file(path: Path) -> list[str]:
     """One gene symbol per line, de-duplicated, order preserved.
 
-    Five of the eleven files are CRLF and at least one carries a UTF-8 BOM, so the
+    Several of the files are CRLF and at least one carries a UTF-8 BOM, so the
     encoding and the stripping are not optional: 'B2M\\r' matches no var_name.
     """
     seen, genes = set(), []
@@ -152,10 +154,10 @@ def read_signature_file(path: Path) -> list[str]:
     return genes
 
 
-def load_signatures(sig_dir: Path = SIG_DIR) -> dict[str, list[str]]:
-    """The whole collection, as {name: [genes]}, straight from the text files."""
+def load_signatures(coll, sig_dir: Path = SIG_DIR) -> dict[str, list[str]]:
+    """One collection, as {name: [genes]}, straight from the text files, in registry order."""
     out = {}
-    for name, fname, _, _ in SIGNATURES:
+    for name, fname in coll.files.items():
         path = sig_dir / fname
         if not path.exists():
             raise FileNotFoundError(f"signature file missing: {path}")
@@ -194,16 +196,27 @@ def read_gmt(path: Path) -> dict[str, list[str]]:
 # --------------------------------------------------------------------------- #
 
 
-def write_table(df: pd.DataFrame, name: str, index: bool = True, table_dir: Path = TABLE_DIR) -> Path:
-    """Write a small result table to the phase's tables/, caveat as a leading comment.
+def table_dir(coll) -> Path:
+    """tables/<collection>/. Created on demand, one folder per readout."""
+    d = TABLE_DIR / coll.name
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def table_path(name: str, coll) -> Path:
+    return table_dir(coll) / f"{name}_{coll.name}_{RUN_ID}.csv"
+
+
+def write_table(df: pd.DataFrame, name: str, coll, index: bool = True) -> Path:
+    """Write a small result table to tables/<collection>/, caveat as a leading comment.
 
     Read it back with `pd.read_csv(path, comment='#', index_col=0)`. The comment lines
     are how the caveat travels with the table when it is pulled out of this folder.
     """
-    table_dir.mkdir(parents=True, exist_ok=True)
-    path = table_dir / f"{name}_{RUN_ID}.csv"
+    path = table_path(name, coll)
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write(f"# {name} | DRVI run {RUN_ID} | 04_3 signature interpretation\n")
+        fh.write(f"# {name} | collection {coll.name} ({coll.title}) | DRVI run {RUN_ID} "
+                 f"| 04_3 - 04_7 signature interpretation\n")
         for line in CAVEAT.split(". "):
             if line.strip():
                 fh.write(f"# CAVEAT: {line.strip().rstrip('.')}.\n")
@@ -212,15 +225,30 @@ def write_table(df: pd.DataFrame, name: str, index: bool = True, table_dir: Path
     return path
 
 
-def fig_dir(step: str) -> Path:
-    """figures/<step>/, `step` being the full step-folder name, e.g. '04_5_cell_first'."""
-    d = PHASE_DIR / "figures" / step
+def read_table(name: str, coll) -> pd.DataFrame:
+    """Read back a table this stage wrote, dropping the caveat comment lines.
+
+    04_6 and 04_7 read what earlier steps wrote; going through this rather than through a
+    hand-built path is what keeps a step from silently reading the OTHER collection's table
+    when it is run with the wrong flag - the file simply is not there.
+    """
+    return pd.read_csv(table_path(name, coll), comment="#", index_col=0)
+
+
+def fig_dir(step: str, coll) -> Path:
+    """figures/<step>/<collection>/, `step` being the full step-folder name, e.g. '04_5_cell_first'.
+
+    The step folders mirror the Methods sections and stay one per step; the collection is a
+    subfolder of each, so the SCIE and EMT versions of the same figure sit side by side
+    without either being able to overwrite the other.
+    """
+    d = PHASE_DIR / "figures" / step / coll.name
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def savefig(name: str, step: str, fig=None, dpi: int = 300, caveat: bool = True):
-    """Save a figure into figures/<step>/, run id appended, caveat as a footnote.
+def savefig(name: str, step: str, coll, fig=None, dpi: int = 300, caveat: bool = True):
+    """Save a figure into figures/<step>/<collection>/, collection and run id appended.
 
     Same helper as 03_3 and 04_2 except for the footnote, which is the mandatory
     caveat: a figure showing cells or states must carry it wherever it ends up.
@@ -236,7 +264,7 @@ def savefig(name: str, step: str, fig=None, dpi: int = 300, caveat: bool = True)
     if caveat:
         fig.text(0.5, -0.02, CAVEAT_SHORT, ha="center", va="top", fontsize=6,
                  style="italic", color="0.35", linespacing=1.4)
-    path = fig_dir(step) / f"{name}_{RUN_ID}.png"
+    path = fig_dir(step, coll) / f"{name}_{coll.name}_{RUN_ID}.png"
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     print(f"[fig] {path}")
     return path

@@ -1,0 +1,49 @@
+name: cytotrace2-py
+# Isolated environment for CytoTRACE2 (04_drvi_epithelial/04_4_cytotrace2) and nothing else.
+#
+# Why it is separate. cytotrace2-py 1.1.0.4 declares `numpy<2.0.0` as a hard pin, so
+# installing it into `benchmark-py-r` does not add a package - it rolls the whole stack
+# back (numpy 2.4 -> 1.26, pandas 3.0 -> 2.3, scipy 1.18 -> 1.17, zarr 3.2 -> 3.1,
+# anndata 0.13 -> 0.12, scanpy 1.12 -> 1.11) and leaves fast-array-utils and tifffile
+# with requirements pip cannot satisfy. The two stacks cannot coexist; same reasoning as
+# `scgen-py.yml`, and the cost here is smaller because this step reads one `.h5ad`,
+# writes tab-delimited matrices and writes one `.csv` - nothing else in the thesis
+# imports it.
+#
+# CPU-only torch. CytoTRACE2 runs its predictor on the CPU and the step is minutes per
+# patient either way, so the CUDA build is not worth ~2.5 GB of duplicated wheels. The
+# extra index below is what keeps `torch` on the `+cpu` build.
+#
+# setuptools is pinned <81 on purpose: cytotrace2_py/common/gen_utils.py still does
+# `import pkg_resources`, which setuptools 81 removed. Without the pin the package
+# installs cleanly and then fails at import with ModuleNotFoundError.
+#
+# anndata 0.12 reads the `.h5ad` written by anndata 0.13 in 04_1 without complaint
+# (checked on shiao_epi.h5ad, 74,441 x 26,371, backed + subset + to_memory).
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - numpy==1.26.4
+      - pandas==2.3.3
+      - scipy==1.17.1
+      - scikit-learn==1.9.0
+      - numba==0.67.0
+
+      - anndata==0.12.19
+      - scanpy==1.11.5
+      - h5py==3.16.0
+      - zarr==3.1.5
+
+      - torch==2.13.0+cpu
+
+      - cytotrace2-py==1.1.0.4
+      - gdown==6.1.0
+      - setuptools==80.10.2
+
+      - matplotlib==3.11.1
+      - seaborn==0.13.2

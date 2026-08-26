@@ -1,0 +1,17 @@
+# cycle_confound_by_readout | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+readout,axis,n_genes,n_cycle_genes,cycle_share_of_variance,r2_cycle_on_score,has_gene_list
+HALLMARK_IFNA,immune,96,0,0.0,0.0073,True
+HALLMARK_IFNG,immune,197,0,0.0,0.0113,True
+ISDS,immune,27,0,0.0,0.0093,True
+KEGG_APM,immune,67,0,0.0,0.0059,True
+IMMUNOGENIC_CONSENSUS,immune,25,0,0.0,0.0095,True
+BENPORATH_ES1,stemness,369,28,0.1102,0.1494,True
+ESC_ASSOU,stemness,802,48,0.0811,0.1159,True
+ESC_WONG,stemness,297,38,0.0905,0.0989,True
+LIM_STEM,stemness,465,0,0.0,0.0046,True
+FMASC,stemness,1698,70,0.0748,0.1138,True
+CytoTRACE2,stemness,0,0,,0.0703,False

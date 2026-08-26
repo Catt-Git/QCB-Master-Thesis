@@ -1,0 +1,18 @@
+# cycle_confound_by_readout | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+readout,axis,n_genes,n_cycle_genes,cycle_share_of_variance,r2_cycle_on_score,has_gene_list
+EMT_B_EPITHELIAL,epithelial,28,0,0.0,0.0157,True
+EMT_B_HYBRID,hybrid,20,0,0.0,0.0002,True
+EMT_B_MESENCHYMAL,mesenchymal,33,0,0.0,0.0003,True
+EMT_A_EPITHELIAL,epithelial,15,0,0.0,0.0101,True
+EMT_A_HYBRID,hybrid,12,0,0.0,0.0026,True
+EMT_A_MESENCHYMAL,mesenchymal,19,0,0.0,0.0008,True
+EMT_C_EPITHELIAL,epithelial,29,0,0.0,0.0144,True
+EMT_C_HYBRID,hybrid,33,0,0.0,0.0051,True
+EMT_C_MESENCHYMAL,mesenchymal,41,0,0.0,0.0019,True
+EMT_SCORE_B,emt_score,0,0,,0.006,False
+EMT_SCORE_A,emt_score,0,0,,0.0024,False
+EMT_SCORE_C,emt_score,0,0,,0.003,False

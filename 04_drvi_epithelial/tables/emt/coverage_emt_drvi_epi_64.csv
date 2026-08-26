@@ -1,0 +1,15 @@
+# coverage | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epi_64 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+signature,axis,primary,provenance,n_genes,n_mapped,mapped_fraction,n_in_hvg_background,hvg_fraction_of_mapped
+EMT_B_EPITHELIAL,epithelial,True,"Collaborator list B (validated + non-validated), epithelial markers; primary triad",28,28,1.0,6,0.21428571428571427
+EMT_B_HYBRID,hybrid,True,"Collaborator list B, hybrid/partial-EMT markers; primary triad",20,20,1.0,6,0.3
+EMT_B_MESENCHYMAL,mesenchymal,True,"Collaborator list B, mesenchymal markers; primary triad",33,33,1.0,15,0.45454545454545453
+EMT_A_EPITHELIAL,epithelial,False,"Collaborator list A (experimentally validated only), epithelial markers; robustness replicate of B",15,15,1.0,2,0.13333333333333333
+EMT_A_HYBRID,hybrid,False,"Collaborator list A, hybrid/partial-EMT markers; robustness replicate of B",12,12,1.0,6,0.5
+EMT_A_MESENCHYMAL,mesenchymal,False,"Collaborator list A, mesenchymal markers; robustness replicate of B",19,19,1.0,10,0.5263157894736842
+EMT_C_EPITHELIAL,epithelial,False,"Collaborator list C (Tomas), epithelial markers, mouse symbols mapped to human; robustness replicate of B",32,29,0.90625,5,0.1724137931034483
+EMT_C_HYBRID,hybrid,False,"Collaborator list C (Tomas), hybrid/partial-EMT markers, mouse symbols mapped to human; robustness replicate of B",34,33,0.9705882352941176,12,0.36363636363636365
+EMT_C_MESENCHYMAL,mesenchymal,False,"Collaborator list C (Tomas), mesenchymal markers, mouse symbols mapped to human; robustness replicate of B",43,41,0.9534883720930233,17,0.4146341463414634
