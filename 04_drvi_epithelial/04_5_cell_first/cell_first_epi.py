@@ -37,6 +37,19 @@ How it fails, and what this script does about it:
   * it is confirmatory by construction and can only find what was brought in from outside.
     That one has no fix inside Route A; it is why Route B exists.
 
+THE COORDINATE SYSTEM IS AN ARGUMENT, NOT PART OF THE QUESTION. A1 - A5 below - scoring,
+standardisation, the target region, the consensus and the confounder checks - are computed
+from `shiao_epi.h5ad` alone and never see an embedding; only A6 does. `--embedding` therefore
+reads the same Route A off another space: `drvi` (the default, 04_2's run and the reference),
+`harmony` or `pca` (both written by `04_9_embedding_control/run_harmony_epi.py`). A control
+run writes ONLY the three embedding-dependent outputs, `dim_signature_spearman`,
+`dim_target_effect_size` and `dimension_row_order`, plus its own heatmap - which lands in
+`figures/04_9_embedding_control/<method>/`, not in this step's folder, so a control run's
+figure is never mixed in with the phase's own; the tables that
+describe the cells are identical by construction and stay owned by the DRVI run rather than
+being copied under a second run id. See the header of `run_harmony_epi.py` for why the
+control exists, and note that Route B and Route C are DRVI-only and are not parameterised.
+
 Scoring is on the UNINTEGRATED, ALL-GENES object. A 150-gene signature reduced to whatever
 survived HVG selection is no longer that signature, so `shiao_epi.h5ad` is read here and
 never `shiao_epi_hvg_2k.h5ad`.
@@ -56,6 +69,8 @@ Usage:
     python cell_first_epi.py --collection emt             # the same procedure on the EMT lists
     python cell_first_epi.py --high-q 0.80 --low-q 0.20   # a stricter target region
     python cell_first_epi.py --overwrite                  # re-score instead of reusing the csv
+    python cell_first_epi.py --embedding harmony          # the same Route A on Harmony's axes
+    python cell_first_epi.py --embedding pca              # and on the uncorrected PCA
 """
 
 from __future__ import annotations
@@ -89,14 +104,8 @@ GROUPBY = ["cohort", "cell_type"]   # the standardisation strata
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     SC.add_argument(p)
-    p.add_argument("--high-q", type=float, default=0.75,
-                   help="quantile of the within-stratum z-score above which a cell is 'high' (default 0.75)")
-    p.add_argument("--low-q", type=float, default=0.25,
-                   help="quantile below which a cell is 'low' (default 0.25)")
-    p.add_argument("--mid-lo-q", type=float, default=0.40,
-                   help="lower edge of the 'mid' band, used by the EMT target region (default 0.40)")
-    p.add_argument("--mid-hi-q", type=float, default=0.60,
-                   help="upper edge of the 'mid' band (default 0.60)")
+    C.add_embedding_argument(p)
+    C.add_cutoff_arguments(p)
     p.add_argument("--overwrite", action="store_true", help="re-score even if the per-cell csv exists")
     return p.parse_args()
 
@@ -149,31 +158,9 @@ def standardise_within(df: pd.DataFrame, strata: pd.DataFrame) -> pd.DataFrame:
 # Quadrants
 # --------------------------------------------------------------------------- #
 
-def in_region(v: pd.Series, rule: str, args) -> pd.Series:
-    """Whether each cell is at the high end, the low end, or in the middle band of a readout.
-
-    The cutoffs are quantiles of the standardised scores rather than fixed z values: the
-    scores are not normal and a fixed z would give wildly different group sizes across
-    readouts, which would make the stability comparison below meaningless.
-
-    "mid" selects the middle of an axis rather than an end of it. Nothing uses it now - the EMT
-    target moved to co-expression, which is both more stable and less dependent on the hybrid
-    lists - but the rule and its two flags stay, because that first definition is part of the
-    record and re-running it has to remain a one-line change.
-    """
-    if rule == "high":
-        return v >= v.quantile(args.high_q)
-    if rule == "low":
-        return v <= v.quantile(args.low_q)
-    if rule == "mid":
-        return (v >= v.quantile(args.mid_lo_q)) & (v <= v.quantile(args.mid_hi_q))
-    raise ValueError(f"unknown region rule {rule!r}")
-
-
-def define_target(z: pd.DataFrame, plane, args) -> pd.Series:
-    """The target cell set of one plane: both readouts inside their respective regions."""
-    return (in_region(z[f"z_{plane.x}"], plane.x_rule, args)
-            & in_region(z[f"z_{plane.y}"], plane.y_rule, args))
+# `in_region`, `define_target` and the majority rule now live in signature_common: 04_9
+# re-derives the same consensus cell set from the same cached scores, and two copies of a
+# quadrant rule are two chances for the two spaces to be compared on different cells.
 
 
 def axis_label(coll, name: str) -> str:
@@ -197,8 +184,43 @@ def jaccard(a: pd.Series, b: pd.Series) -> float:
 def main():
     args = parse_args()
     coll = SC.get(args.collection)
+    # Before anything is written: this sets the run id every table and figure name carries.
+    emb = C.set_embedding(args.embedding)
     C.banner(f"04_5 - Route A, cell-first: {coll.title}")
     print(f"question  {coll.question}")
+    print(f"space     {emb.title} ({emb.run_id}) - {emb.description}")
+
+    # A1 - A5 describe the CELLS: they are computed from the all-genes object and cannot move
+    # when the coordinate system does. The reference run owns them; a control run recomputes
+    # them identically - which is the point, the target region must not be allowed to follow
+    # the embedding - and does not write a second, byte-identical copy under its own run id.
+    # Only A6 differs between runs, and that is exactly what is being compared.
+    ref = C.EMBEDDINGS[C.DEFAULT_EMBEDDING]
+
+    # A control run's figures do NOT go in this step's folder: 04_5's folder is the phase's
+    # own run, and a Harmony heatmap sitting next to the DRVI one invites the two to be read
+    # as one result set. They go to 04_9's folder, and inside it to a subfolder named for the
+    # METHOD - `04_9_embedding_control/harmony/<collection>/` - so the space's own figures
+    # stay separate both from DRVI's and from the cross-method comparison figures, which are
+    # the only thing left directly under `<collection>/`.
+    fig_step = ("04_5_cell_first" if emb.is_reference
+                else f"04_9_embedding_control/{emb.name}")
+
+    def write_shared(df, name, *a, **k):
+        """Write an embedding-independent table, or say who owns it and skip."""
+        if not emb.is_reference:
+            print(f"[skip] {name}: embedding-independent, owned by the {ref.run_id} run")
+            return None
+        return C.write_table(df, name, *a, **k)
+
+    def savefig_shared(name, step, coll_, fig):
+        if not emb.is_reference:
+            print(f"[skip] {name}: embedding-independent, owned by the {ref.run_id} run")
+            plt.close(fig)
+            return None
+        path = C.savefig(name, step, coll_, fig)
+        plt.close(fig)
+        return path
 
     sets = C.read_gmt(C.gmt_path(coll))
     print(f"{len(sets)} signatures from {C.gmt_path(coll)}")
@@ -304,7 +326,7 @@ def main():
         rows.append(r)
     conf = pd.DataFrame(rows).set_index("readout")
     print(conf[[f"rho_{k}" for k in conf_keys]].to_string(float_format="%+.3f"))
-    C.write_table(conf, "confounders", coll)
+    write_shared(conf, "confounders", coll)
 
     cc_max = conf[["rho_S_score", "rho_G2M_score"]].abs().max(axis=1)
     print(f"\nstrongest cell-cycle coupling: {cc_max.idxmax()} (|rho| = {cc_max.max():.3f})")
@@ -312,8 +334,13 @@ def main():
           f"(|rho| = {conf['rho_n_genes_by_counts'].abs().max():.3f})")
 
     out = pd.concat([raw.add_prefix("score_"), z], axis=1)
-    out.to_csv(scores_csv)
-    print(f"\n[write] {scores_csv}")
+    if emb.is_reference or not scores_csv.exists():
+        out.to_csv(scores_csv)
+        print(f"\n[write] {scores_csv}")
+    else:
+        # Named for the object and not for the run (see signature_common), so a control run
+        # would be rewriting the reference run's file with identical content.
+        print(f"\n[skip] {scores_csv} is embedding-independent and already there")
 
     # ----------------------------------------------------- A5 - target region
     C.banner(f"A5 - the target region: {coll.target_label}\n"
@@ -321,7 +348,8 @@ def main():
              f"mid = q{args.mid_lo_q:.2f} - q{args.mid_hi_q:.2f})")
 
     labels = [pl.label for pl in planes]
-    quads = {pl.label: define_target(z, pl, args) for pl in planes}
+    cut = C.Cutoffs.from_args(args)
+    quads = {pl.label: C.define_target(z, pl, cut) for pl in planes}
 
     qdf = pd.DataFrame(quads)
     sizes = qdf.sum().rename("n_cells").to_frame()
@@ -339,16 +367,15 @@ def main():
     off = stab.where(~np.eye(len(labels), dtype=bool))
     print(f"median pairwise Jaccard: {np.nanmedian(off.values):.3f}  "
           f"(range {np.nanmin(off.values):.3f} - {np.nanmax(off.values):.3f})")
-    C.write_table(stab.round(4), "quadrant_stability", coll)
+    write_shared(stab.round(4), "quadrant_stability", coll)
 
-    n_defs = qdf.sum(axis=1)
-    consensus = n_defs >= max(2, int(np.ceil(len(labels) / 2)))
+    n_defs, consensus = C.consensus_vote(qdf)
     print(f"\ncalled by >=1 definition: {int((n_defs >= 1).sum()):,} cells; "
           f"by a majority: {int(consensus.sum()):,}; by all {len(labels)}: "
           f"{int((n_defs == len(labels)).sum()):,}")
     votes = n_defs.value_counts().sort_index().rename("n_cells").to_frame()
     votes.index.name = "n_definitions_calling_the_cell"
-    C.write_table(votes, "quadrant_vote_distribution", coll)
+    write_shared(votes, "quadrant_vote_distribution", coll)
 
     # per-patient sizes: a state present in one patient is a patient effect until shown otherwise
     per_pat = qdf.copy()
@@ -363,7 +390,7 @@ def main():
           .sort_values("pct_consensus", ascending=False).to_string(float_format="%.2f"))
     print(f"\npatients with at least one consensus cell: "
           f"{int((pp['consensus'] > 0).sum())} / {len(pp)}")
-    C.write_table(pp, "quadrant_per_patient", coll)
+    write_shared(pp, "quadrant_per_patient", coll)
 
     per_ct = pd.DataFrame({"cell_type": adata.obs["cell_type"].values,
                            "consensus": consensus.values}).groupby("cell_type", observed=True).agg(
@@ -371,7 +398,7 @@ def main():
     per_ct["pct"] = 100 * per_ct["n_target"] / per_ct["n_cells"]
     print("\nconsensus quadrant by cell type")
     print(per_ct.sort_values("pct", ascending=False).to_string(float_format="%.2f"))
-    C.write_table(per_ct, "quadrant_per_cell_type", coll)
+    write_shared(per_ct, "quadrant_per_cell_type", coll)
 
     # ------------------------------------------- the named risks (A4 cont.)
     C.banner(f"A4 - the named risks of this collection: {', '.join(coll.risks)}")
@@ -390,9 +417,9 @@ def main():
     # The quantile cutoffs are recomputed WITHIN G1, not carried over: the point of the check
     # is what the definition would have called had the cycling cells never been there.
     z_g1 = z[g1]
-    g1_quads = {pl.label: define_target(z_g1, pl, args) for pl in planes}
+    g1_quads = {pl.label: C.define_target(z_g1, pl, cut) for pl in planes}
     g1df = pd.DataFrame(g1_quads)
-    g1_consensus = g1df.sum(axis=1) >= max(2, int(np.ceil(len(labels) / 2)))
+    _, g1_consensus = C.consensus_vote(g1df)
     overlap = jaccard(consensus[g1], g1_consensus)
     print(f"consensus target restricted to G1: {int(consensus[g1].sum()):,} cells")
     print(f"consensus target recomputed within G1: {int(g1_consensus.sum()):,} cells")
@@ -459,17 +486,28 @@ def main():
         print("  AUROC near 0.5 means the mesenchymal signal is not the soup; well above it\n"
               "  means the EMT readout is measuring contamination and nothing here is a state.")
 
-    C.write_table(pd.DataFrame(cc_rows).set_index("check"), "confounder_checks", coll, index=True)
+    write_shared(pd.DataFrame(cc_rows).set_index("check"), "confounder_checks", coll, index=True)
 
     # ----------------------------------------------- A6 - dimensions x signatures
-    C.banner("A6 - latent dimensions vs the standardised scores")
+    C.banner(f"A6 - the dimensions of {emb.title} vs the standardised scores")
+    if not C.EMBED_H5AD.exists():
+        raise SystemExit(
+            f"{C.EMBED_H5AD} not found.\n"
+            + ("Run 04_2_drvi_run/run_drvi_epi.py first."
+               if emb.is_reference else
+               "Run 04_9_embedding_control/run_harmony_epi.py first."))
     embed = ad.read_h5ad(C.EMBED_H5AD)
     assert (embed.obs_names == adata.obs_names).all(), \
         "the embedding and the all-genes object do not hold the same cells in the same order"
     dims = C.analysis_dimensions(embed)
     n_van = C.n_vanished(embed)
-    print(f"{embed.n_vars} dimensions, all {len(dims)} used "
-          f"({n_van} flagged vanished in var['vanished'] and NOT pruned)")
+    print(f"{embed.n_vars} dimensions, all {len(dims)} used")
+    if emb.is_reference:
+        print(f"({n_van} flagged vanished in var['vanished'] and NOT pruned)")
+    else:
+        # `vanished` is a DRVI notion. The column is there and all False; saying so is
+        # clearer than a count of zero that could be read as a filter having run.
+        print("no vanished dimensions: this space has no such notion, every dimension is used")
 
     L = pd.DataFrame(np.asarray(embed.X), index=embed.obs_names, columns=embed.var["title"].values)[dims]
 
@@ -501,8 +539,10 @@ def main():
     C.write_table(eff, "dim_target_effect_size", coll)
 
     # The row order every later heatmap uses, Route B included.
+    # The order column is named for the embedding, so `drvi_order` is what the DRVI run
+    # writes, unchanged, and a control run cannot pass its own ordering off as DRVI's.
     order = pd.Series(dims, name="dimension").to_frame().assign(
-        drvi_order=embed.var.set_index("title").loc[dims, "order"].values,
+        **{f"{emb.name}_order": embed.var.set_index("title").loc[dims, "order"].values},
         vanished=embed.var.set_index("title").loc[dims, "vanished"].astype(bool).values)
     C.write_table(order.set_index("dimension"), "dimension_row_order", coll)
 
@@ -519,8 +559,7 @@ def main():
                  "raw signature scores vs technical and cycle covariates", fontsize=9)
     plt.setp(ax.get_xticklabels(), rotation=30, ha="right", fontsize=8)
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
-    C.savefig("confounder_heatmap", "04_5_cell_first", coll, fig)
-    plt.close(fig)
+    savefig_shared("confounder_heatmap", "04_5_cell_first", coll, fig)
 
     # the plane, one panel per definition of the target region
     def cut_lines(a, v, rule, vertical: bool):
@@ -557,8 +596,7 @@ def main():
                  f"target region in red = {coll.target_label}; {len(idx):,} cells shown",
                  fontsize=10)
     fig.tight_layout(rect=[0, 0, 1, 0.94])
-    C.savefig(coll.plane_figure, "04_5_cell_first", coll, fig)
-    plt.close(fig)
+    savefig_shared(coll.plane_figure, "04_5_cell_first", coll, fig)
 
     # quadrant stability
     fig, ax = plt.subplots(figsize=(6, 5))
@@ -568,8 +606,7 @@ def main():
     ax.set_title(f"Stability of the target region across definitions, {coll.title}", fontsize=10)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
-    C.savefig("quadrant_stability", "04_5_cell_first", coll, fig)
-    plt.close(fig)
+    savefig_shared("quadrant_stability", "04_5_cell_first", coll, fig)
 
     # dimensions x signatures
     #
@@ -585,16 +622,17 @@ def main():
                 cbar_kws={"label": "Spearman rho (dimension vs within-stratum z-score)\n"
                                    "sign = direction: rho > 0 is DR n+, rho < 0 is DR n-",
                           "shrink": 0.4}, ax=ax)
-    ax.set_title(f"Route A, {coll.title}: latent dimensions x signatures\n"
-                 f"all {len(dims)} dimensions of {C.RUN_ID}, nothing pruned "
-                 f"({n_van} of them flagged vanished in var['vanished'])\n"
+    pruning = (f"nothing pruned ({n_van} of them flagged vanished in var['vanished'])"
+               if emb.is_reference else "nothing pruned")
+    ax.set_title(f"Route A, {coll.title}: {emb.title} dimensions x signatures\n"
+                 f"all {len(dims)} dimensions of {emb.run_id}, {pruning}\n"
                  "rows are dimensions, not dimension-directions: the sign of rho IS the "
                  "direction, as 04_7 joins them", fontsize=10)
     for pos in coll.block_edges(col_order):
         ax.axvline(pos, color="k", lw=1.5)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(ax.get_yticklabels(), fontsize=6)
-    C.savefig("dim_signature_heatmap", "04_5_cell_first", coll, fig)
+    C.savefig("dim_signature_heatmap", fig_step, coll, fig)
     plt.close(fig)
 
     if skipped:

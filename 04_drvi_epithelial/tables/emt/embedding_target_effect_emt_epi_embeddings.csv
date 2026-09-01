@@ -1,0 +1,8 @@
+# embedding_target_effect | collection emt (epithelial-mesenchymal transition (EMT)) | run epi_embeddings | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+embedding,space,n_dimensions,effective_rank_of_space,mean_abs_dim_correlation,best_dimension,auroc_best_single_dimension,auroc_best_single_dimension_signed,abs_auroc_from_half,max_abs_smd,n_dims_auroc_dev_ge_0.10,effective_n_dims,share_top_dimension,auroc_multivariate_cv_mean,auroc_multivariate_cv_sd,cv_folds_used
+drvi,DRVI,64,30.704229730821595,0.09407336155187777,DR 45,0.646652464073548,0.3533475359264519,0.1466524640735481,0.57151365,4,20.545853889959737,0.11933304810474425,0.7740815299306907,0.02542365971372418,5
+harmony,Harmony,50,43.57847646279131,0.036820349382287496,HD 4,0.6760761932662545,0.6760761932662545,0.17607619326625445,0.575393,4,13.647622031440978,0.19613187926081932,0.8150663898962336,0.01690044174478055,5

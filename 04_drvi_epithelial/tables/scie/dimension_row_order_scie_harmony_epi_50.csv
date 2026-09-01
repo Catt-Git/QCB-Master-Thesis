@@ -1,0 +1,56 @@
+# dimension_row_order | collection scie (stemness x immunogenicity (SCIE)) | Harmony run harmony_epi_50 | 04_3 - 04_7 signature interpretation
+# CAVEAT: Cell type labels come from CellTypist (Cells_Adult_Breast.pkl, Kumar et al.
+# CAVEAT: 2023), a NORMAL adult breast atlas with no malignant class: TNBC cells are assigned to the nearest normal state.
+# CAVEAT: This subset therefore mixes normal and malignant epithelium and no CNV inference has been run.
+# CAVEAT: Every state reported here is an EPITHELIAL state, not a tumour cell state.
+dimension,harmony_order,vanished
+HD 1,0,False
+HD 2,1,False
+HD 3,2,False
+HD 4,3,False
+HD 5,4,False
+HD 6,5,False
+HD 7,6,False
+HD 8,7,False
+HD 9,8,False
+HD 10,9,False
+HD 11,10,False
+HD 12,11,False
+HD 13,12,False
+HD 14,13,False
+HD 15,14,False
+HD 16,15,False
+HD 17,16,False
+HD 18,17,False
+HD 19,18,False
+HD 20,19,False
+HD 21,20,False
+HD 22,21,False
+HD 23,22,False
+HD 24,23,False
+HD 25,24,False
+HD 26,25,False
+HD 27,26,False
+HD 28,27,False
+HD 29,28,False
+HD 30,29,False
+HD 31,30,False
+HD 32,31,False
+HD 33,32,False
+HD 34,33,False
+HD 35,34,False
+HD 36,35,False
+HD 37,36,False
+HD 38,37,False
+HD 39,38,False
+HD 40,39,False
+HD 41,40,False
+HD 42,41,False
+HD 43,42,False
+HD 44,43,False
+HD 45,44,False
+HD 46,45,False
+HD 47,46,False
+HD 48,47,False
+HD 49,48,False
+HD 50,49,False

@@ -44,7 +44,7 @@ carries over unchanged into 05.
 ├── README.md
 ├── signature_interpretation_all.sh   # phase-level driver for 04_3 -> 04_7
 ├── utils/
-│   ├── signature_common.py           # paths, writers, DRVI accessor - collection-agnostic
+│   ├── signature_common.py           # paths, writers, DRVI accessor, embeddings, target region
 │   └── sig_collections.py            # the scie and emt collections: lists, axes, target region
 ├── 04_1_subsetting/                  # from shiao.h5ad to the epithelial object
 ├── 04_2_drvi_run/                    # DRVI on that object, n_latent 64
@@ -53,6 +53,8 @@ carries over unchanged into 05.
 ├── 04_5_cell_first/                  # Route A
 ├── 04_6_factor_first/                # Route B
 ├── 04_7_convergence/                 # Route C, the main result
+├── 04_8_cycle_confound/              # how much of "stemness" is the cycle - a diagnostic
+├── 04_9_embedding_control/           # Route A on Harmony instead of DRVI - a control
 ├── tables/{scie,emt}/                # every result table of 04_3 - 04_7, one folder per collection
 └── figures/                          # one folder per step, then one per collection
 ```
@@ -833,6 +835,9 @@ plane, whose name is the collection's: `stemness_immunogenicity_plane` for `scie
 `04_6_factor_first/`: `dim_geneset_signed_heatmap`.
 `04_8_cycle_confound/`: `cycle_behind_stemness`.
 `04_7_convergence/`: `routes_side_by_side`, `convergence_scatter`.
+`04_9_embedding_control/`: `dim_signature_heatmap_side_by_side`, `association_concentration`,
+`max_abs_rho`, `information_vs_alignment` - plus, outside the collection folders, **one folder
+per method** (`harmony/`, `pca/`) holding that space's own UMAPs and its own Route A heatmap.
 
 ### Rules that keep the two routes independent
 
@@ -849,6 +854,256 @@ plane, whose name is the collection's: `stemness_immunogenicity_plane` for `scie
   SCIE p-value cannot move because the EMT lists were added, and neither run may be read as
   having been corrected for the other.
 - **Nothing is promoted on a single route.** All three categories are reported separately.
+
+## 04_9_embedding_control (Route A on a space that is not DRVI's)
+
+A **control**, not a result, and the one the README's own justification for DRVI invites:
+Route B "is also what makes the choice of DRVI pay off (…) without it any of the
+higher-scoring phase-02 methods would have done". That sentence is about Route B. It says
+nothing about **Route A**, which is the route that assigns the cells - the deliverable. This
+step asks Route A of **Harmony** and reports the two answers side by side.
+
+Either outcome is worth writing down:
+
+- if Harmony's corrected PCs carry the readouts as strongly as DRVI's dimensions, then Route
+  A is **not** evidence for DRVI and the whole weight of the choice sits on Route B;
+- if the association is **concentrated** on DRVI (one dimension carrying a readout) and
+  **smeared** on Harmony (ten PCs each carrying a bit), that is the disentanglement claim
+  measured on this dataset instead of cited from the DRVI paper.
+
+### ⚠ What is under test here, and what is not
+
+**DRVI is the hypothesis; Harmony is the reference level, not a rival.** The asymmetry is
+deliberate and every output of this step has to be read through it: **Harmony has never
+claimed axis-level interpretability.** It claims batch correction with the biological signal
+preserved, and it was benchmarked on exactly that, against nine other methods, in phase 02.
+A low concentration for Harmony is therefore **not a defect of Harmony**, and nothing in this
+step may be quoted as ranking the two methods - phase 02 is where they are ranked, on what
+they both promise. What is tested here is whether **DRVI delivers on its own promise** for
+these readouts, with Harmony as the level a space that makes no such promise happens to
+reach. The figures of this step carry that sentence as a subtitle for the same reason.
+
+That splits the comparison into **two questions, and only the first is fair to both**:
+
+| | question | how it is measured | fair to both? |
+|---|---|---|---|
+| 1 | does the space **carry** the state? | AUROC of the consensus target region from **all** the dimensions, L2 logistic regression, 5-fold CV **grouped by patient** | **yes** - it asks Harmony for nothing Harmony does not offer |
+| 1b | is it on one axis, as a separation? | `auroc_best_single_dimension`, **oriented**: `0.5 + abs(AUROC - 0.5)`. A latent dimension has no privileged sign - the phase says so everywhere else, *the sign of rho IS the direction* - so an axis separating the target at 0.315 separates it exactly as well as one at 0.685. The signed value is kept in the column next to it | yes |
+| 2 | is the state on **one axis**? | `max abs rho` per readout, and how concentrated the association is across dimensions | no - this is DRVI's own claim, and Harmony is the floor |
+
+The **gap between them** is the quantity that makes the useful statement possible: it is the
+state a space *represents but does not isolate*. "Harmony carries the same information but on
+no single axis, DRVI puts it on one" is a defensible conclusion; neither number can reach it
+alone. And if the multivariate AUROCs match **and** the concentrations match, Route A is not
+an argument for DRVI at all - which is a result, not a failure of the control.
+
+Grouped by patient rather than shuffled, because the question a multivariate readout has to
+answer is whether the state is recoverable in a patient the fit has never seen; a random
+split would put cells of one patient on both sides and report the patient effect as a
+success. The classifier is deliberately **linear**: a non-linear one would measure its own
+capacity as much as the geometry of the space, and the geometry is the question.
+
+### Two fairness caveats, reported rather than corrected
+
+**`effective_n_dims` cannot be read without the space's own redundancy next to it.** It mixes
+two things - how aligned a readout is with a single axis, and how correlated the axes are
+with each other, because correlated axes *share* an association. The two spaces differ
+structurally on the second, and the difference is measured, not assumed:
+
+| | dimensions | effective rank of the space | mean abs r between dimensions |
+|---|---|---|---|
+| DRVI (`drvi_epi_64`) | 64 | **30.7** | 0.094 (max 0.70) |
+| Harmony (`harmony_epi_50`) | 50 | **43.6** | 0.037 |
+| the uncorrected PCA | 50 | 50 exactly - orthogonal by construction | 0 |
+
+DRVI's 64 dimensions behave as ~31 independent ones, Harmony's 50 as ~44 - the correction
+breaks the PCA's exact orthogonality, but only slightly. Redundant axes spread any readout
+over more of them, so **that bias runs against DRVI, not against Harmony.** Hence
+`effective_rank_of_space` and `mean_abs_dim_correlation` are columns of the comparison table
+and a subtitle of the concentration figure: the number never travels alone.
+
+**The maximum of |ρ| over 64 draws is slightly inflated against the same maximum over 50.**
+Small, and it cannot be removed without retraining DRVI at 50, which would change the run the
+whole phase is built on. It is stated instead, and it is one more reason the counts are
+reported as a percentage of the space rather than as a count.
+
+**The coordinate system is an argument of Route A, not part of it.** A1 - A5 of
+`cell_first_epi.py` - scoring, within-`(cohort, cell_type)` standardisation, the target
+region, the consensus vote, the confounder and G1 and depth checks - are computed from
+`shiao_epi.h5ad` and never see an embedding; only A6 does. So there is **no second copy of
+Route A**: `cell_first_epi.py` takes `--embedding {drvi,harmony,pca}` exactly as it takes
+`--collection`, and a control run writes only the three outputs that depend on the space -
+`dim_signature_spearman`, `dim_target_effect_size`, `dimension_row_order` - plus its own
+heatmap. Everything describing the cells stays owned by the `drvi_epi_64` run and is
+reported `[skip]`. That is the point rather than an economy: **the cells being placed are
+the same cells in both spaces**, so the only thing that varies is the axes.
+
+**Harmony is re-run on the subset**, never reused from phase 02, for the reason 04_1 re-did
+the pre-processing and 04_2 retrained DRVI: the phase-02 Harmony ran on 619,693 cells over
+HVGs dominated by immune and stromal genes. It runs here on `shiao_epi_hvg_2k.h5ad`, **the
+same 2,000 batch-aware HVGs DRVI was trained on**, so the two spaces differ by the method and
+not by the genes.
+
+**Route B and Route C are DRVI-only and are not parameterised.** They read the additive
+decoder off `embed.varm`, which no other method has; the linear analogue would be the PCA
+loadings, and Harmony corrects the embedding and *not* the loadings, so a "gene programme"
+for a harmonised PC would be the programme of the PC **before** correction. The embeddings
+written here carry no `varm` at all, so 04_6 fails on them immediately rather than quietly
+producing something that reads like a Route B result. This is also why 04_9 has its own
+driver instead of a flag on `signature_interpretation_all.sh`.
+
+### The call, and what is pinned
+
+`scib.integration.harmony`'s two lines, reproduced rather than imported the way
+`02_2_integration/integration_methods.py` reproduces scVI's:
+
+```python
+sc.tl.pca(adata)                                             # 50 components
+harmonize(adata.obsm["X_pca"], adata.obs, batch_key="cohort")
+```
+
+Everything that affects the result is kept identical to scib - the same **50** components
+(scanpy's default, i.e. the size the phase-02 Harmony ran at), `batch_key='cohort'`, and
+harmony-pytorch's own defaults for `theta`, `sigma`, `ridge_lambda` and the two iteration
+caps. The two additions are `svd_solver='arpack'` and `random_state`, pinned so the run is
+reproducible; scib leaves both to scanpy and a thesis table should not depend on that.
+
+**50 against DRVI's 64 is not a handicap on any per-readout maximum** - the PCA is nested, so
+the extra dimensions of a larger space can only add - but it *is* one on anything that
+**counts** dimensions, which is why the comparison reports the effective count and the
+percentage rather than the raw number.
+
+**The uncorrected PCA comes free.** Harmony corrects the PCA it has just computed, so writing
+that PCA out as well costs one extra UMAP and gives Route A a null arm: `--embedding pca`
+separates "the integration matters for this readout" from "any 50-dimensional linear space
+would have done". `run_harmony_epi.py` writes it by default (`--no-pca-arm` to skip);
+`embedding_control_all.sh` asks for it only under `--embeddings "harmony pca"`, so the
+default chain neither writes nor analyses an arm nobody requested.
+
+### The three numbers, per readout
+
+| Column | What it says |
+|---|---|
+| `max_abs_rho` | the strongest association any single dimension carries. This is the bar 04_7 applies (\|ρ\| ≥ 0.20), so it is what decides whether a readout has an axis at all |
+| `pct_dims_abs_rho_ge_0.2` | how much of the space clears that bar, as a percentage - a percentage because 50 and 64 dimensions must not be compared by a count |
+| **`effective_n_dims`** | inverse Simpson on the shares of Σρ², i.e. **the number of dimensions the association behaves as if it were spread over**. 1.0 is a readout living on one axis; 12 is a readout smeared across the space |
+| `effective_rank_of_space`, `mean_abs_dim_correlation` | the redundancy of the space itself, repeated on every row so the column above is never read alone (see the caveats) |
+
+The third is the disentanglement claim made measurable, and it is the same statistic
+`signature_concentration` applies to the *genes inside* a score, applied here to the
+*dimensions outside* it. Two spaces can reach the same `max_abs_rho` and still say very
+different things about whether a dimension **is** a cell state: a strong association on a
+space with an effective count of 10 is a programme the space represents but does not isolate.
+
+### Execution order
+
+| # | File | What it does | Where |
+|---|------|--------------|-------|
+| 1 | `run_harmony_epi.py` | PCA(50) + Harmony on `shiao_epi_hvg_2k.h5ad` → `embed_harmony_epi_50.h5ad` (and the uncorrected `embed_pca_epi_50.h5ad`), in DRVI's embedding format; the 04_2 figure set minus the decoder-only panels | local |
+| 2 | `../04_5_cell_first/cell_first_epi.py --embedding harmony` | the same Route A, per collection | local |
+| 3 | `compare_embeddings_epi.py` | the runs side by side: the comparison tables and the four figures. Re-derives the target region from the cached per-cell scores with `signature_common`'s own quadrant functions - not a second copy of the rule - and **checks it against the vote distribution 04_5 wrote**, stopping if they disagree: two spaces compared on two different cell sets is not a comparison. Give it the same `--high-q/--low-q/--mid-lo-q/--mid-hi-q` 04_5 was run with; `--no-multivariate` skips the CV fits, the only slow part | local |
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+cd 04_drvi_epithelial/04_9_embedding_control
+
+./embedding_control_all.sh                            # harmony, both collections, resuming
+./embedding_control_all.sh --collection scie          # one collection
+./embedding_control_all.sh --embeddings "harmony pca" # with the uncorrected null arm
+./embedding_control_all.sh --dry-run                  # print what would run
+./embedding_control_all.sh cellfirst compare          # only the named steps
+```
+
+Step names: `harmony`, `cellfirst`, `compare`; a step whose output exists is `[have]` and
+skipped, as in the other drivers. Environment `benchmark-py-r`, which already carries
+`harmony-pytorch` 0.1.8 from phase 02 - **nothing new to install**. Everything is CPU and
+local: the PCA is a couple of minutes on 74k x 2,000, `harmonize` a handful, and the UMAPs
+the rest; no scheduler.
+
+**Adding a third method** - scVI, scANVI, anything with an embedding - is one entry in the
+`EMBEDDINGS` registry of `utils/signature_common.py` plus a writer that produces
+`.X` = cells x dimensions with `var` carrying `title` / `order` / `vanished`. No step script
+changes, exactly as adding a third collection does not change one.
+
+### Outputs
+
+    tables/<coll>/dim_signature_spearman_<coll>_harmony_epi_50.csv    # Route A on Harmony
+    tables/<coll>/dim_target_effect_size_<coll>_harmony_epi_50.csv
+    tables/<coll>/dimension_row_order_<coll>_harmony_epi_50.csv       # `harmony_order`, not `drvi_order`
+    tables/<coll>/embedding_comparison_<coll>_epi_embeddings.csv      # one row per (space, readout)
+    tables/<coll>/embedding_target_effect_<coll>_epi_embeddings.csv   # the quadrant on each space
+
+    figures/04_9_embedding_control/
+    ├── pca_variance_ratio_epi_50.png     the elbow of the PCA BOTH arms come from, hence
+    │                                     at the root and not inside either method
+    ├── harmony/                          one folder per METHOD, named for the method
+    │   ├── umap_*_harmony_epi_50.png     its own UMAPs: 04_2's set, same panel names, so a
+    │   ├── dims_in_heatmap_*             Harmony figure and its DRVI counterpart differ only
+    │   ├── umap_dims_harmony_epi_50.png  by the run id in the filename
+    │   └── <coll>/dim_signature_heatmap_<coll>_harmony_epi_50.png
+    │                                     its Route A heatmap. NOT in figures/04_5_cell_first/,
+    │                                     which is the phase's own run - a Harmony heatmap next
+    │                                     to the DRVI one invites the two to be read as one
+    │                                     result set - and not loose among the comparison
+    │                                     figures either
+    ├── pca/                              the same for the null arm
+    └── <coll>/                           what is genuinely cross-method, and only that:
+        dim_signature_heatmap_side_by_side, association_concentration, max_abs_rho,
+        information_vs_alignment - question 1 against question 2, the one the control is for
+
+A third method added to the registry gets its own folder and reorganises nothing.
+
+The cross-run files carry `epi_embeddings` where a run id would be: they are about several
+runs, so naming them after one would be a lie. Their `#` header falls back to the bare run id
+for the same reason, while a control run's tables say `Harmony run harmony_epi_50` where the
+phase's own say `DRVI run drvi_epi_64`.
+
+### Result: the control does not support Route A as an argument for DRVI
+
+Run on 2026-09-01, both collections, DRVI (`drvi_epi_64`, 64 dims) against Harmony
+(`harmony_epi_50`, 50 dims), same 74,441 cells, same scores, same target region - re-derived
+and checked against the vote distribution 04_5 wrote (4,145 cells on `scie`, 3,266 on `emt`).
+
+**Question 1, does the space carry the state - Harmony, slightly.**
+
+| | `scie` (4,145 cells) | `emt` (3,266 cells) |
+|---|---|---|
+| DRVI, whole space, patient-grouped CV | 0.850 ± 0.034 | 0.774 ± 0.025 |
+| **Harmony**, same | **0.868 ± 0.029** | **0.815 ± 0.017** |
+| DRVI, best single dimension (oriented) | **0.732** (DR 27) | 0.647 (DR 45) |
+| Harmony, same | 0.685 (HD 12) | **0.676** (HD 4) |
+
+Harmony carries the target region **as well as or better than** DRVI on both collections. On
+`scie` DRVI isolates it better on one axis (0.732 vs 0.685); on `emt` it does not (0.647 vs
+0.676). Both spaces show a large gap between the whole space and their best axis - DRVI
++0.118 and +0.127, Harmony +0.183 and +0.139 - so **neither space puts this state on a single
+dimension**.
+
+**Question 2, is it on one axis - not more so on DRVI.**
+
+- `max abs rho`: DRVI is the stronger of the two on **8 of 11** readouts on `scie` and **9 of
+  12** on `emt`, with a median paired difference of **-0.032** and **-0.025** in Harmony's
+  disfavour. That is DRVI's one clear advantage, and it is small. Both spaces clear the 04_7
+  bar on all 11 `scie` readouts; on `emt` Harmony clears it on 9 and DRVI on 7.
+- **concentration, which is the disentanglement claim, goes the other way.** Median
+  `effective_n_dims` is **16.8 on DRVI against 10.1 on Harmony** (`scie`) and **20.1 against
+  13.3** (`emt`): the association is spread over *more* DRVI dimensions, not fewer. Correcting
+  for the redundancy of each space widens the gap rather than closing it - 16.8 of 30.7
+  effective DRVI directions (55%) against 10.1 of 43.6 Harmony ones (23%).
+
+**What this licenses, and what it does not.** It does not say Harmony is the better method:
+Harmony is here as the reference level and is ranked in phase 02, on what it promises. It says
+that **for these readouts, on this compartment, Route A gives no evidence for DRVI's
+axis-level interpretability** - a batch-corrected PCA reaches the same conclusions about the
+same cells, and concentrates them on fewer axes. The justification for DRVI in this phase
+therefore rests **entirely on Route B**, exactly as the README's own sentence said it did,
+and that sentence should now be read as the whole of the argument rather than the main part
+of it. Route C's convergent verdicts are unaffected: they are joint statements about a DRVI
+dimension and its decoder, and nothing here touches either.
+
+The honest way to present it: *"the interpretation is not an artefact of the embedding - it
+reproduces on an independent, non-disentangled space - and the case for DRVI is the decoder,
+not the axes."* The first half is a robustness result worth having on its own.
 
 ## Data location (`DATA_DIR`)
 
@@ -867,6 +1122,8 @@ epithelial chain is never confused with the non-immune one of 03:
         ├── shiao_epi_hvg_2k.h5ad              # 5  (DRVI input for 04_2)
         ├── shiao_epi.h5ad                     # 6  (+ leiden) - definitive epithelial object
         ├── shiao_epi_leiden_resolution_profile.csv   # 6  (resolution vs NMI)
+        ├── embed_harmony_epi_50.h5ad          # 04_9 (Harmony on the same 2k HVGs, the control)
+        ├── embed_pca_epi_50.h5ad              # 04_9 (that PCA uncorrected, the null arm)
         ├── model_drvi_epi_64.pt               # 04_2 (the trained DRVI model, one flat file)
         ├── embed_drvi_epi_64.h5ad             # 04_2 (latent space + stats + OOD/IND scores)
         ├── shiao_epi_drvi_epi_64.h5ad         # 04_2 (the 04_1 object + obsm['X_drvi'])

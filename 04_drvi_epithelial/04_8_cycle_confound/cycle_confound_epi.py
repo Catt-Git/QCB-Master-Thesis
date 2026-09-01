@@ -50,7 +50,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from scipy.stats import rankdata, spearmanr
+from scipy.stats import hypergeom, rankdata, spearmanr
 
 UTILS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "utils")
 sys.path.insert(0, UTILS_DIR)
@@ -67,6 +67,18 @@ HIGH_Q, LOW_Q = 0.75, 0.25
 CYCLE_FLAG = 0.30
 
 CYCLE_GENES_FILE = "regev_lab_cell_cycle_genes.txt"
+
+# The Regev list is 97 genes, which makes a RAW OVERLAP COUNT misleading in one direction: for a
+# 25-gene list the expected overlap by chance is 0.09, so its zero is not evidence of anything.
+# Every count below is therefore reported against its hypergeometric expectation, and the bars
+# of panel A are annotated with the fold enrichment rather than the count alone. The signal in
+# this collection is entirely that four lists are 11-35x enriched, NOT that the others are at 0.
+#
+# These hallmark sets widen the definition, as a robustness check on a 97-gene list: LIM_STEM
+# goes from "0 cycle genes" to "8, against 9.1 expected" - i.e. it does not lack them, it has
+# exactly as many as a random list its size, which is the claim that actually holds up.
+BROAD_PROLIFERATION_SETS = ("E2F Targets", "G2-M Checkpoint", "Mitotic Spindle")
+HALLMARK_JSON = "msigdb_hallmark_2020.json"
 
 
 def parse_args():
@@ -110,6 +122,18 @@ def main():
     cycle_genes = set(C.read_signature_file(cyc_path))
     print(f"cycle list  {cyc_path.name}, {len(cycle_genes)} genes (the same list 04_1 used)")
 
+    broad_genes = set(cycle_genes)
+    hall_path = C.EPI_DIR / HALLMARK_JSON
+    if hall_path.exists():
+        import json
+        hall = json.load(open(hall_path))
+        for k in BROAD_PROLIFERATION_SETS:
+            broad_genes |= set(hall.get(k, []))
+        print(f"broad set   + {', '.join(BROAD_PROLIFERATION_SETS)} = {len(broad_genes)} genes")
+    else:
+        print(f"[note] {HALLMARK_JSON} not found - the broad robustness columns fall back to "
+              f"the Regev list alone.")
+
     adata = ad.read_h5ad(C.FULL_H5AD, backed="r")
     obs = adata.obs
     for k in ("S_score", "G2M_score", "phase"):
@@ -127,31 +151,63 @@ def main():
 
     # ------------------------------------------------------------------ A + B
     gene_tbl = C.read_table("signature_gene_contribution", coll).reset_index()
+    # The hypergeometric universe is the object Route A scores on, which is what every list was
+    # mapped against in 04_3 - not the HVG set and not "all human genes".
+    universe = set(ad.read_h5ad(C.FULL_H5AD, backed="r").var_names)
     rows = []
     z_all = within_stratum_z(scores[[f"score_{r}" for r in readouts]], keys)
     z_all.columns = [c.replace("score_", "") for c in z_all.columns]
     X = np.column_stack([np.ones(len(obs)), S, G])
+    def overlap(sub, gene_set):
+        """Observed overlap, its hypergeometric expectation, fold and one-sided p."""
+        hit = sub[sub["gene"].isin(gene_set)]
+        n, K = len(sub), len(gene_set & universe)
+        exp = n * K / len(universe)
+        p = float(hypergeom.sf(len(hit) - 1, len(universe), K, n)) if len(hit) else 1.0
+        return (len(hit), exp, (len(hit) / exp if exp else np.nan), p,
+                float(hit["share_of_score_variance"].sum()))
+
     for r in readouts:
         sub = gene_tbl[gene_tbl["signature"] == r]
         if len(sub):
-            hit = sub[sub["gene"].isin(cycle_genes)]
-            n_cycle, share = len(hit), float(hit["share_of_score_variance"].sum())
+            n_cycle, exp, fold, pval, share = overlap(sub, cycle_genes)
+            n_broad, exp_b, fold_b, p_b, share_b = overlap(sub, broad_genes)
         else:
             # CytoTRACE2 and any derived readout: no gene list, so no cycle genes BY
             # CONSTRUCTION. That is what makes it the non-circular control of panel B.
-            n_cycle, share = 0, np.nan
+            n_cycle = exp = fold = n_broad = exp_b = fold_b = np.nan
+            pval = p_b = np.nan
+            share = share_b = np.nan
         y = z_all[r].to_numpy()
         beta, *_ = np.linalg.lstsq(X, y, rcond=None)
         r2 = 1.0 - ((y - X @ beta) ** 2).sum() / ((y - y.mean()) ** 2).sum()
-        rows.append({"readout": r, "axis": coll.axis_of[r],
-                     "n_genes": len(sub), "n_cycle_genes": n_cycle,
-                     "cycle_share_of_variance": share, "r2_cycle_on_score": r2,
-                     "has_gene_list": bool(len(sub))})
+        rows.append({"readout": r, "axis": coll.axis_of[r], "n_genes": len(sub),
+                     "n_cycle_genes": n_cycle, "n_cycle_expected": exp,
+                     "cycle_fold_enrichment": fold, "cycle_hypergeom_p": pval,
+                     "cycle_share_of_variance": share,
+                     "n_broad_prolif_genes": n_broad, "n_broad_expected": exp_b,
+                     "broad_fold_enrichment": fold_b, "broad_hypergeom_p": p_b,
+                     "broad_share_of_variance": share_b,
+                     "r2_cycle_on_score": r2, "has_gene_list": bool(len(sub))})
     per_readout = pd.DataFrame(rows).set_index("readout")
 
-    print("\nA/B - cycle gene content, and the variance it explains")
-    print(per_readout[["axis", "n_genes", "n_cycle_genes", "cycle_share_of_variance",
-                       "r2_cycle_on_score"]].to_string(float_format="%.4f"))
+    # Which axis the figure indicts is decided by the DATA, not hard-coded: the axis whose
+    # readouts the cycle explains most. On scie that is stemness by an order of magnitude
+    # (mean R2 0.092 against 0.009). Needed by panels B and D, so it is computed here.
+    focus_axis = (per_readout[per_readout["has_gene_list"]]
+                  .groupby("axis")["r2_cycle_on_score"].mean().idxmax())
+
+    print("\nA/B - cycle gene content against chance, and the variance it explains")
+    print(per_readout[["axis", "n_genes", "n_cycle_genes", "n_cycle_expected",
+                       "cycle_fold_enrichment", "cycle_hypergeom_p",
+                       "cycle_share_of_variance", "r2_cycle_on_score"]]
+          .to_string(float_format="%.3g"))
+    print("\n  robustness, against the broad proliferation set:")
+    print(per_readout[["n_broad_prolif_genes", "n_broad_expected", "broad_fold_enrichment",
+                       "broad_hypergeom_p", "broad_share_of_variance"]]
+          .to_string(float_format="%.3g"))
+    print("  A count of 0 is NOT a finding: a 25-gene list expects 0.09 cycle genes by chance.\n"
+          "  Read the fold column, and read a list at ~1x as carrying no more cycle than random.")
 
     # -------------------------------------------------------------------- C
     # One target per PLANE, exactly as 04_5's `define_target` builds it. Going through the
@@ -223,8 +279,6 @@ def main():
     # whose readouts the cycle explains most. On scie that is stemness by an order of magnitude
     # (mean R2 0.092 against 0.009); on another collection it will name whichever axis is most
     # exposed, which is the one the panel exists to indict.
-    listed_only = per_readout[per_readout["has_gene_list"]]
-    focus_axis = listed_only.groupby("axis")["r2_cycle_on_score"].mean().idxmax()
     focus = [r for r in coll.by_axis(focus_axis) if r in sp.columns]
     rest = [r for r in sp.columns if r not in focus]
     print(f"\n    panel D focus axis: '{focus_axis}' "
@@ -264,14 +318,19 @@ def main():
     vals = listed.loc[order_a, "cycle_share_of_variance"] * 100
     ax.barh(range(len(order_a)), vals, color=[axis_colors[listed.loc[r, "axis"]] for r in order_a])
     for i, r in enumerate(order_a):
-        ax.text(vals.iloc[i] + .18, i, f"{int(listed.loc[r,'n_cycle_genes'])}/{int(listed.loc[r,'n_genes'])}",
-                va="center", fontsize=7.5, color="0.35")
+        n_c, n_g = int(listed.loc[r, "n_cycle_genes"]), int(listed.loc[r, "n_genes"])
+        fold, e = listed.loc[r, "cycle_fold_enrichment"], listed.loc[r, "n_cycle_expected"]
+        # A raw count means nothing without its expectation: 0 of 25 is the expected outcome,
+        # 28 of 369 is 21x chance. The annotation carries whichever of the two the reader needs.
+        note = f"{n_c}/{n_g} · {fold:.0f}× chance" if n_c else f"{n_c}/{n_g} · {e:.1f} expected"
+        ax.text(vals.iloc[i] + .18, i, note, va="center", fontsize=7.2, color="0.35")
     ax.set_yticks(range(len(order_a)))
     ax.set_yticklabels(order_a, fontsize=8)
     ax.invert_yaxis()
     ax.set_xlabel("% of the score's variance carried by Regev cell-cycle genes")
-    ax.set_xlim(0, max(vals.max() * 1.28, 1))
-    ax.set_title("A · The lists themselves contain cycle genes", fontsize=10.5, loc="left")
+    ax.set_xlim(0, max(vals.max() * 1.42, 1))
+    ax.set_title("A · The embryonic lists are built partly out of cycle genes",
+                 fontsize=10.5, loc="left")
 
     # --- B: content vs variance explained
     ax = axes[0, 1]
@@ -293,10 +352,12 @@ def main():
     if at_zero:
         y_hi = per_readout.loc[at_zero, "r2_cycle_on_score"].max()
         n_imm = sum(1 for r in at_zero if coll.axis_of[r] != "stemness")
-        label = (f"{n_imm} {'list' if n_imm == 1 else 'lists'} off the stemness axis"
-                 + (f"\n+ {', '.join(r for r in at_zero if coll.axis_of[r] == 'stemness')}"
+        fold_hi = per_readout.loc[at_zero, "broad_fold_enrichment"].max()
+        label = (f"{n_imm} {'list' if n_imm == 1 else 'lists'} off the {focus_axis} axis"
+                 + (f"\n+ {', '.join(r for r in at_zero if coll.axis_of[r] == focus_axis)}"
                     if n_imm < len(at_zero) else "")
-                 + f"\nno cycle genes at all, R\u00b2 \u2264 {y_hi:.3f}")
+                 + f"\ncycle content at chance ({fold_hi:.1f}\u00d7 or less),"
+                   f"\nR\u00b2 \u2264 {y_hi:.3f}")
         ax.annotate(label, xy=(0.05, y_hi), xytext=(2.1, y_hi + .030),
                     fontsize=7.4, color="0.35", linespacing=1.5,
                     arrowprops=dict(arrowstyle="-", color="0.6", lw=.9,
@@ -360,7 +421,7 @@ def main():
                     color=CYC_C, ha="right")
     ax.set_xlabel("cycle loading of the dimension:  max(|ρ S_score|, |ρ G2M_score|)")
     ax.set_ylabel("strongest |ρ| with a readout")
-    ax.set_title("D · The cycle dimensions are convergent stemness rows", fontsize=10.5, loc="left")
+    ax.set_title(f"D · Cycle loading against the {focus_axis} signal", fontsize=10.5, loc="left")
     ax.legend(fontsize=7.4, loc="upper right", framealpha=.92)
     ax.text(.02, .96, f"ρ(cycle loading, stemness) = {rho_stem:+.3f}\n"
                       f"ρ(cycle loading, other)    = {rho_other:+.3f}",
