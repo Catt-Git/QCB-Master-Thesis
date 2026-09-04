@@ -11,9 +11,8 @@ embedding from disk instead of recomputing them.
 
 Nothing is parameterized differently from the notebook: same input, same
 architecture (encoder [256, 128] / decoder [128, 256], dispersion='gene-batch'),
-`batch_key='cohort'`, `SEED=123`, the same 400-epoch cap with early stopping
-after 50 epochs without improvement, and the same three outputs, named from the
-run id `drvi_epi_<n_latent>`:
+`batch_key='cohort'`, `SEED=123`, the same 400 full epochs with no early stopping,
+and the same three outputs, named from the run id `drvi_epi_<n_latent>`:
 
     04_epi/model_<run_id>.pt              the trained model, one flat file per run
     04_epi/embed_<run_id>.h5ad            latent space + dimension stats + OOD/IND scores
@@ -49,6 +48,7 @@ Usage:
   python run_drvi_epi.py                 # n_latent 64, the run of this phase
   python run_drvi_epi.py --n-latent 32    # another size, side by side with it
   python run_drvi_epi.py --overwrite      # retrain and rewrite everything
+  python run_drvi_epi.py --early-stopping # stop early instead (see --epochs)
 
 On the cluster the same script is submitted by submit_drvi_epi.slurm, which
 trains on CPU (the cluster has no GPU) and takes its arguments unchanged.
@@ -103,8 +103,14 @@ def parse_args():
                    help="latent dimensions; the run id follows it [default: 64]")
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--epochs", type=int, default=400,
-                   help="max epochs, the maximum suggested in the literature; "
-                        "early stopping usually fires first [default: 400]")
+                   help="epochs to train; scvi-tools warms the KL term up over exactly "
+                        "this many by default [default: 400]")
+    p.add_argument("--early-stopping", action="store_true",
+                   help="stop after 50 epochs without improvement. Off by default: the KL "
+                        "warmup lasts --epochs epochs, so a run that stops earlier never "
+                        "trains at full KL weight, and it is that KL pressure that makes "
+                        "the unused latent dimensions vanish. Pair it with a shorter warmup "
+                        "if you turn it on")
     p.add_argument("--data-dir", default=os.environ.get("DATA_DIR"),
                    help="directory holding the datasets [default: $DATA_DIR]")
     p.add_argument("--fig-dir", default=None,
@@ -348,12 +354,12 @@ def main():
     # Train only if the model is not on disk yet, or if --overwrite asks for a
     # retrain. The training uses the GPU if one is available, otherwise the CPU.
     if args.overwrite or not model_path.exists():
-        print(f">>> training {run_id}: up to {args.epochs} epochs, "
-              f"early stopping after 50 without improvement", flush=True)
+        print(f">>> training {run_id}: {args.epochs} epochs, early stopping "
+              f"{'on (patience 50)' if args.early_stopping else 'off'}", flush=True)
         model.train(
             max_epochs=args.epochs,
-            early_stopping=True,             # activate early stopping
-            early_stopping_patience=50,      # stop after 50 epochs without improvement
+            early_stopping=args.early_stopping,  # off: the KL warmup needs all --epochs
+            early_stopping_patience=50,          # only read when --early-stopping is given
         )
         save_model(model, model_path)
         print(f"[model] saved to {model_path}", flush=True)

@@ -1,0 +1,14 @@
+# jaccard | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_32 | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+,EMT_B_EPITHELIAL,EMT_B_HYBRID,EMT_B_MESENCHYMAL,EMT_A_EPITHELIAL,EMT_A_HYBRID,EMT_A_MESENCHYMAL,EMT_C_EPITHELIAL,EMT_C_HYBRID,EMT_C_MESENCHYMAL
+EMT_B_EPITHELIAL,1.0,0.0,0.0,0.5556,0.0,0.0,0.7188,0.0169,0.0
+EMT_B_HYBRID,0.0,1.0,0.0392,0.0,0.6,0.0263,0.0435,0.4722,0.0339
+EMT_B_MESENCHYMAL,0.0,0.0392,1.0,0.0,0.0227,0.5758,0.0,0.1,0.7619
+EMT_A_EPITHELIAL,0.5556,0.0,0.0,1.0,0.0,0.0,0.4333,0.0213,0.0
+EMT_A_HYBRID,0.0,0.6,0.0227,0.0,1.0,0.0,0.0526,0.3235,0.0192
+EMT_A_MESENCHYMAL,0.0,0.0263,0.5758,0.0,0.0,1.0,0.0,0.0833,0.4634
+EMT_C_EPITHELIAL,0.7188,0.0435,0.0,0.4333,0.0526,0.0,1.0,0.0517,0.0
+EMT_C_HYBRID,0.0169,0.4722,0.1,0.0213,0.3235,0.0833,0.0517,1.0,0.0882
+EMT_C_MESENCHYMAL,0.0,0.0339,0.7619,0.0,0.0192,0.4634,0.0,0.0882,1.0

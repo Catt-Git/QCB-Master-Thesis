@@ -1,0 +1,18 @@
+,epithelial (post-CNV) subset
+cell set,epi
+cells,73353
+genes,26379
+cohorts,31
+post-CNV labels (cell_type),9
+pre-CNV labels (cell_type_01_4),31
+HVGs,2000
+PCs,50
+leiden NMI target,cell_type
+leiden resolution (selected),0.3
+leiden NMI (selected),0.4025
+leiden clusters (selected),30
+cycling cells (S + G2M),46.0%
+median genes per cell,1292
+median counts per cell,2870
+median pct_counts_mt,4.11
+median cnv_score,0.002

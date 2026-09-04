@@ -1,0 +1,14 @@
+# coverage | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_32 | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+signature,axis,primary,provenance,n_genes,n_mapped,mapped_fraction,n_in_hvg_background,hvg_fraction_of_mapped
+EMT_B_EPITHELIAL,epithelial,True,"Collaborator list B (validated + non-validated), epithelial markers; primary triad, the >=2-of-3 consensus of A/B/C",28,27,0.9642857142857143,5,0.18518518518518517
+EMT_B_HYBRID,hybrid,True,"Collaborator list B, hybrid/partial-EMT markers; primary triad, the >=2-of-3 consensus of A/B/C",20,20,1.0,6,0.3
+EMT_B_MESENCHYMAL,mesenchymal,True,"Collaborator list B, mesenchymal markers; primary triad, the >=2-of-3 consensus of A/B/C",33,33,1.0,15,0.45454545454545453
+EMT_A_EPITHELIAL,epithelial,False,"Collaborator list A (experimentally validated only), epithelial markers; strict subset of B, its validated core - a sensitivity analysis on the non-validated genes, not a replicate",15,15,1.0,2,0.13333333333333333
+EMT_A_HYBRID,hybrid,False,"Collaborator list A, hybrid/partial-EMT markers; strict subset of B, its validated core - a sensitivity analysis, not a replicate",12,12,1.0,5,0.4166666666666667
+EMT_A_MESENCHYMAL,mesenchymal,False,"Collaborator list A, mesenchymal markers; strict subset of B, its validated core - a sensitivity analysis, not a replicate",19,19,1.0,11,0.5789473684210527
+EMT_C_EPITHELIAL,epithelial,False,"Collaborator list C (Tomas), epithelial markers, mouse symbols mapped to human; the one separately curated list, hence the only true robustness replicate of B",32,28,0.875,4,0.14285714285714285
+EMT_C_HYBRID,hybrid,False,"Collaborator list C (Tomas), hybrid/partial-EMT markers, mouse symbols mapped to human; separately curated, the only true robustness replicate of B",34,33,0.9705882352941176,10,0.30303030303030304
+EMT_C_MESENCHYMAL,mesenchymal,False,"Collaborator list C (Tomas), mesenchymal markers, mouse symbols mapped to human; separately curated, the only true robustness replicate of B",43,41,0.9534883720930233,17,0.4146341463414634

@@ -106,19 +106,34 @@ The R methods also write a `02_integration/<run_id>.rds` intermediate, deleted o
 | `04_epi/shiao_epi_drvi_epi_<N>.h5ad` | 04_2, the 04_1 object (all genes) + `obsm['X_drvi']` |
 | **`signatures/*.txt`** | **input**, not written by any phase: the curated gene lists from the collaborator, one symbol per line, read by 04_3 via `SIG_DIR` (default `$DATA_DIR/signatures/`). Versioned in git, like `regev_lab_cell_cycle_genes.txt`. Two collections live here: the 11 stemness/immunogenicity lists (`--collection scie`) and the 9 `EMT_[ABC]_*` ones (`--collection emt`), the latter documented in `signatures/EMT_LISTS_NOTES.md`. |
 
-### 05_epi_treatment
+### 05_drvi_tumoral_epi
+
+`05_tum/` holds everything phase 05 writes. The first block is 05_1 (inferCNV); the rest is the
+04 procedure redone on the malignant subset, and lands here as 05_2 onwards fills it in.
+
+| Path | Step |
+|---|---|
+| `05_tum/gene_order_hg38_gencode_v27.txt` | 05_1, downloaded once from the inferCNV authors |
+| `05_tum/cohort_census.csv` | 05_1, what went into each per-patient run |
+| `05_tum/input/<cohort>/` | 05_1, `counts.mtx` + `genes.tsv` + `barcodes.tsv` + `annotations.tsv` |
+| `05_tum/work/<cohort>/` | 05_1, inferCNV's working directory - **deleted on success**, 1-3 GB while it exists |
+| `05_tum/summary/<cohort>_cnv.csv` | 05_1, one row per cell: group, `cnv_score`, `cnv_corr`, `chr1`..`chr22` |
+| **`05_tum/cnv_status.csv`** | 05_1, the call - one row per cell of `shiao.h5ad` |
+| **`05_tum/cell_annotation_cnv.csv`** | 05_1, `cell_type_cnv` after the CellTypist re-run - the table 05_2 joins |
+
+### 06_epi_treatment
 
 One folder per treatment split, `<split>` being `base`, `pd1` or `rtpd1`.
 
 | Path | Step |
 |---|---|
-| `05_epi_treat/<split>/shiao_epi_<split>_raw.h5ad` | 05_1, the split of `04_epi/shiao_epi_raw.h5ad` + refilter |
-| `05_epi_treat/<split>/shiao_epi_<split>_norm.h5ad`, `..._norm_cc.h5ad`, `..._reduced.h5ad` | 05_1 |
-| `05_epi_treat/<split>/shiao_epi_<split>_hvg_2k_list.csv` / `shiao_epi_<split>_hvg_2k.h5ad` | 05_1, the DRVI input, HVGs reselected inside the split |
-| **`05_epi_treat/<split>/shiao_epi_<split>.h5ad`** | 05_1, + leiden - the definitive object of the split |
-| `05_epi_treat/<split>/model_drvi_epi_<split>_<N>.pt` | 05_2, the trained DRVI model, one flat file per run |
-| `05_epi_treat/<split>/embed_drvi_epi_<split>_<N>.h5ad` | 05_2, latent space + per-dimension stats + OOD/IND scores - what `drvi_treat.ipynb` reads |
-| `05_epi_treat/<split>/shiao_epi_<split>_drvi_epi_<split>_<N>.h5ad` | 05_2, the 05_1 object (all genes) + `obsm['X_drvi']` |
+| `06_epi_treat/<split>/shiao_epi_<split>_raw.h5ad` | 06_1, the split of `04_epi/shiao_epi_raw.h5ad` + refilter |
+| `06_epi_treat/<split>/shiao_epi_<split>_norm.h5ad`, `..._norm_cc.h5ad`, `..._reduced.h5ad` | 06_1 |
+| `06_epi_treat/<split>/shiao_epi_<split>_hvg_2k_list.csv` / `shiao_epi_<split>_hvg_2k.h5ad` | 06_1, the DRVI input, HVGs reselected inside the split |
+| **`06_epi_treat/<split>/shiao_epi_<split>.h5ad`** | 06_1, + leiden - the definitive object of the split |
+| `06_epi_treat/<split>/model_drvi_epi_<split>_<N>.pt` | 06_2, the trained DRVI model, one flat file per run |
+| `06_epi_treat/<split>/embed_drvi_epi_<split>_<N>.h5ad` | 06_2, latent space + per-dimension stats + OOD/IND scores - what `drvi_treat.ipynb` reads |
+| `06_epi_treat/<split>/shiao_epi_<split>_drvi_epi_<split>_<N>.h5ad` | 06_2, the 06_1 object (all genes) + `obsm['X_drvi']` |
 
 The three splits together are the 74,441 cells of `04_epi/shiao_epi.h5ad` minus the per-split
 cohort drops, so this folder roughly doubles the epithelial footprint on disk.

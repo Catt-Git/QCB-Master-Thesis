@@ -1,0 +1,33 @@
+name: infercnv-r
+# Isolated R environment for inferCNV (04_drvi_epithelial/04_0_infercnv) and nothing else.
+#
+# Why it is separate. `benchmark-py-r` already carries R 4.5.3 with the Bioconductor stack
+# that scran/batchelor need, and bioconductor-infercnv builds against the same R 4.5
+# (build string r45), so on paper it would install there. It is kept apart anyway:
+# inferCNV pulls ~40 Bioconductor packages of its own (SingleCellExperiment, edgeR,
+# limma, HiddenMarkov, coin, fitdistrplus, ...) and letting the solver re-pin those
+# beside scran and batchelor risks the main local environment for one step of one phase.
+# Same reasoning as `cytotrace2-py.yml`, and the same low cost: this step talks to the
+# rest of the thesis through flat files only.
+#
+# R only, on purpose. The Python half of 04_0 (exporting the per-patient matrices,
+# reading the residuals back, calling malignant status, re-running CellTypist) runs in
+# `benchmark-py-r`, which already has anndata, scanpy and celltypist 1.7.1. Duplicating
+# that stack here would add ~2 GB for no gain; `infercnv_all.sh` activates one env per
+# step.
+#
+# jags + r-rjags are NOT optional. infercnv::run() with HMM_type='i6' (the default HMM,
+# and what 04_0 uses to turn residuals into discrete CNV states) calls out to JAGS through
+# rjags for the Bayesian mixture that filters low-confidence calls. Without them run()
+# fails part-way through, after the expensive smoothing has already been computed.
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.5
+  - bioconductor-infercnv=1.26.0
+  - r-rjags
+  - jags
+  - r-optparse
+  - r-matrix
+  - r-jsonlite

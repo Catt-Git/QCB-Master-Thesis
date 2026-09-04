@@ -1,0 +1,15 @@
+# coverage | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_32 | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+signature,axis,primary,provenance,n_genes,n_mapped,mapped_fraction,n_in_hvg_background,hvg_fraction_of_mapped
+HALLMARK_IFNA,immune,True,"Interferon Alpha response, MSigDB Hallmark",97,96,0.9896907216494846,48,0.5
+HALLMARK_IFNG,immune,True,"Interferon Gamma response, MSigDB Hallmark",200,197,0.985,95,0.48223350253807107
+ISDS,immune,True,"IFN-Stem Cell-Down signature, PMC5481166",27,27,1.0,19,0.7037037037037037
+KEGG_APM,immune,True,"Antigen Presentation Machinery, KEGG",88,62,0.7045454545454546,27,0.43548387096774194
+IMMUNOGENIC_CONSENSUS,immune,True,"Curated by the lab from the KEGG APM signature, retaining only immunogenic genes and immunomodulators; primary immune readout",25,25,1.0,15,0.6
+BENPORATH_ES1,stemness,True,MSigDB BENPORATH_ES_1,378,368,0.9735449735449735,77,0.20923913043478262
+ESC_ASSOU,stemness,True,"PMC1906587, Table S3",1066,800,0.7504690431519699,134,0.1675
+ESC_WONG,stemness,True,MSigDB WONG_EMBRYONIC_STEM_CELL_CORE,335,296,0.8835820895522388,64,0.21621621621621623
+LIM_STEM,stemness,True,MSigDB LIM_MAMMARY_STEM_CELL_UP,479,465,0.9707724425887265,143,0.30752688172043013
+FMASC,stemness,True,"Fetal mammary stem cells, PMC3277444, Supplementary Table 2",1882,1689,0.8974495217853348,306,0.1811722912966252

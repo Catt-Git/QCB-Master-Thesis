@@ -34,8 +34,16 @@ back with `pd.read_csv(path, comment='#', index_col=0)`. The two 04_3 figures ar
 nothing there for the caveat to qualify.
 
 Any step that would require malignant status to be meaningful is not in this phase, and the
-question "is this a tumour cell state?" cannot be answered from these data. The same caveat
-carries over unchanged into 05.
+question "is this a tumour cell state?" cannot be answered from these data.
+
+> **This caveat is a statement about this phase, and it stays true of it.** The question it
+> refuses is answered in [05_drvi_tumoral_epi](../05_drvi_tumoral_epi/), which runs inferCNV
+> against a per-patient immune reference, calls `malignant` / `non_malignant` per cell, re-runs
+> the 01_4 CellTypist annotation on the non-malignant cells only, and then redoes this
+> phase's procedure on that basis. Phase 05 does not modify anything here and shares no output
+> with it: 04 and 05 are two branches off `shiao.h5ad`, and every number and figure in this
+> phase comes from the mixed epithelium described above. Read them as such, and read 05 for the
+> version that knows which cells are tumour.
 
 ## Repository layout
 

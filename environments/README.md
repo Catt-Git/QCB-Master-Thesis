@@ -1,6 +1,6 @@
 # environments
 
-Conda/mamba environment files used across the thesis. Four environments, each with a
+Conda/mamba environment files used across the thesis. Five environments, each with a
 distinct role.
 
 ## The environments
@@ -11,6 +11,7 @@ distinct role.
 | `benchmark-hpc.yml` | `benchmark-hpc` (on the HPC used for the thesis: `catalano_env`) | **Cluster environment.** Same scientific stack but CPU-only (no CUDA pin) and with **pinned pip versions** (`scib==1.1.7`, `drvi-py==0.2.7`) for reproducible SLURM jobs |
 | `scgen-py.yml` | `scgen-py` | **Isolated legacy env for scGen only.** Old pinned deps (Python 3.9, `anndata 0.10`, `scanpy 1.9`, `torch 2.0`, `scvi-tools 0.19.0`, `scgen 2.1.0`) that conflict with the main stack, so scGen gets its own env. |
 | `cytotrace2-py.yml` | `cytotrace2-py` | **Isolated env for CytoTRACE2 only** (`04_drvi_epithelial/04_4_cytotrace2`). `cytotrace2-py` pins `numpy<2.0.0`, so it cannot live beside the main stack; CPU-only torch, Python 3.11. |
+| `infercnv-r.yml` | `infercnv-r` | **Isolated env for inferCNV only** (`05_drvi_tumoral_epi/05_1_infercnv`). R 4.5 + `bioconductor-infercnv` + JAGS. R only: the Python half of that step runs in `benchmark-py-r`. |
 
 ## Usage
 
@@ -27,6 +28,16 @@ Then run the code as described in each phase's README (`export DATA_DIR=...` fir
 - Cluster / SLURM: `benchmark-hpc`.
 - scGen integration method only: `scgen-py`.
 - CytoTRACE2 (04_4) only: `cytotrace2-py`.
+- inferCNV (05_1) only: `infercnv-r`. That step runs its Python half in `benchmark-py-r` and
+  switches environment per stage; `05_1_infercnv/infercnv_all.sh` does it with `conda run`.
+
+> **Why inferCNV is not in `benchmark-py-r`.** Unlike the two cases below this is not a
+> conflict that was observed - it is one that was not risked. `benchmark-py-r` already carries
+> R 4.5.3 and `bioconductor-infercnv` builds against R 4.5, so the solver would probably have
+> managed it; but inferCNV pulls ~40 Bioconductor packages of its own (SingleCellExperiment,
+> edgeR, limma, HiddenMarkov, coin, fitdistrplus, ...) and letting it re-pin those beside
+> `scran` and `batchelor` puts the main local environment - which every phase depends on - at
+> the mercy of one step of one phase. 2.2 GB is a cheap alternative.
 
 > **Do not `pip install cytotrace2-py` into `benchmark-py-r`.** It declares `numpy<2.0.0` as a
 > hard requirement, so pip does not refuse - it downgrades the main stack under you (numpy

@@ -1,0 +1,15 @@
+# jaccard | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_32 | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+,HALLMARK_IFNA,HALLMARK_IFNG,ISDS,KEGG_APM,IMMUNOGENIC_CONSENSUS,BENPORATH_ES1,ESC_ASSOU,ESC_WONG,LIM_STEM,FMASC
+HALLMARK_IFNA,1.0,0.3258,0.2812,0.0464,0.0614,0.0022,0.0056,0.0,0.0018,0.0022
+HALLMARK_IFNG,0.3258,1.0,0.1256,0.0571,0.0622,0.0089,0.0101,0.002,0.0122,0.008
+ISDS,0.2812,0.1256,1.0,0.023,0.04,0.0025,0.0024,0.0,0.0,0.0
+KEGG_APM,0.0464,0.0571,0.023,1.0,0.4032,0.007,0.0058,0.0028,0.0,0.0006
+IMMUNOGENIC_CONSENSUS,0.0614,0.0622,0.04,0.4032,1.0,0.0,0.0012,0.0,0.0,0.0
+BENPORATH_ES1,0.0022,0.0089,0.0025,0.007,0.0,1.0,0.341,0.1012,0.0134,0.0479
+ESC_ASSOU,0.0056,0.0101,0.0024,0.0058,0.0012,0.341,1.0,0.1346,0.0268,0.0794
+ESC_WONG,0.0,0.002,0.0,0.0028,0.0,0.1012,0.1346,1.0,0.012,0.036
+LIM_STEM,0.0018,0.0122,0.0,0.0,0.0,0.0134,0.0268,0.012,1.0,0.0346
+FMASC,0.0022,0.008,0.0,0.0006,0.0,0.0479,0.0794,0.036,0.0346,1.0
