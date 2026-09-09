@@ -27,6 +27,7 @@
 #   ./infercnv_all.sh --force                  # re-run everything, overwriting
 #   ./infercnv_all.sh --dry-run                # print what would run, do nothing
 #   ./infercnv_all.sh --threads 16             # threads for infercnv::run() [8]
+#   ./infercnv_all.sh --leiden-resolution 0.01 # subcluster granularity [0.005]
 #   ./infercnv_all.sh --cohorts Patient52 Patient16   # only these cohorts
 #   ./infercnv_all.sh prepare                  # only stage 1
 #   ./infercnv_all.sh infercnv                 # only stage 2
@@ -44,6 +45,12 @@ LOG_DIR="$SCRIPT_DIR/logs"
 PREP_ENV="${PREP_ENV:-benchmark-py-r}"
 INFERCNV_ENV="${INFERCNV_ENV:-infercnv-r}"
 THREADS="${THREADS:-8}"
+# Operating leiden resolution for the per-patient subclustering. 0.005 comes out of
+# sensitivity_resolution.sh: across 0.005-0.05 the per-patient verdict does not move at
+# all, but at the coarse end 98-100% of epithelial cells sit in subclusters of >= 20
+# cells against 23-57% at 0.05, where the median the verdict is taken on stops being an
+# aggregate. See ../tables/05_1_infercnv/sensitivity/.
+RESOLUTION="${RESOLUTION:-0.005}"
 
 FORCE=0; DRY_RUN=0; HMM=0
 COHORTS=()
@@ -54,6 +61,7 @@ while [ $# -gt 0 ]; do
     --dry-run|-n) DRY_RUN=1; shift ;;
     --hmm) HMM=1; shift ;;
     --threads) THREADS="$2"; shift 2 ;;
+    --leiden-resolution) RESOLUTION="$2"; shift 2 ;;
     --cohorts) shift; while [ $# -gt 0 ] && [[ "$1" != -* ]]; do COHORTS+=("$1"); shift; done ;;
     -h|--help) sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 1 ;;
@@ -81,7 +89,7 @@ echo "DATA_DIR    : $DATA_DIR"
 echo "output dir  : $CNV_DIR"
 echo "FIG_DIR     : $FIG_DIR"
 echo "environments: $PREP_ENV (prepare) | $INFERCNV_ENV (inferCNV)"
-echo "threads     : $THREADS | HMM: $HMM"
+echo "threads     : $THREADS | HMM: $HMM | leiden resolution: $RESOLUTION"
 [ "$DRY_RUN" -eq 0 ] && echo "log         : $LOG_FILE"
 echo
 df -h "$DATA_DIR" | tail -1
@@ -129,7 +137,7 @@ if run_stage infercnv; then
       echo "[have] $cohort: $(basename "$summary") already exists, skipping"
       n_have=$((n_have + 1)); continue
     fi
-    r_args=(--cohort "$cohort" --threads "$THREADS")
+    r_args=(--cohort "$cohort" --threads "$THREADS" --leiden-resolution "$RESOLUTION")
     [ "$FORCE" -eq 1 ] && r_args+=(--force)
     [ "$HMM" -eq 1 ] && r_args+=(--hmm)
     if [ "$DRY_RUN" -eq 1 ]; then

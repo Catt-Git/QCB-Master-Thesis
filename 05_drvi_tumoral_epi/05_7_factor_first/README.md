@@ -16,9 +16,17 @@ readable gene-level footprint. Without this stage any integration method would h
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 factor_first_tum.py                      # scie, the default
 python3 factor_first_tum.py --collection emt     # the EMT lists
+python3 factor_first_tum.py --collection gavish  # the 27 TNBC-relevant metaprograms
+python3 factor_first_tum.py --collection gavish --all-metaprograms  # all 40 instead
+N_LATENT=64 python3 factor_first_tum.py          # read the drvi_tum_64 run instead
 python3 factor_first_tum.py --n-top-genes 500    # a deeper list
 python3 factor_first_tum.py --no-hallmark        # custom signatures only, fully offline
 ```
+
+`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32` by
+default, `N_LATENT=64` for `drvi_tum_64`, `CELL_SET=epi HVG_SET=nomt N_LATENT=64` for
+`drvi_epicnv_64_nomt`. See [the phase README](../README.md#which-run-05_4---05_8-read); the
+run id is in the name of everything written.
 
 Needs `05_4` (the `.gmt`), `05_3` (the embedding) and `05_6` (the row order). No GPU, no model:
 the genes × dimension-direction table is rebuilt from `embed.varm` alone.
@@ -72,9 +80,9 @@ rather than acted on.
 ## What comes out
 
 ```
-../tables/<collection>/dim_geneset_signed_significance_*.csv   the matrix 05_8 joins
-../tables/<collection>/factor_first_significant_*.csv          every significant pair
-../tables/<collection>/factor_first_hallmark_significant_*.csv the sanity-check library
+../tables/<collection>/<run_id>/dim_geneset_signed_significance_*.csv   the matrix 05_8 joins
+../tables/<collection>/<run_id>/factor_first_significant_*.csv          every significant pair
+../tables/<collection>/<run_id>/factor_first_hallmark_significant_*.csv the sanity-check library
 $DATA_DIR/05_tum/factor_first_top<N>_<collection>_<run_id>.tsv every pair tested, unfiltered
 $DATA_DIR/05_tum/factor_first_top<N>_genes_<run_id>.tsv        the top-gene lists themselves
 ```

@@ -11,19 +11,42 @@ drop below 1,272 cells in any cohort).
 
 What each per-patient run contains, and why:
 
-  reference  ref_tcell    up to N_REF_PER_GROUP T/NK cells      diploid baseline
-             ref_myeloid  up to N_REF_PER_GROUP myeloid cells   diploid baseline
-  observed   epi          every epithelial cell of the cohort   what we want to call
-             stromal      up to N_STROMAL fibro/vascular cells  internal negative control
+  reference  ref_tcell       up to N_REF_PER_GROUP T/NK cells      diploid baseline
+             ref_myeloid     up to N_REF_PER_GROUP myeloid cells   diploid baseline
+  observed   epi             every epithelial cell of the cohort   what we want to call
+             stromal         up to N_STROMAL fibro/endo/PVL cells  the null the cut comes from
+             immune_heldout  up to N_IMMUNE_HELDOUT immune cells   specificity control
 
 Two reference groups rather than one pooled group is inferCNV's own recommendation: with
 `ref_group_names` of length > 1 the residual of a gene is taken against the *bounds* of
-the per-group means, so a gene that is simply higher in myeloid cells than in T cells
-cannot masquerade as a gain. The stromal block is not a reference: it is passed as an
+the per-group means (`min` and `max` over those means; anything an observed cell has
+INSIDE that band becomes exactly zero), so a gene that is simply higher in myeloid cells
+than in T cells cannot masquerade as a gain.
+
+Why two and not more. This was measured rather than assumed, on Patient16 (8,028
+epithelial cells, tumour-rich) and Patient52 (9,243, no detectable tumour), holding the
+observations and the gene set fixed and changing only the reference: one pooled immune
+group, T/NK + myeloid, T + B, and five separate immune subtypes. The AUC separating
+epithelium from the stromal null moved by 0.003 across all four on Patient16 (0.972 -
+0.975) and stayed at chance on Patient52 (0.45 - 0.53) for every one of them. Splitting
+finer is not free - five groups widen the band enough to blank 1.76% of genes outright
+against 0.84% for two, and push the epithelium sitting within 1.5x of its own cut from
+12.5% to 23.1% - so the split stops at two. T + B is worse on every metric and would put
+the band on the immunoglobulin loci; B and plasma stay out of the reference entirely.
+
+The stromal block is not a reference: it is passed as an
 OBSERVATION so that it goes through exactly the same smoothing and denoising as the
-epithelium, and its CNV score distribution becomes a free specificity check - fibroblasts
-and endothelium are not the malignant compartment in a carcinoma, so if they score like
-the epithelium the call is measuring something other than aneuploidy.
+epithelium, and its CNV score distribution is what the per-cohort cut is a quantile of -
+fibroblasts and endothelium are not the malignant compartment in a carcinoma, so if they
+score like the epithelium the call is measuring something other than aneuploidy.
+
+`immune_heldout` is the specificity control, and it exists because the reference cannot
+be one. `cnv_score` is a residual taken against the mean of the reference cells, so those
+cells sit at ~0 as a matter of arithmetic and their crossing rate proves nothing. These
+500 are immune cells drawn BEFORE the reference and removed from its pool: diploid, never
+used to centre anything, never used to set a threshold. Measured across eight runs
+spanning a 95%-malignant cohort and a 0%-malignant one, they were called 0.00% of the
+time.
 
 Per patient, not pooled. Every published application of inferCNV to a multi-patient
 cohort runs one patient at a time, for the same reason 04_4 scores CytoTRACE2 per
@@ -84,11 +107,17 @@ EPITHELIAL = {
     "Lumsec-myo", "Lumsec-prol",
     "basal",
 }
-STROMAL = {
-    "Fibro-SFRP4", "Fibro-major", "Fibro-matrix", "Fibro-prematrix",
+# The stromal block is drawn STRATIFIED over these three, not uniformly over their union;
+# stratified_sample() below says why. STROMAL stays defined as their union so the
+# vocabulary assertion in main() is unaffected.
+STROMAL_FIBRO = {"Fibro-SFRP4", "Fibro-major", "Fibro-matrix", "Fibro-prematrix"}
+STROMAL_ENDO = {
     "Lymph-immune", "Lymph-major", "Lymph-valve1", "Lymph-valve2",
-    "Vas-arterial", "Vas-capillary", "Vas-venous", "pericytes", "vsmc",
+    "Vas-arterial", "Vas-capillary", "Vas-venous",
 }
+STROMAL_PVL = {"pericytes", "vsmc"}
+STROMAL_STRATA = {"fibro": STROMAL_FIBRO, "endo": STROMAL_ENDO, "pvl": STROMAL_PVL}
+STROMAL = STROMAL_FIBRO | STROMAL_ENDO | STROMAL_PVL
 T_NK = {
     "CD4-Tem", "CD4-Th", "CD4-Th-like", "CD4-Treg", "CD4-activated", "CD4-naive",
     "CD8-Tem", "CD8-Trm", "CD8-activated", "GD", "NK", "NK-ILCs", "NKT", "T_prol",
@@ -106,17 +135,23 @@ B_PLASMA = {"b_naive", "bmem_switched", "bmem_unswitched", "plasma_IgA", "plasma
 
 GROUP_EPI = "epi"
 GROUP_STROMAL = "stromal"
+GROUP_HELDOUT = "immune_heldout"
 GROUP_REF_T = "ref_tcell"
 GROUP_REF_MYE = "ref_myeloid"
 REFERENCE_GROUPS = (GROUP_REF_T, GROUP_REF_MYE)
+# Blocks are written in this order, and the census columns follow it.
+BLOCK_ORDER = (GROUP_REF_T, GROUP_REF_MYE, GROUP_STROMAL, GROUP_HELDOUT, GROUP_EPI)
 
 BATCH_KEY = "cohort"
 LABEL_KEY = "cell_type"
+RAW_LABEL_KEY = "celltypist_predicted"   # CellTypist BEFORE majority voting
 
-N_REF_PER_GROUP = 1000   # T/NK and myeloid cells drawn per cohort, each
-N_STROMAL = 1000         # stromal cells carried as the internal negative control
-MIN_EPI_CELLS = 50       # a cohort with fewer epithelial cells is not run at all
-MIN_CELLS_PER_GENE = 3   # drop genes detected in < this many cells OF THIS COHORT
+N_REF_PER_GROUP = 1000    # T/NK and myeloid cells drawn per cohort, each
+N_STROMAL = 2000          # stromal cells carried as the null the per-cohort cut comes from
+N_IMMUNE_HELDOUT = 500    # immune cells kept OUT of the reference, carried as observations
+MIN_REF_TOTAL = 1000      # ...but never at the cost of leaving the reference below this
+MIN_EPI_CELLS = 50        # a cohort with fewer epithelial cells is not run at all
+MIN_CELLS_PER_GENE = 3    # drop genes detected in < this many cells OF THIS COHORT
 SEED = 0
 
 GENE_ORDER_URL = "https://data.broadinstitute.org/Trinity/CTAT/cnv/hg38_gencode_v27.txt"
@@ -163,6 +198,40 @@ def assign_group(labels: pd.Series) -> pd.Series:
     return out
 
 
+def stratified_sample(strata: dict, cap: int, rng: np.random.Generator) -> np.ndarray:
+    """Draw up to `cap` indices, spread as evenly over `strata` as availability allows.
+
+    Why the stromal null is not sampled uniformly over its union. Drawn at random from
+    the whole block, its composition follows whatever mix the cohort happens to have:
+    measured on this dataset, Patient30 comes out 81% fibroblast and Patient64 60%
+    endothelial. The per-cohort cut is a quantile of that block, so "the stromal null"
+    then denotes a different population in every run - and the three do not sit at the
+    same level (median cnv_score 0.00083 endothelial, 0.00090 fibroblast, 0.00097
+    perivascular). The cost is not hypothetical: on Patient10 the malignant fraction
+    moves from 3.6% off the fibroblast null to 48.8% off the endothelial one.
+
+    Taking cap/3 from each instead makes the null comparable across cohorts and costs no
+    cells, because a stratum that cannot fill its share leaves the remainder to the
+    others: a cohort with almost no fibroblasts still contributes `cap` cells whenever it
+    has them anywhere.
+    """
+    share = cap // len(strata)
+    taken = {}
+    for name, idx in strata.items():
+        n = min(share, len(idx))
+        taken[name] = rng.choice(idx, size=n, replace=False) if n else idx[:0]
+    short = cap - sum(len(v) for v in taken.values())
+    if short > 0:
+        left = np.concatenate([np.setdiff1d(idx, taken[name])
+                               for name, idx in strata.items()])
+        if len(left):
+            taken["_topup"] = rng.choice(left, size=min(short, len(left)), replace=False)
+    parts = [v for v in taken.values() if len(v)]
+    if not parts:
+        return np.array([], dtype=int)
+    return np.sort(np.concatenate(parts).astype(int))
+
+
 def main() -> int:
     args = parse_args()
     rng = np.random.default_rng(SEED)
@@ -185,7 +254,12 @@ def main() -> int:
     adata = ad.read_h5ad(in_path, backed="r")
     assert "counts" in adata.layers, "expected raw counts in layers['counts']"
 
+    assert RAW_LABEL_KEY in adata.obs, (
+        f"obs['{RAW_LABEL_KEY}'] is needed to keep tumour cells out of the reference; "
+        "it is written by 01_4/celltypist_annotation.py"
+    )
     labels = adata.obs[LABEL_KEY].astype(str)
+    raw_labels = adata.obs[RAW_LABEL_KEY].astype(str)
     unclassified = set(labels.unique()) - EPITHELIAL - STROMAL - T_NK - MYELOID - B_PLASMA
     assert not unclassified, (
         f"cell_type value(s) in no lineage set: {sorted(unclassified)}; "
@@ -228,28 +302,51 @@ def main() -> int:
                 cohort=cohort, status="prepared",
                 n_cells=len(have),
                 n_genes=sum(1 for _ in open(out_dir / "genes.tsv")),
-                **{f"n_{g}": int(have_n.get(g, 0)) for g in
-                   (GROUP_REF_T, GROUP_REF_MYE, GROUP_STROMAL, GROUP_EPI)},
+                **{f"n_{g}": int(have_n.get(g, 0)) for g in BLOCK_ORDER},
             ))
             continue
 
-        # Pick the cells: all epithelium, a capped stromal control, a capped reference.
-        picked = {}
-        for group, cap in ((GROUP_EPI, None), (GROUP_STROMAL, N_STROMAL),
-                           (GROUP_REF_T, N_REF_PER_GROUP), (GROUP_REF_MYE, N_REF_PER_GROUP)):
-            idx = np.flatnonzero((grp == group).to_numpy())
-            if cap is not None and len(idx) > cap:
-                idx = rng.choice(idx, size=cap, replace=False)
+        # Pick the cells. The order below is load-bearing: the held-out immune
+        # observations are drawn BEFORE the reference and removed from its pool, so the
+        # two are disjoint by construction rather than by a check that could be forgotten.
+        labels_c = labels[in_cohort]
+        raw_c = raw_labels[in_cohort]
+        picked = {GROUP_EPI: np.flatnonzero((grp == GROUP_EPI).to_numpy())}
+
+        strata = {name: np.flatnonzero(labels_c.isin(members).to_numpy())
+                  for name, members in STROMAL_STRATA.items()}
+        picked[GROUP_STROMAL] = stratified_sample(strata, N_STROMAL, rng)
+
+        # Only cells whose RAW CellTypist call is non-epithelial may serve as a diploid
+        # baseline. `cell_type` has been through majority voting, which can hand a tumour
+        # cell an immune label borrowed from the neighbourhood it sits in; the raw
+        # prediction is the one that was not smoothed over neighbours, and 1.6-4.5% of
+        # the immune cells here carry an epithelial one. The filter is deliberately this
+        # narrow: requiring the voted and raw labels to AGREE would discard 60% of some
+        # cohorts' immune cells for within-immune churn that has nothing to do with
+        # tumour contamination.
+        pure = ~raw_c.isin(EPITHELIAL).to_numpy()
+        is_imm = ((grp == GROUP_REF_T) | (grp == GROUP_REF_MYE)).to_numpy()
+        imm = np.flatnonzero(is_imm & pure)
+        n_held = min(N_IMMUNE_HELDOUT, max(0, len(imm) - MIN_REF_TOTAL))
+        held = np.sort(rng.choice(imm, size=n_held, replace=False)) if n_held else imm[:0]
+        picked[GROUP_HELDOUT] = held
+
+        avail = np.setdiff1d(imm, held)
+        for group in REFERENCE_GROUPS:
+            idx = np.intersect1d(avail, np.flatnonzero((grp == group).to_numpy()))
+            if len(idx) > N_REF_PER_GROUP:
+                idx = rng.choice(idx, size=N_REF_PER_GROUP, replace=False)
             picked[group] = np.sort(idx)
 
         # Positions are relative to the cohort slice; lift them back to the full object.
         cohort_pos = np.flatnonzero(in_cohort)
-        order = np.concatenate([picked[g] for g in
-                                (GROUP_REF_T, GROUP_REF_MYE, GROUP_STROMAL, GROUP_EPI)])
+        order = np.concatenate([picked[g] for g in BLOCK_ORDER])
         rows = cohort_pos[order]
-        cell_groups = np.concatenate([[g] * len(picked[g]) for g in
-                                      (GROUP_REF_T, GROUP_REF_MYE, GROUP_STROMAL, GROUP_EPI)])
+        cell_groups = np.concatenate([[g] * len(picked[g]) for g in BLOCK_ORDER])
         cell_ids = adata.obs_names[rows]
+        strat_n = {f"n_stromal_{k}": int(np.isin(picked[GROUP_STROMAL], v).sum())
+                   for k, v in strata.items()}
 
         # Slice the counts. `.layers['counts']` on a backed object needs an increasing
         # index, which `rows` is by construction (cohort_pos sorted, each block sorted,
@@ -283,16 +380,18 @@ def main() -> int:
         mtx_mb = (out_dir / "counts.mtx").stat().st_size / 1024**2
         print(f"[ok]   {cohort}: {counts.shape[0]:,} cells x {counts.shape[1]:,} genes "
               f"({mtx_mb:.0f} MB) | " +
-              " ".join(f"{g}={n_by_group.get(g, 0)}" for g in
-                       (GROUP_REF_T, GROUP_REF_MYE, GROUP_STROMAL, GROUP_EPI)), flush=True)
+              " ".join(f"{g}={n_by_group.get(g, 0)}" for g in BLOCK_ORDER) +
+              " | null: " + " ".join(f"{k.split('_')[-1]}={v}" for k, v in strat_n.items()),
+              flush=True)
 
         census_rows.append(dict(
             cohort=cohort, status="prepared",
             n_cells=counts.shape[0], n_genes=counts.shape[1],
             # n_epi is the GROUP_EPI count: the epithelium is never capped, so the two
             # are the same number and the skipped rows below use the same column name.
-            **{f"n_{g}": int(n_by_group.get(g, 0)) for g in
-               (GROUP_REF_T, GROUP_REF_MYE, GROUP_STROMAL, GROUP_EPI)},
+            **{f"n_{g}": int(n_by_group.get(g, 0)) for g in BLOCK_ORDER},
+            # the stromal null's composition, so the stratification is auditable
+            **strat_n,
         ))
 
     census = pd.DataFrame(census_rows)

@@ -38,6 +38,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python convergence_tum.py                     # the scie collection, the default
     python convergence_tum.py --collection emt    # the same procedure on the EMT lists
+    python convergence_tum.py --collection gavish # names the dimensions, no target axis
+    python convergence_tum.py --collection gavish --all-metaprograms  # all 40, not just TNBC
     python convergence_tum.py --rho-min 0.30      # a stricter cell-level bar
 """
 
@@ -79,14 +81,18 @@ def parse_args():
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
     C.banner(f"05_8 - Route C, convergence: {coll.title}")
     print(f"question  {coll.question}")
 
-    # All five come from tables/<collection>/, so a run can only ever join a collection with
+    # All five come from tables/<collection>/<run_id>/, so a run can only ever join a collection with
     # itself: the SCIE and EMT results are never in the same table to begin with.
     rho = C.read_table("dim_signature_spearman", coll)
-    eff = C.read_table("dim_target_effect_size", coll)
+    # A vocabulary collection defines no target region, so the cell-first step wrote no
+    # effect-size table and there is none to read. Everything else below is unaffected: the
+    # convergence of the two routes is a statement about DIMENSIONS, not about a cell set,
+    # and it is the whole point of running such a collection. See `Collection.has_target`.
+    eff = C.read_table("dim_target_effect_size", coll) if coll.has_target else None
     signed = C.read_table("dim_geneset_signed_significance", coll)
     conf = C.read_table("confounders", coll)
     order = C.read_table("dimension_row_order", coll)
@@ -123,9 +129,12 @@ def main():
             a_rho_any = float(all_vals.max())
 
             # ---- effect size of the target quadrant on this axis, oriented to the side
-            auroc = float(eff.loc[d, "auroc_target_vs_rest"])
-            smd = float(eff.loc[d, "standardised_mean_difference"]) * s
-            auroc_dir = auroc if direction == "+" else 1 - auroc
+            if eff is None:
+                smd = auroc_dir = np.nan     # no quadrant, hence no cell set to separate
+            else:
+                auroc = float(eff.loc[d, "auroc_target_vs_rest"])
+                smd = float(eff.loc[d, "standardised_mean_difference"]) * s
+                auroc_dir = auroc if direction == "+" else 1 - auroc
 
             # ---- Route B: the strongest enrichment on this side
             b_vals = signed.loc[d, sigs].astype(float) * s
@@ -177,6 +186,12 @@ def main():
 
     conv = pd.DataFrame(rows).set_index("dim_direction")
     conv = conv.loc[sorted(conv.index, key=C.dim_sort_key)]
+    # Dropped rather than written as two columns of NaN: a column that is empty for a reason
+    # is more honestly absent than present and blank.
+    auroc_col = ["A_auroc_target_this_side"]
+    if not coll.has_target:
+        conv = conv.drop(columns=["A_auroc_target_this_side", "A_standardised_mean_difference"])
+        auroc_col = []
 
     C.banner("the three categories, reported separately")
     counts = conv["verdict"].value_counts()
@@ -190,7 +205,7 @@ def main():
     conv_rows = conv[conv["verdict"] == "convergent"].sort_values("A_rho", ascending=False)
     print(f"\nCONVERGENT ({len(conv_rows)}): both routes, same signature family")
     if len(conv_rows):
-        print(conv_rows[["A_best_signature", "A_rho", "A_auroc_target_this_side",
+        print(conv_rows[["A_best_signature", "A_rho", *auroc_col,
                          "B_best_signature", "B_fdr", "same_signature",
                          "confounder_flags"]].to_string(float_format="%.3g"))
 
@@ -205,7 +220,7 @@ def main():
     print(f"\nCELL-ONLY ({len(a_only)}): the cells separate, the axis does not encode the "
           "program cleanly.\nThe state may be real; this single dimension is not its description.")
     if len(a_only):
-        print(a_only[["A_best_signature", "A_rho", "A_auroc_target_this_side",
+        print(a_only[["A_best_signature", "A_rho", *auroc_col,
                       "B_best_signature", "B_neglog10_fdr", "confounder_flags"]]
               .head(20).to_string(float_format="%.3g"))
 
@@ -213,52 +228,64 @@ def main():
     print(f"\n{len(flagged)} of the {len(conv_rows)} convergent rows carry a confounder flag "
           "from A3 and cannot be read as clean.")
 
-    # the project's actual target: both criteria of the collection on the SAME axis
-    crit_names = " AND ".join(c.label for c in coll.criteria)
-    C.banner(f"the project's target for {coll.name}: {crit_names} on the same axis")
-
-    def criterion_value(crit, d: str, side: float) -> float:
-        """The strongest Route A correlation satisfying one criterion, oriented to one side.
-
-        `sign` is +1 for a readout that must be HIGH in the target state, -1 for one that must
-        be LOW (immune evasion is the absence of the signal, so the correlation has to be
-        negative to count), and 0 for one whose magnitude matters but whose direction does not
-        - an axis is an E-to-M axis whichever way round the model happened to orient it.
-        """
-        names = [n for n in (crit.names or coll.by_axis(crit.axis)) if n in rho.columns]
-        if not names:
-            return np.nan
-        v = rho.loc[d, names].astype(float) * side
-        return float(v.abs().max()) if crit.sign == 0 else float((v * crit.sign).max())
-
-    tgt = []
-    for d in dims:
-        for direction in ("+", "-"):
-            side = 1.0 if direction == "+" else -1.0
-            vals = {c.label: criterion_value(c, d, side) for c in coll.criteria}
-            if all(v >= args.rho_min for v in vals.values()):
-                row = {"dim_direction": f"{d}{direction}", **vals}
-                row.update({"auroc_target": conv.loc[f"{d}{direction}", "A_auroc_target_this_side"],
-                            "verdict": conv.loc[f"{d}{direction}", "verdict"],
-                            "flags": conv.loc[f"{d}{direction}", "confounder_flags"]})
-                tgt.append(row)
-    tgt_df = pd.DataFrame(tgt)
-    if len(tgt_df):
-        tgt_df = tgt_df.set_index("dim_direction").sort_values("auroc_target", ascending=False)
-        print(f"axes on which {crit_names} hold at the same time:")
-        print(tgt_df.to_string(float_format="%.3f"))
-        C.write_table(tgt_df, "target_axes", coll)
+    # the project's actual target: both criteria of the collection on the SAME axis.
+    # A vocabulary collection states no such target - it has no state it is looking for - so
+    # this last section is skipped and the convergence table above is the whole result.
+    if not coll.criteria:
+        C.banner(f"{coll.name} states no target axis: it names dimensions, it does not "
+                 "look for a state")
+        print("The convergence table above is the result of this run. A dimension whose two\n"
+              "routes independently land on the same family is a dimension with a name from\n"
+              "outside this dataset; that is what a vocabulary collection is for.")
     else:
-        print(f"No single axis carries both at |rho| >= {args.rho_min}.\n"
-              "That is a result: the target state is an INTERSECTION of two axes in the latent\n"
-              "space rather than a direction of it, which is what the Route A target region\n"
-              "already assumed by crossing two independent scores.")
+        crit_names = " AND ".join(c.label for c in coll.criteria)
+        C.banner(f"the project's target for {coll.name}: {crit_names} on the same axis")
+
+        def criterion_value(crit, d: str, side: float) -> float:
+            """The strongest Route A correlation satisfying one criterion, oriented to one side.
+
+            `sign` is +1 for a readout that must be HIGH in the target state, -1 for one that must
+            be LOW (immune evasion is the absence of the signal, so the correlation has to be
+            negative to count), and 0 for one whose magnitude matters but whose direction does not
+            - an axis is an E-to-M axis whichever way round the model happened to orient it.
+            """
+            names = [n for n in (crit.names or coll.by_axis(crit.axis)) if n in rho.columns]
+            if not names:
+                return np.nan
+            v = rho.loc[d, names].astype(float) * side
+            return float(v.abs().max()) if crit.sign == 0 else float((v * crit.sign).max())
+
+        tgt = []
+        for d in dims:
+            for direction in ("+", "-"):
+                side = 1.0 if direction == "+" else -1.0
+                vals = {c.label: criterion_value(c, d, side) for c in coll.criteria}
+                if all(v >= args.rho_min for v in vals.values()):
+                    row = {"dim_direction": f"{d}{direction}", **vals}
+                    row.update({"auroc_target": conv.loc[f"{d}{direction}", "A_auroc_target_this_side"],
+                                "verdict": conv.loc[f"{d}{direction}", "verdict"],
+                                "flags": conv.loc[f"{d}{direction}", "confounder_flags"]})
+                    tgt.append(row)
+        tgt_df = pd.DataFrame(tgt)
+        if len(tgt_df):
+            tgt_df = tgt_df.set_index("dim_direction").sort_values("auroc_target", ascending=False)
+            print(f"axes on which {crit_names} hold at the same time:")
+            print(tgt_df.to_string(float_format="%.3f"))
+            C.write_table(tgt_df, "target_axes", coll)
+        else:
+            print(f"No single axis carries both at |rho| >= {args.rho_min}.\n"
+                  "That is a result: the target state is an INTERSECTION of two axes in the latent\n"
+                  "space rather than a direction of it, which is what the Route A target region\n"
+                  "already assumed by crossing two independent scores.")
 
     # ------------------------------------------------------------------ figures
     C.banner("figures")
 
     sigs_ord = coll.order(list(sigs))
-    fig, axes = plt.subplots(1, 2, figsize=(2 * (0.9 * len(sigs_ord) + 3.5), 0.24 * len(dims) + 3.5),
+    # Two panels side by side, so each gets half the cap: forty signatures fit at a narrower
+    # column than ten do rather than making a figure no page can hold.
+    panel_w = C.fig_span(len(sigs_ord), 0.9, 3.5, cap=C.MAX_FIG_IN / 2)
+    fig, axes = plt.subplots(1, 2, figsize=(2 * panel_w, C.fig_span(len(dims), 0.24, 3.5)),
                              sharey=True)
     sns.heatmap(rho.loc[dims, sigs_ord].astype(float), cmap="vlag", center=0, vmin=-0.6, vmax=0.6,
                 cbar_kws={"label": "Spearman rho", "shrink": 0.4}, ax=axes[0])

@@ -247,6 +247,58 @@ CAVEAT_SHORT = (
 MIN_SIGNATURE_GENES = 10      # below this a signature is skipped and reported
 MIN_MAPPED_FRACTION = 0.60    # below this the step stops: low coverage means NOT MEASURED
 
+
+# --------------------------------------------------------------------------- #
+# Figure sizing, for collections of very different widths
+# --------------------------------------------------------------------------- #
+#
+# Every heatmap in this stage is `n_dimensions` rows by `n_readouts` columns, and the two
+# collections these steps were written for are nine and ten columns wide. `gavish` is forty.
+# A figure size computed as "inches per column" is right at ten and unreadable at forty: the
+# canvas grows past what any renderer or page can use, the printed annotations shrink to
+# noise, and a legend built from a ten-colour qualitative palette starts repeating colours.
+#
+# These three helpers are the whole fix, and they are here rather than in the steps so that
+# the SAME figure of 04_3 and of 05_4 cannot end up sized by two different rules. None of
+# them changes anything for a collection under the thresholds: `scie` and `emt` get exactly
+# the figures they got before.
+
+MAX_FIG_IN = 26.0        # beyond this a canvas is not a figure any more, it is a wall
+ANNOT_MAX_CELLS = 400    # above ~20 x 20 the printed numbers are smaller than the cells
+
+
+def fig_span(n: int, per_item: float, base: float, cap: float = MAX_FIG_IN) -> float:
+    """Inches for `n` rows or columns at `per_item` each, plus `base`, capped at `cap`.
+
+    The cap is the point: past it the cells get thinner instead of the figure getting wider,
+    which is the correct trade - a 40-column heatmap read at 0.4 in per column is still a
+    heatmap, a 44-inch one is not.
+
+    NOTHING MOVES FOR `scie` AND `emt`. Where a figure already sized itself per column, the
+    coefficients here are the ones it used and the cap only ever binds above them. Where it
+    used a fixed size, the call site keeps that fixed size below a threshold and only reaches
+    for this above it. That is deliberate: a figure already in the write-up has to come back
+    identical from a re-run.
+    """
+    return min(base + per_item * n, cap)
+
+
+def annotate_cells(n_rows: int, n_cols: int) -> bool:
+    """Whether a heatmap that size can carry its numbers legibly. Under 400 cells, yes."""
+    return n_rows * n_cols <= ANNOT_MAX_CELLS
+
+
+def axis_palette(n: int):
+    """`n` distinguishable colours, one per axis of a collection.
+
+    `deep` is seaborn's default qualitative palette and has ten colours; asked for more it
+    recycles them, which would give two axis blocks the same colour in a legend. Above ten,
+    `husl` is generated at the requested size and stays distinguishable. `scie` (2 axes) and
+    `emt` (4) are unaffected.
+    """
+    import seaborn as _sns
+    return _sns.color_palette("deep" if n <= 10 else "husl", n)
+
 # --------------------------------------------------------------------------- #
 # The target region, and the vote over its definitions
 # --------------------------------------------------------------------------- #
@@ -413,9 +465,19 @@ def read_gmt(path: Path) -> dict[str, list[str]]:
 # --------------------------------------------------------------------------- #
 
 
-def table_dir(coll) -> Path:
-    """tables/<collection>/. Created on demand, one folder per readout."""
-    d = TABLE_DIR / coll.name
+def table_dir(coll, run_id: str | None = None) -> Path:
+    """tables/<collection>/<run_id>/. Created on demand: one folder per readout, then per run.
+
+    THE RUN SUBFOLDER. The collection folder is what stops two readouts overwriting each
+    other; the run folder inside it is what stops two RUNS doing the same, and it exists
+    because a phase can have several. The run id is still in every filename as well, which is
+    not redundancy: a file dragged out of here has to stay identifiable, and the folder is a
+    convenience for reading the directory rather than the thing that makes the name unique.
+
+    The `.gmt` deliberately sits ABOVE this level - see `gmt_path`, it depends on the object
+    rather than on the run, so several runs share one.
+    """
+    d = TABLE_DIR / coll.name / (run_id or RUN_ID)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -427,12 +489,13 @@ def table_path(name: str, coll, run_id: str | None = None) -> Path:
     the one step that reads several runs in the same process, so it cannot go through the
     global.
     """
-    return table_dir(coll) / f"{name}_{coll.name}_{run_id or RUN_ID}.csv"
+    run_id = run_id or RUN_ID
+    return table_dir(coll, run_id) / f"{name}_{coll.name}_{run_id}.csv"
 
 
 def write_table(df: pd.DataFrame, name: str, coll, index: bool = True,
                 run_id: str | None = None) -> Path:
-    """Write a small result table to tables/<collection>/, caveat as a leading comment.
+    """Write a small result table to tables/<collection>/<run_id>/, caveat as a leading comment.
 
     Read it back with `pd.read_csv(path, comment='#', index_col=0)`. The comment lines
     are how the caveat travels with the table when it is pulled out of this folder.
@@ -467,21 +530,22 @@ def read_table(name: str, coll, run_id: str | None = None) -> pd.DataFrame:
     return pd.read_csv(table_path(name, coll, run_id), comment="#", index_col=0)
 
 
-def fig_dir(step: str, coll) -> Path:
-    """figures/<step>/<collection>/, `step` being the full step-folder name, e.g. '04_5_cell_first'.
+def fig_dir(step: str, coll, run_id: str | None = None) -> Path:
+    """figures/<step>/<collection>/<run_id>/, `step` being the full step-folder name.
 
     The step folders mirror the Methods sections and stay one per step; the collection is a
     subfolder of each, so the SCIE and EMT versions of the same figure sit side by side
-    without either being able to overwrite the other.
+    without either being able to overwrite the other, and the run is a subfolder of that, for
+    the reason `table_dir` gives. `step` is e.g. '04_5_cell_first'.
     """
-    d = PHASE_DIR / "figures" / step / coll.name
+    d = PHASE_DIR / "figures" / step / coll.name / (run_id or RUN_ID)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def savefig(name: str, step: str, coll, fig=None, dpi: int = 300, caveat: bool = True,
             run_id: str | None = None):
-    """Save a figure into figures/<step>/<collection>/, collection and run id appended.
+    """Save a figure into figures/<step>/<collection>/<run_id>/, collection and run id appended.
 
     Same helper as 03_3 and 04_2 except for the footnote, which is the mandatory
     caveat: a figure showing cells or states must carry it wherever it ends up.
@@ -497,7 +561,8 @@ def savefig(name: str, step: str, coll, fig=None, dpi: int = 300, caveat: bool =
     if caveat:
         fig.text(0.5, -0.02, CAVEAT_SHORT, ha="center", va="top", fontsize=6,
                  style="italic", color="0.35", linespacing=1.4)
-    path = fig_dir(step, coll) / f"{name}_{coll.name}_{run_id or RUN_ID}.png"
+    run_id = run_id or RUN_ID
+    path = fig_dir(step, coll, run_id) / f"{name}_{coll.name}_{run_id}.png"
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     print(f"[fig] {path}")
     return path

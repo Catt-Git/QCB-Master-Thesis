@@ -56,8 +56,8 @@ cell sets is not a comparison.
 
 Outputs (`*` is `_<collection>_epi_embeddings`):
 
-    tables/<coll>/embedding_comparison*.csv        one row per (space, readout)
-    tables/<coll>/embedding_target_effect*.csv     the target region on each space, with the
+    tables/<coll>/<run>/embedding_comparison*.csv  one row per (space, readout)
+    tables/<coll>/<run>/embedding_target_effect*.csv  the target region on each space, with the
                                                    multivariate AUROC and the space's own rank
     figures/04_9_embedding_control/<coll>/
         dim_signature_heatmap_side_by_side*.png    the heatmaps, one colour scale
@@ -229,10 +229,18 @@ def multivariate_auroc(X, y, groups, seed=C.SEED) -> tuple[float, float, int]:
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
     cut = C.Cutoffs.from_args(args)
     embs = [C.get_embedding(n) for n in args.embeddings]
     C.banner(f"04_9 - Route A across {len(embs)} coordinate systems: {coll.title}")
+
+    # The comparison is "which space separates the SAME cells best", and the same cells are
+    # the consensus target region. Without one there is nothing to hold fixed across the
+    # spaces, so the step stops rather than comparing two heatmaps and calling it a control.
+    if not coll.has_target:
+        sys.exit(f"[STOP] the {coll.name} collection defines no target region (it is a "
+                 "vocabulary, not a hypothesis), so there is no cell set to ask the "
+                 "spaces about.")
     print("DRVI is the hypothesis under test; Harmony is the reference level, not a rival:\n"
           "it never claimed axis-level interpretability. Phase 02 is where the methods are\n"
           "ranked, on what they both promise.\n")

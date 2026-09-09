@@ -25,8 +25,8 @@ Reused from 03_3_enrichment (`enrichment_nonimm.ipynb`), unchanged:
   * the OOD_combined scores, which favour the genes specific to a dimension.
 
 Changed here:
-  * the gene sets are the requested collection (the .gmt of step 1, `--collection scie` or
-    `--collection emt`) rather than the public libraries only. Hallmark 2020 is kept alongside it as a sanity-check collection, so a
+  * the gene sets are the requested collection (the .gmt of step 1, `--collection scie`,
+    `--collection emt` or `--collection gavish`) rather than the public libraries only. Hallmark 2020 is kept alongside it as a sanity-check collection, so a
     dimension that enriches for nothing in the custom sets can still be named;
   * every test runs OFFLINE against a declared background (`gp.enrich`, hypergeometric),
     never against Enrichr's implicit all-human-genes universe;
@@ -55,6 +55,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python factor_first_epi.py                       # the scie collection, the default
     python factor_first_epi.py --collection emt      # the same procedure on the EMT lists
+    python factor_first_epi.py --collection gavish   # ORA against the TNBC metaprograms
+    python factor_first_epi.py --collection gavish --all-metaprograms  # against all 40
     python factor_first_epi.py --n-top-genes 500     # a deeper list
     python factor_first_epi.py --no-hallmark         # custom signatures only, fully offline
 """
@@ -111,7 +113,7 @@ def load_hallmark(cache: "C.Path") -> dict[str, list[str]]:
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
     C.banner(f"04_6 - Route B, factor-first: {coll.title}")
     print(f"question  {coll.question}")
 
@@ -268,7 +270,8 @@ def main():
                       "factor_first_hallmark_significant", coll, index=False)
 
     # ---------------------------------------------------------------- figure
-    fig, ax = plt.subplots(figsize=(1.0 * len(sig_cols) + 4, 0.24 * len(row_order) + 3))
+    fig, ax = plt.subplots(figsize=(C.fig_span(len(sig_cols), 1.0, 4.0),
+                                    C.fig_span(len(row_order), 0.24, 3.0)))
     vmax = float(np.nanpercentile(signed.abs().values, 99)) or 1.0
     sns.heatmap(signed, cmap="vlag", center=0, vmin=-vmax, vmax=vmax,
                 cbar_kws={"label": "signed -log10 FDR  (+ = positive direction)", "shrink": 0.4},

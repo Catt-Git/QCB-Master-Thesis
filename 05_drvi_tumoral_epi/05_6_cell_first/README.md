@@ -13,9 +13,17 @@ so the deliverable of the project comes from here.
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 cell_first_tum.py                            # scie, the default
 python3 cell_first_tum.py --collection emt           # the EMT lists
+python3 cell_first_tum.py --collection gavish        # the metaprograms: scores only, no target
+python3 cell_first_tum.py --collection gavish --all-metaprograms   # all 40, not just the TNBC 27
+N_LATENT=64 python3 cell_first_tum.py                # read the drvi_tum_64 run instead
 python3 cell_first_tum.py --high-q 0.80 --low-q 0.20 # a stricter target region
 python3 cell_first_tum.py --overwrite                # re-score instead of reusing the csv
 ```
+
+`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32` by
+default, `N_LATENT=64` for `drvi_tum_64`, `CELL_SET=epi HVG_SET=nomt N_LATENT=64` for
+`drvi_epicnv_64_nomt`. See [the phase README](../README.md#which-run-05_4---05_8-read); the
+run id is in the name of everything written.
 
 Needs `05_4` (the `.gmt`) and `05_3` (the embedding). `05_5` is optional and its absence is
 reported rather than fatal.
@@ -82,24 +90,31 @@ to be re-read from this phase's own table before being quoted of the tumour.
 Embedding-independent (they describe the cells, not the space):
 
 ```
-../tables/<collection>/confounders_*.csv              readouts vs depth, mito, S, G2M
-../tables/<collection>/quadrant_stability_*.csv       Jaccard across definitions
-../tables/<collection>/quadrant_vote_distribution_*.csv
-../tables/<collection>/quadrant_per_patient_*.csv     a state in one patient is a patient effect
-../tables/<collection>/quadrant_per_<grouping>_*.csv  leiden, cell_type_01_4, phase
-../tables/<collection>/confounder_checks_*.csv        every named risk, as numbers
+../tables/<collection>/<run_id>/confounders_*.csv              readouts vs depth, mito, S, G2M
+../tables/<collection>/<run_id>/quadrant_stability_*.csv       Jaccard across definitions
+../tables/<collection>/<run_id>/quadrant_vote_distribution_*.csv
+../tables/<collection>/<run_id>/quadrant_per_patient_*.csv     a state in one patient is a patient effect
+../tables/<collection>/<run_id>/quadrant_per_<grouping>_*.csv  leiden, cell_type_01_4, phase
+../tables/<collection>/<run_id>/confounder_checks_*.csv        every named risk, as numbers
 $DATA_DIR/05_tum/signature_scores_<collection>_<run_id>.csv   per cell, raw + z
 ```
 
 Embedding-dependent:
 
 ```
-../tables/<collection>/dim_signature_spearman_*.csv   dimensions x readouts (the input of 05_8)
-../tables/<collection>/dim_target_effect_size_*.csv   AUROC and SMD of the target per dimension
-../tables/<collection>/dimension_row_order_*.csv      the row order every later heatmap uses
+../tables/<collection>/<run_id>/dim_signature_spearman_*.csv   dimensions x readouts (the input of 05_8)
+../tables/<collection>/<run_id>/dim_target_effect_size_*.csv   AUROC and SMD of the target per dimension
+../tables/<collection>/<run_id>/dimension_row_order_*.csv      the row order every later heatmap uses
 ```
 
-Figures in `../figures/05_6_cell_first/<collection>/`.
+**On a collection with no target region** (`gavish`, where `Collection.has_target` is False)
+only `confounders`, `signature_scores`, `dim_signature_spearman` and `dimension_row_order` are
+written, plus the confounder and dimensions × readouts heatmaps. Everything with `quadrant` or
+`target` in its name is skipped rather than emptied, and the step prints the list of what it
+skipped and what it produced before it starts — an all-False consensus written to disk would
+read like a result of zero cells instead of like a question nobody asked.
+
+Figures in `../figures/05_6_cell_first/<collection>/<run_id>/`.
 
 One row per **dimension**, not per direction: Route A correlates the latent coordinate, which has
 no direction of its own. The direction is the **sign of rho** — that is what makes the two routes

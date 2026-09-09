@@ -5,9 +5,15 @@ Reads the plain-text files of the requested collection from `$DATA_DIR/signature
 symbol per line) and writes a single `.gmt` whose description field carries the provenance
 string, so the identical collection feeds both routes and doubles as the Appendix table.
 
-Which files, on which axes, is declared in `utils/sig_collections.py`: `--collection scie` is
-the ten stemness/immunogenicity lists, `--collection emt` the nine EMT lists. The step is
-the same either way, and so is every check below.
+Which files, on which axes, is declared in `utils/sig_collections.py`: `--collection scie`
+is the ten stemness/immunogenicity lists, `--collection emt` the nine EMT lists, and
+`--collection gavish` the pan-cancer metaprograms of Gavish et al. 2023, which live in
+the `GAVISH_metaprograms/` subdirectory - the 27 relevant to a triple-negative breast
+carcinoma by default, all 40 with `--all-metaprograms`. The step is the same for all three,
+and so is every check below - the coverage floor and the Jaccard matrix matter MORE on the
+metaprograms, not less: they are the widest collection, several of them are negative controls
+whose coverage is the only thing that says they were measured at all, and the four EMT
+metaprograms overlap each other by construction.
 
 Two tables come out of it, both of which have to be read before any result of this stage
 is believed:
@@ -38,6 +44,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python build_signatures_tum.py                        # the scie collection, the default
     python build_signatures_tum.py --collection emt       # the same, on the EMT lists
+    python build_signatures_tum.py --collection gavish    # the 27 TNBC-relevant metaprograms
+    python build_signatures_tum.py --collection gavish --all-metaprograms   # all 40 instead
     python build_signatures_tum.py --allow-low-coverage   # report, do not stop
 """
 
@@ -72,7 +80,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
 
     C.banner(f"05_4 - signature collection: {coll.title}")
     print(f"question    {coll.question}")
@@ -187,41 +195,61 @@ def main():
     labelled = J.loc[order, order].copy()
     labelled.index = labelled.columns = [f"{n} ({len(mapped[n])})" for n in order]
 
-    fig, ax = plt.subplots(figsize=(8.5, 7))
+    # Under thirteen lists this is the 8.5 x 7 figure it has always been, so re-running scie
+    # or emt reproduces the figure in the write-up rather than a slightly different one.
+    # Above it the canvas grows with the collection, up to MAX_FIG_IN, and the annotations
+    # come off: the 1,600 cells of `gavish` are far past the point where a printed number is
+    # legible, and the colour scale carries the value on its own.
+    n = len(order)
+    if n <= 12:
+        fig_w, fig_h, annot = 8.5, 7.0, True
+    else:
+        fig_h = C.fig_span(n, per_item=0.55, base=3.0)
+        fig_w, annot = fig_h + 1.5, C.annotate_cells(n, n)
+    fig, ax = plt.subplots(figsize=(fig_w, fig_h))
     sns.heatmap(labelled, cmap="rocket_r", vmin=0, vmax=float(np.nanmax(off.values)),
-                annot=True, fmt=".2f", annot_kws={"size": 7}, square=True,
+                annot=annot, fmt=".2f", annot_kws={"size": 7}, square=True,
                 cbar_kws={"label": "Jaccard index", "shrink": 0.7}, ax=ax)
     # `pad` leaves room for the two block labels below the title: at the default the
     # title sits where "immune" and "stemness" are drawn and the three overlap.
+    # One separator per axis boundary, and the axis name centred over its block. On the EMT
+    # collection there are three blocks rather than two and on `gavish` fifteen, so both are
+    # derived from the order rather than hard-coded.
+    edges = coll.block_edges(order)
+    blocks = list(zip([0] + edges, edges + [len(order)]))
+    # A block two columns wide has no room for the word "detoxification" written across it,
+    # and horizontal labels on narrow blocks collide with their neighbours instead of naming
+    # them. Below three columns they are turned on their side, and the title is moved up to
+    # clear the taller strip that makes.
+    narrow = min(b - a for a, b in blocks) < 3
     ax.set_title(f"Pairwise overlap of the {coll.title} collection\n"
                  "(mapped genes; the block structure is why these are not independent tests)",
-                 fontsize=10, pad=30)
-    # One separator per axis boundary, and the axis name centred over its block. On the EMT
-    # collection there are three blocks rather than two, so both are derived from the order
-    # rather than hard-coded.
-    edges = coll.block_edges(order)
+                 fontsize=10, pad=90 if narrow else 30)
     for pos in edges:
         ax.axhline(pos, color="black", lw=2)
         ax.axvline(pos, color="black", lw=2)
-    for start, stop in zip([0] + edges, edges + [len(order)]):
+    for start, stop in blocks:
         ax.text((start + stop) / 2, -0.15, coll.axis_of[order[start]], ha="center",
-                va="bottom", fontsize=9, weight="bold")
+                va="bottom", fontsize=9, weight="bold",
+                rotation=90 if narrow else 0)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
     C.savefig("jaccard_signature_overlap", "05_4_signatures", coll, fig, caveat=False)
     plt.close(fig)
 
     # coverage barplot
-    fig, ax = plt.subplots(figsize=(8, 4.5))
+    # 8 in up to twelve bars, the width this figure has always had; wider beyond it.
+    fig, ax = plt.subplots(figsize=(8.0 if len(order) <= 12
+                                    else C.fig_span(len(order), per_item=0.42, base=3.5), 4.5))
     cov = coverage.loc[order]
-    axis_colors = dict(zip(coll.axes, sns.color_palette("deep", len(coll.axes))))
+    axis_colors = dict(zip(coll.axes, C.axis_palette(len(coll.axes))))
     colors = [axis_colors[a] for a in cov["axis"]]
     ax.bar(range(len(cov)), cov["mapped_fraction"], color=colors)
     ax.axhline(C.MIN_MAPPED_FRACTION, color="crimson", ls="--", lw=1,
                label=f"floor ({C.MIN_MAPPED_FRACTION:.0%})")
     for i, (n_m, n_g) in enumerate(zip(cov["n_mapped"], cov["n_genes"])):
         ax.text(i, cov["mapped_fraction"].iloc[i] + 0.015, f"{n_m}/{n_g}",
-                ha="center", fontsize=7)
+                ha="center", fontsize=7 if len(order) <= 15 else 5, rotation=0 if len(order) <= 15 else 90)
     ax.set_xticks(range(len(cov)))
     ax.set_xticklabels(cov.index, rotation=45, ha="right", fontsize=8)
     ax.set_ylabel("fraction of symbols mapped")
@@ -231,8 +259,15 @@ def main():
     labels = [a for a in coll.axes if a in set(cov["axis"])]
     ax.set_title(f"{coll.title}: signature coverage on the malignant object "
                  f"({n_all:,} genes)", fontsize=10)
-    ax.legend(handles + [ax.get_lines()[0]], labels + [f"floor ({C.MIN_MAPPED_FRACTION:.0%})"],
-              fontsize=8)
+    # Inside the axes at two or four axis colours; below it at fifteen, where the legend box
+    # is taller than the plot and lands on the first bars.
+    leg_handles = handles + [ax.get_lines()[0]]
+    leg_labels = labels + [f"floor ({C.MIN_MAPPED_FRACTION:.0%})"]
+    if len(leg_labels) <= 6:
+        ax.legend(leg_handles, leg_labels, fontsize=8)
+    else:
+        ax.legend(leg_handles, leg_labels, fontsize=8, loc="upper center",
+                  bbox_to_anchor=(0.5, -0.42), ncol=min(8, len(leg_labels)), frameon=False)
     sns.despine(ax=ax)
     C.savefig("signature_coverage", "05_4_signatures", coll, fig, caveat=False)
     plt.close(fig)

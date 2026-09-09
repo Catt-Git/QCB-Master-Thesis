@@ -1,0 +1,26 @@
+name: soupx-r
+# Isolated R environment for SoupX (06_ambient_soupx/06_2_soupx) and nothing else.
+#
+# Why it is separate. Same reasoning as `infercnv-r.yml` and `cytotrace2-py.yml`: this step
+# talks to the rest of the thesis through flat files only (gzipped Matrix Market in, gzipped
+# Matrix Market out), so it costs nothing to isolate, and `benchmark-py-r` is the one
+# environment the whole local pipeline depends on. SoupX itself is light - it is a CRAN
+# package over Matrix and ggplot2, not a Bioconductor tree like inferCNV - but there is no
+# reason to let a solver re-pin anything beside scran and batchelor for it.
+#
+# R only, on purpose. The Python halves of 06_2 (slicing shiao.h5ad into per-channel
+# matrices, putting the corrections back together) run in `benchmark-py-r`, which already
+# has anndata and scanpy; `soupx_all.sh` activates one environment per stage.
+#
+# r-soupx 1.6.2 is the version whose `SoupChannel(calcSoupProfile = FALSE)` +
+# `setSoupProfile()` path 06_2 depends on: the empty-droplet profile is measured on the
+# cluster by 06_1 and handed to SoupX as a table, because the raw Cell Ranger matrices it
+# would otherwise derive it from are not on this machine.
+channels:
+  - conda-forge
+dependencies:
+  - r-base=4.5
+  - r-soupx=1.6.2
+  - r-optparse
+  - r-matrix
+  - r-ggplot2

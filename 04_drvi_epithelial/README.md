@@ -53,7 +53,7 @@ question "is this a tumour cell state?" cannot be answered from these data.
 ├── signature_interpretation_all.sh   # phase-level driver for 04_3 -> 04_7
 ├── utils/
 │   ├── signature_common.py           # paths, writers, DRVI accessor, embeddings, target region
-│   └── sig_collections.py            # the scie and emt collections: lists, axes, target region
+│   └── sig_collections.py            # the scie, emt and gavish collections: lists, axes, target region
 ├── 04_1_subsetting/                  # from shiao.h5ad to the epithelial object
 ├── 04_2_drvi_run/                    # DRVI on that object, n_latent 64
 ├── 04_3_signatures/                  # the lists of one collection -> .gmt, coverage, Jaccard
@@ -63,8 +63,8 @@ question "is this a tumour cell state?" cannot be answered from these data.
 ├── 04_7_convergence/                 # Route C, the main result
 ├── 04_8_cycle_confound/              # how much of "stemness" is the cycle - a diagnostic
 ├── 04_9_embedding_control/           # Route A on Harmony instead of DRVI - a control
-├── tables/{scie,emt}/                # every result table of 04_3 - 04_7, one folder per collection
-└── figures/                          # one folder per step, then one per collection
+├── tables/{scie,emt,gavish,gavish_tnbc}/<run>/   # every result table of 04_3 - 04_7: one folder per collection, then per run
+└── figures/                          # one folder per step, then one per collection, then per run
 ```
 
 `utils/` follows 00 and 02: helpers shared by several steps live there, imported with the idiom
@@ -72,29 +72,78 @@ question "is this a tumour cell state?" cannot be answered from these data.
 `figures/` is - 04_7 reads what 04_5 and 04_6 wrote, so a per-step `tables/` would mean steps
 reaching into each other's folders.
 
-### The two collections
+### The three collections
 
-04_3 - 04_7 are **one procedure applied to two independent bodies of prior knowledge**. The step
-folders are one per *method step*, not one per readout; which lists are being interpreted is a
-flag, `--collection`, declared in `utils/sig_collections.py`:
+04_3 - 04_7 are **one procedure applied to three independent bodies of prior knowledge**. The
+step folders are one per *method step*, not one per readout; which lists are being interpreted is
+a flag, `--collection`, declared in `utils/sig_collections.py`:
 
-| | `scie` (the default) | `emt` |
-|---|---|---|
-| question | is there an epithelial state that is stem-like **and** immune-evasive? | which cells sit in the **hybrid**, partial-EMT state? |
-| lists | 11, on `immune` / `stemness`, plus CytoTRACE2 | 9, on `epithelial` / `hybrid` / `mesenchymal`, plus a derived E-to-M score per list version |
-| primary | no primary stemness list; `IMMUNOGENIC_CONSENSUS` is the primary immune one | list **B**; A and C are robustness replicates of it |
-| hybrid lists | - | scored and reported, but they **validate** the call rather than making it - see `sig_collections.py` |
-| target region | stem-**high** x immunogenic-**low** | epithelial **high** x mesenchymal **high**, i.e. co-expression |
-| named risks | cell cycle, sequencing depth | cell cycle, fibroblast ambient RNA / doublets |
+| | `scie` (the default) | `emt` | `gavish` |
+|---|---|---|---|
+| question | is there an epithelial state that is stem-like **and** immune-evasive? | which cells sit in the **hybrid**, partial-EMT state? | which recurrent pan-cancer metaprogram, if any, does each latent dimension carry? |
+| lists | 11, on `immune` / `stemness`, plus CytoTRACE2 | 9, on `epithelial` / `hybrid` / `mesenchymal`, plus a derived E-to-M score per list version | 27 by default — the ones a TNBC can express — or all 40 with `--all-metaprograms`, from `signatures/GAVISH_metaprograms/` |
+| primary | no primary stemness list; `IMMUNOGENIC_CONSENSUS` is the primary immune one | list **B**; A and C are robustness replicates of it | 24 of the 27 (29 of the 40); the lineage metaprograms that cannot be here are **negative controls** |
+| hybrid lists | - | scored and reported, but they **validate** the call rather than making it - see `sig_collections.py` | - |
+| target region | stem-**high** x immunogenic-**low** | epithelial **high** x mesenchymal **high**, i.e. co-expression | **none** - see below |
+| named risks | cell cycle, sequencing depth | cell cycle, fibroblast ambient RNA / doublets | - (the confounder table carries them per readout) |
 
-They share no output. Every table goes to `tables/<collection>/<name>_<collection>_<run_id>.csv`
-and every figure to `figures/<step>/<collection>/<name>_<collection>_<run_id>.png`, and **04_6
+They share no output. Every table goes to `tables/<collection>/<run_id>/<name>_<collection>_<run_id>.csv`
+and every figure to `figures/<step>/<collection>/<run_id>/<name>_<collection>_<run_id>.png`, and **04_6
 corrects its FDR inside one collection**, so running one cannot move a single number of the
-other. `04_4_cytotrace2` is the one step that is not collection-scoped: it computes a
+other. The run folder is the level below the collection one: this phase has a single DRVI run
+(`drvi_epi_64`), so it looks redundant here and is not — 04_9 writes `harmony_epi_50` and
+`epi_embeddings` beside it, and phase 05 has three. The run id stays in the filename as well,
+so a file dragged out of its folder is still identifiable. The `.gmt` sits ABOVE the run
+folders: it is a property of the object, and every run of this phase shares one. `04_4_cytotrace2` is the one step that is not collection-scoped: it computes a
 measurement, and it is the `scie` collection that declares it wants to use it.
 
-Adding a third collection means appending a `Collection` to `sig_collections.py`. No step script
-changes.
+#### A collection can be a vocabulary instead of a hypothesis
+
+`scie` and `emt` each ask whether a **named state exists**, so each defines a region of the
+cell-first plane and 04_5 calls cells in it. `gavish` asks the question the other way round —
+*given a latent dimension, what is it?* — so it defines **no** target region, and
+`Collection.has_target` is False. That is not a degenerate case, it is the second thing a
+signature collection can be, and each step drops exactly what depends on a region:
+
+| step | on `gavish` |
+|---|---|
+| 04_3 signatures | unchanged: `.gmt`, coverage, Jaccard |
+| 04_5 cell-first | per-cell scores, confounder table, dimensions x metaprograms correlations. **Skipped**: A5, the consensus quadrant and everything read off it, the plane and stability figures |
+| 04_6 factor-first | unchanged: ORA of each dimension's top decoder genes against the same sets |
+| 04_7 convergence | unchanged, and it is the point of the run: a dimension where both routes land on the same metaprogram has a name from outside this dataset. **Skipped**: the target-axis test |
+| 04_8 cycle, 04_9 embedding control | **stop with a message** — both exist only to interrogate a target region |
+
+The metaprograms are Gavish et al. 2023 (Nature 618:598-606), derived by NMF over ~1,000
+tumours of 24 cancer types with no knowledge of this project. That is what makes them the
+outside check on the other two collections: an EMT axis visible on the collaborator's lists
+**and** on MP12-MP16 is an axis that does not depend on whose EMT list was used. `MP1`
+(Cell Cycle G2/M) is missing — it is absent from `datasets/GAVISH.csv`, the export the text
+files were written from, so there are 40 lists and not 41.
+
+**Only 27 of them are scored by default, and the flag that widens it is `--all-metaprograms`.**
+Eighteen of the forty name a lineage or a tissue a triple-negative breast carcinoma cannot
+express, and each one costs a column of both heatmaps and one more test inside the FDR
+correction of 04_6. The default is therefore the 22 states that have been reported in
+basal-like / triple-negative malignant cells — the cycle (MP2, MP3), chromatin (MP4), stress
+and hypoxia (MP5, MP6), proteostasis (MP8–MP11), the four EMT programmes (MP12–MP15),
+interferon / MHC-II (MP17, MP18), epithelial senescence (MP19), MYC (MP20), respiration
+(MP21), the two secreted programmes (MP22, MP23) and the two detoxification ones (MP38, MP39)
+— plus **five that are there only to bound them**: `MP7` (in-vitro stress: the dissociation
+control on the stress axis), `MP36` (IG) and `MP33` (RBCs), the two ambient-RNA readouts,
+`MP25` (astrocytes) as the one impossible lineage that says what a correlation of zero looks
+like on this data, and `MP41` (unassigned), the residual a dimension can land on instead of
+being forced onto the nearest real programme. The set is one editable tuple,
+`_GAVISH_TNBC_MPS` in `sig_collections.py`; `MP30` and `MP40` are the first candidates to add
+back, since their genes are the generic secretory-epithelial ones that are luminal in breast.
+
+The two widths are **two collections on disk** — slug `gavish_tnbc` for the subset, `gavish`
+for all 40 — so their tables and figures sit in separate folders, carry the slug in their
+filenames, and neither can overwrite or be mistaken for the other. Everything already
+produced with all 40 stays valid and stays where it is.
+
+Adding a collection means appending a `Collection` to `sig_collections.py` and nothing else.
+The one exception is on the record: a collection **without** a target region needed the steps
+taught to skip what depends on one, which is `has_target` and is now part of the contract.
 
 ## 04_1_subsetting
 
@@ -304,8 +353,10 @@ are reported separately. Nothing is promoted on a single route.**
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 cd 04_drvi_epithelial
 
-./signature_interpretation_all.sh                  # steps 1, 3, 4, 5, 6, 7 on scie - resuming
-./signature_interpretation_all.sh --collection emt # the same six steps on the EMT lists
+./signature_interpretation_all.sh                     # steps 1, 3, 4, 5, 6, 7 on scie - resuming
+./signature_interpretation_all.sh --collection emt    # the same six steps on the EMT lists
+./signature_interpretation_all.sh --collection gavish # the 27 TNBC metaprograms; the cycle step is skipped
+./signature_interpretation_all.sh --collection gavish --all-metaprograms   # all 40 instead
 ./signature_interpretation_all.sh --force          # re-run everything
 ./signature_interpretation_all.sh --dry-run        # print what would run
 ./signature_interpretation_all.sh cellfirst convergence   # only the named steps
@@ -502,7 +553,7 @@ list in either collection to do so. Re-deriving that on the current code is a `s
 call on `$DATA_DIR/signatures/EMP.txt`, which is still on disk; it is not in the registry and no
 step reads it.
 
-How much of each list is actually measured is in `tables/<collection>/coverage_*.csv`, against two universes:
+How much of each list is actually measured is in `tables/<collection>/<run_id>/coverage_*.csv`, against two universes:
 all genes of the epithelial object (what Route A scores on) and the 2,000 HVGs (the Route B ORA
 background). The step **stops** below a 60 % mapping floor (`--allow-low-coverage` to override):
 these lists date from 2007-2012 and carry deprecated symbols, and a gene that does not map is
@@ -753,7 +804,7 @@ model, no GPU, no `scvi-tools`); reading each dimension in its **two directions 
 - **no direction is pruned.** 03_3 let DRVI's accessor drop the directions it had marked vanished;
   here all 2 x 64 are tested (see *Vanished dimensions are not pruned* above);
 - the output is a matrix on the **same row order as Route A**, read from
-  `tables/<collection>/dimension_row_order_*.csv`, so the two heatmaps are directly comparable.
+  `tables/<collection>/<run_id>/dimension_row_order_*.csv`, so the two heatmaps are directly comparable.
 
 **The gene universe, for the Methods.** DRVI was trained on the 2,000 batch-aware HVGs of 04_1, so
 a gene outside that set could never have entered a top-gene list: the ORA background is the
@@ -805,7 +856,7 @@ inert: the 24 new rows contribute 3 `convergent` verdicts and all 4 `both_routes
 ones - a category that literally could not appear before, since no row had both routes to compare.
 `PRUNE_VANISHED = False` is doing real work.
 
-### Result tables (`tables/<collection>/`)
+### Result tables (`tables/<collection>/<run_id>/`)
 
 One `.csv` per file, the caveat in the `#` header, the collection and the run id in the name:
 `tables/scie/convergence_scie_drvi_epi_64.csv`, `tables/emt/convergence_emt_drvi_epi_64.csv`.
@@ -834,7 +885,7 @@ The `*` below stands for `_<collection>_<run_id>`.
 | `target_axes_*.csv` | axes carrying both halves of the target, when there are any |
 | **`convergence_*.csv`** | **the main result: 128 rows, one per dimension-direction** |
 
-### Figures (`figures/<step>/<collection>/`)
+### Figures (`figures/<step>/<collection>/<run_id>/`)
 
 `04_3_signatures/`: `signature_coverage`, `jaccard_signature_overlap`, `signature_composition`.
 `04_5_cell_first/`: `confounder_heatmap`, `quadrant_stability`, `dim_signature_heatmap`, and the

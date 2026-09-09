@@ -23,6 +23,8 @@
 # Environment on the cluster (override with the vars below):
 #   DRVI_ENV   conda env carrying scvi-tools + drvi-py   [default: catalano_env]
 #   CELL_SET   tum (default) or epi, as everywhere in this phase
+#   HVG_SET    unset (default) or nomt, the gene panel without the MT- genes
+#   N_LATENT   32 (default), the fallback for --n-latent; the flag below wins over it
 #
 # catalano_env (benchmark-hpc.yml) pins drvi-py==0.2.7, the same version as the local
 # benchmark-py-r, so the model this job writes loads back in the notebook.
@@ -35,6 +37,12 @@
 #   sbatch --export=ALL,DATA_DIR=$DATA_DIR submit_drvi_tum.slurm                # n_latent 32
 #   sbatch --export=ALL,DATA_DIR=$DATA_DIR submit_drvi_tum.slurm --n-latent 64  # another size
 #   sbatch --export=ALL,DATA_DIR=$DATA_DIR,CELL_SET=epi submit_drvi_tum.slurm   # the control set
+#   sbatch --export=ALL,DATA_DIR=$DATA_DIR,CELL_SET=epi,HVG_SET=nomt submit_drvi_tum.slurm  # ...on the MT-free panel
+#
+# The three variables together are the run id - drvi_<compartment>_<n_latent><hvg_tag> - and
+# 05_4 - 05_8 reconstruct it from the same three to find what this job wrote. Exporting
+# N_LATENT rather than passing --n-latent is what keeps the local chain pointing at the run
+# this job produced.
 #
 # Three inputs, all produced by 05_2 locally and all to be copied up before submitting
 # (rsync/scp: the 02 helper utils/sync_to_cluster.sh only walks the phase-02 grid):
@@ -89,7 +97,7 @@ conda activate "$DRVI_ENV"
 set -u
 
 which python3
-echo "env: $DRVI_ENV   CELL_SET=${CELL_SET:-tum}   OMP_NUM_THREADS=$OMP_NUM_THREADS   args: ${*:-<none>}"
+echo "env: $DRVI_ENV   CELL_SET=${CELL_SET:-tum}   HVG_SET=${HVG_SET:-<none>}   OMP_NUM_THREADS=$OMP_NUM_THREADS   args: ${*:-<none>}"
 
 # Spelled out rather than a bare "$@": older bash treats an empty "$@" as an unbound
 # variable under `set -u`, and "${@:-}" would hand the script one empty argument, which

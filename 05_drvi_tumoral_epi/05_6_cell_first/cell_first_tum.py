@@ -16,7 +16,14 @@ Which readouts, and what shape the target region has on the plane, come from the
     version and takes the corner where BOTH are high, because a partial-EMT cell is one
     co-expressing the two programmes rather than one sitting at either end of the axis. The
     hybrid gene lists are scored and reported but do not define the region - see
-    `sig_collections.py` for the robustness argument behind that.
+    `sig_collections.py` for the robustness argument behind that;
+  * `--collection gavish` defines NO region at all. It is a vocabulary - the pan-cancer
+    metaprograms of Gavish et al. 2023 (the 27 TNBC-relevant ones, or all 40 with
+    `--all-metaprograms`), used to name the dimensions rather than to call cells
+    - so A5, the consensus quadrant, everything computed on it and the two figures that draw
+    it are skipped, and the run produces the per-cell scores, the confounder table and the
+    dimensions x readouts correlations. The step says so on stdout rather than silently
+    writing a target of zero cells. See `Collection.has_target`.
 
 How it fails, and what this script does about it:
 
@@ -62,12 +69,16 @@ the results instead.
 
 No single definition of the target is primary: the region is defined once per plane - one per
 stemness readout for `scie`, one per list version for `emt` - and the stability of the
-resulting cell set across those definitions is itself a reported result.
+resulting cell set across those definitions is itself a reported result. A collection that
+defines no region at all skips this entirely; it is not the same thing as a region nobody
+could fill.
 
 Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python cell_first_tum.py                              # the scie collection, the default
     python cell_first_tum.py --collection emt             # the same procedure on the EMT lists
+    python cell_first_tum.py --collection gavish          # scores only: no target region
+    python cell_first_tum.py --collection gavish --all-metaprograms  # all 40, not the TNBC 27
     python cell_first_tum.py --high-q 0.80 --low-q 0.20   # a stricter target region
     python cell_first_tum.py --overwrite                  # re-score instead of reusing the csv
 """
@@ -205,7 +216,7 @@ def jaccard(a: pd.Series, b: pd.Series) -> float:
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
     # Before anything is written: this sets the run id every table and figure name carries.
     emb = C.set_embedding(args.embedding)
     C.banner(f"05_6 - Route A, cell-first: {coll.title}")
@@ -329,15 +340,31 @@ def main():
         if on_axis:
             print(f"\n{ax_name:12s} readouts: {', '.join(on_axis)}")
 
-    planes = coll.planes(coll, list(raw.columns))
-    assert planes, (f"the {coll.name} collection defines no plane on the readouts that were "
-                    "scored - nothing can be called a target region")
-    for pl in planes:
-        for k in (pl.x, pl.y):
-            assert k in raw.columns, f"plane '{pl.label}' needs readout {k}, which was not scored"
-    print(f"\n{len(planes)} definitions of the target region ({coll.target_label}):")
-    for pl in planes:
-        print(f"  {pl.label:24s} {pl.x} {pl.x_rule} x {pl.y} {pl.y_rule}")
+    # THE TARGET REGION IS OPTIONAL. A collection that asks whether a named state exists
+    # defines one or more planes and a rule for each; a VOCABULARY collection - `gavish` -
+    # defines none, because it is here to name the dimensions rather than to call cells.
+    # Everything below that is computed on a quadrant is skipped in that case, and it is
+    # skipped rather than emptied: an all-False consensus would flow into the tables, the
+    # figures and 04_7 looking like a result of zero cells instead of like no question asked.
+    if coll.has_target:
+        planes = coll.planes(coll, list(raw.columns))
+        assert planes, (f"the {coll.name} collection defines no plane on the readouts that were "
+                        "scored - nothing can be called a target region")
+        for pl in planes:
+            for k in (pl.x, pl.y):
+                assert k in raw.columns, f"plane '{pl.label}' needs readout {k}, which was not scored"
+        print(f"\n{len(planes)} definitions of the target region ({coll.target_label}):")
+        for pl in planes:
+            print(f"  {pl.label:24s} {pl.x} {pl.x_rule} x {pl.y} {pl.y_rule}")
+    else:
+        planes = []
+        print(f"\n{coll.name} defines no target region: it is a vocabulary, not a hypothesis.")
+        print("SKIPPED: A5 (the region, its consensus, its stability, its per-patient and\n"
+              "         per-group breakdowns), the named risks computed on it, the per-dimension\n"
+              "         target effect size, and the plane and stability figures.")
+        print("PRODUCED: the per-cell scores, the confounder table, and the dimensions x\n"
+              "          readouts correlations - everything that needs no region to mean\n"
+              "          something. Route B and Route C run unchanged.")
 
     # ------------------------------------------------------- confounder table
     C.banner("A4 - confounders")
@@ -368,163 +395,168 @@ def main():
         # would be rewriting the reference run's file with identical content.
         print(f"\n[skip] {scores_csv} is embedding-independent and already there")
 
-    # ----------------------------------------------------- A5 - target region
-    C.banner(f"A5 - the target region: {coll.target_label}\n"
-             f"(high >= q{args.high_q:.2f}, low <= q{args.low_q:.2f}, "
-             f"mid = q{args.mid_lo_q:.2f} - q{args.mid_hi_q:.2f})")
+    # A5 and the named risks characterise a target region and nothing else, so a collection
+    # without one skips both. The confounder table above already carries the cycle and depth
+    # coupling of every readout, which is what survives of these checks when there is no
+    # cell set to run them on.
+    if coll.has_target:
+        # ----------------------------------------------------- A5 - target region
+        C.banner(f"A5 - the target region: {coll.target_label}\n"
+                 f"(high >= q{args.high_q:.2f}, low <= q{args.low_q:.2f}, "
+                 f"mid = q{args.mid_lo_q:.2f} - q{args.mid_hi_q:.2f})")
 
-    labels = [pl.label for pl in planes]
-    cut = C.Cutoffs.from_args(args)
-    quads = {pl.label: C.define_target(z, pl, cut) for pl in planes}
+        labels = [pl.label for pl in planes]
+        cut = C.Cutoffs.from_args(args)
+        quads = {pl.label: C.define_target(z, pl, cut) for pl in planes}
 
-    qdf = pd.DataFrame(quads)
-    sizes = qdf.sum().rename("n_cells").to_frame()
-    sizes["pct_of_compartment"] = 100 * sizes["n_cells"] / adata.n_obs
-    print(f"\ntarget region ({coll.target_label}), one definition per plane")
-    print(sizes.to_string(float_format="%.2f"))
+        qdf = pd.DataFrame(quads)
+        sizes = qdf.sum().rename("n_cells").to_frame()
+        sizes["pct_of_compartment"] = 100 * sizes["n_cells"] / adata.n_obs
+        print(f"\ntarget region ({coll.target_label}), one definition per plane")
+        print(sizes.to_string(float_format="%.2f"))
 
-    # stability across definitions
-    stab = pd.DataFrame(index=labels, columns=labels, dtype=float)
-    for a in labels:
-        for b in labels:
-            stab.loc[a, b] = jaccard(qdf[a], qdf[b])
-    print("\nstability of the cell set across definitions (Jaccard)")
-    print(stab.to_string(float_format="%.3f"))
-    off = stab.where(~np.eye(len(labels), dtype=bool))
-    print(f"median pairwise Jaccard: {np.nanmedian(off.values):.3f}  "
-          f"(range {np.nanmin(off.values):.3f} - {np.nanmax(off.values):.3f})")
-    write_shared(stab.round(4), "quadrant_stability", coll)
+        # stability across definitions
+        stab = pd.DataFrame(index=labels, columns=labels, dtype=float)
+        for a in labels:
+            for b in labels:
+                stab.loc[a, b] = jaccard(qdf[a], qdf[b])
+        print("\nstability of the cell set across definitions (Jaccard)")
+        print(stab.to_string(float_format="%.3f"))
+        off = stab.where(~np.eye(len(labels), dtype=bool))
+        print(f"median pairwise Jaccard: {np.nanmedian(off.values):.3f}  "
+              f"(range {np.nanmin(off.values):.3f} - {np.nanmax(off.values):.3f})")
+        write_shared(stab.round(4), "quadrant_stability", coll)
 
-    n_defs, consensus = C.consensus_vote(qdf)
-    print(f"\ncalled by >=1 definition: {int((n_defs >= 1).sum()):,} cells; "
-          f"by a majority: {int(consensus.sum()):,}; by all {len(labels)}: "
-          f"{int((n_defs == len(labels)).sum()):,}")
-    votes = n_defs.value_counts().sort_index().rename("n_cells").to_frame()
-    votes.index.name = "n_definitions_calling_the_cell"
-    write_shared(votes, "quadrant_vote_distribution", coll)
+        n_defs, consensus = C.consensus_vote(qdf)
+        print(f"\ncalled by >=1 definition: {int((n_defs >= 1).sum()):,} cells; "
+              f"by a majority: {int(consensus.sum()):,}; by all {len(labels)}: "
+              f"{int((n_defs == len(labels)).sum()):,}")
+        votes = n_defs.value_counts().sort_index().rename("n_cells").to_frame()
+        votes.index.name = "n_definitions_calling_the_cell"
+        write_shared(votes, "quadrant_vote_distribution", coll)
 
-    # per-patient sizes: a state present in one patient is a patient effect until shown otherwise
-    per_pat = qdf.copy()
-    per_pat["cohort"] = adata.obs["cohort"].values
-    pp = per_pat.groupby("cohort", observed=True).sum()
-    pp["n_cells_in_cohort"] = adata.obs["cohort"].value_counts().reindex(pp.index).values
-    pp["consensus"] = pd.Series(consensus.values, index=adata.obs["cohort"].values).groupby(level=0).sum()
-    pp["pct_consensus"] = 100 * pp["consensus"] / pp["n_cells_in_cohort"]
-    print("\nper-patient size of the consensus quadrant "
-          "(a state in one patient is a patient effect until shown otherwise)")
-    print(pp[["n_cells_in_cohort", "consensus", "pct_consensus"]]
-          .sort_values("pct_consensus", ascending=False).to_string(float_format="%.2f"))
-    print(f"\npatients with at least one consensus cell: "
-          f"{int((pp['consensus'] > 0).sum())} / {len(pp)}")
-    write_shared(pp, "quadrant_per_patient", coll)
+        # per-patient sizes: a state present in one patient is a patient effect until shown otherwise
+        per_pat = qdf.copy()
+        per_pat["cohort"] = adata.obs["cohort"].values
+        pp = per_pat.groupby("cohort", observed=True).sum()
+        pp["n_cells_in_cohort"] = adata.obs["cohort"].value_counts().reindex(pp.index).values
+        pp["consensus"] = pd.Series(consensus.values, index=adata.obs["cohort"].values).groupby(level=0).sum()
+        pp["pct_consensus"] = 100 * pp["consensus"] / pp["n_cells_in_cohort"]
+        print("\nper-patient size of the consensus quadrant "
+              "(a state in one patient is a patient effect until shown otherwise)")
+        print(pp[["n_cells_in_cohort", "consensus", "pct_consensus"]]
+              .sort_values("pct_consensus", ascending=False).to_string(float_format="%.2f"))
+        print(f"\npatients with at least one consensus cell: "
+              f"{int((pp['consensus'] > 0).sum())} / {len(pp)}")
+        write_shared(pp, "quadrant_per_patient", coll)
 
-    # 04 breaks the target set down by `cell_type`. That column is the constant `malignant`
-    # here, so the breakdown is by every grouping this subset actually has - the leiden
-    # partition of 05_2 first, the pre-CNV CellTypist label second - plus `phase`, which is
-    # not a grouping but the covariate the cycle risk is read on.
-    #
-    # These are COVARIATES of the target set, reported. They are deliberately not in GROUPBY:
-    # standardising within a state is what would remove the contrast being measured. A target
-    # set that turns out to be one leiden cluster, or all `Lumsec-prol`, is a finding to state
-    # - possibly a negative one - not something to correct away here.
-    for key in C.grouping_keys(adata.obs) + ["phase"]:
-        per_g = pd.DataFrame({key: adata.obs[key].astype(str).values,
-                              "consensus": consensus.values}).groupby(key, observed=True).agg(
-            n_cells=("consensus", "size"), n_target=("consensus", "sum"))
-        per_g["pct"] = 100 * per_g["n_target"] / per_g["n_cells"]
-        print(f"\nconsensus quadrant by {key}")
-        print(per_g.sort_values("pct", ascending=False).to_string(float_format="%.2f"))
-        write_shared(per_g, f"quadrant_per_{key}", coll)
+        # 04 breaks the target set down by `cell_type`. That column is the constant `malignant`
+        # here, so the breakdown is by every grouping this subset actually has - the leiden
+        # partition of 05_2 first, the pre-CNV CellTypist label second - plus `phase`, which is
+        # not a grouping but the covariate the cycle risk is read on.
+        #
+        # These are COVARIATES of the target set, reported. They are deliberately not in GROUPBY:
+        # standardising within a state is what would remove the contrast being measured. A target
+        # set that turns out to be one leiden cluster, or all `Lumsec-prol`, is a finding to state
+        # - possibly a negative one - not something to correct away here.
+        for key in C.grouping_keys(adata.obs) + ["phase"]:
+            per_g = pd.DataFrame({key: adata.obs[key].astype(str).values,
+                                  "consensus": consensus.values}).groupby(key, observed=True).agg(
+                n_cells=("consensus", "size"), n_target=("consensus", "sum"))
+            per_g["pct"] = 100 * per_g["n_target"] / per_g["n_cells"]
+            print(f"\nconsensus quadrant by {key}")
+            print(per_g.sort_values("pct", ascending=False).to_string(float_format="%.2f"))
+            write_shared(per_g, f"quadrant_per_{key}", coll)
 
-    # ------------------------------------------- the named risks (A4 cont.)
-    C.banner(f"A4 - the named risks of this collection: {', '.join(coll.risks)}")
+        # ------------------------------------------- the named risks (A4 cont.)
+        C.banner(f"A4 - the named risks of this collection: {', '.join(coll.risks)}")
 
-    # 1. is the target set just the cycling one? Runs for every collection.
-    phase = adata.obs["phase"].astype(str).values
-    comp = pd.crosstab(pd.Series(phase, name="phase"), consensus.values,
-                       normalize="columns") * 100
-    comp.columns = ["rest", "target"]
-    print("phase composition, target quadrant vs the rest (%)")
-    print(comp.to_string(float_format="%.2f"))
+        # 1. is the target set just the cycling one? Runs for every collection.
+        phase = adata.obs["phase"].astype(str).values
+        comp = pd.crosstab(pd.Series(phase, name="phase"), consensus.values,
+                           normalize="columns") * 100
+        comp.columns = ["rest", "target"]
+        print("phase composition, target quadrant vs the rest (%)")
+        print(comp.to_string(float_format="%.2f"))
 
-    g1 = phase == "G1"
-    print(f"\nrecomputing the target region inside G1 alone ({g1.sum():,} cells), "
-          "i.e. with the cycle held out")
-    # The quantile cutoffs are recomputed WITHIN G1, not carried over: the point of the check
-    # is what the definition would have called had the cycling cells never been there.
-    z_g1 = z[g1]
-    g1_quads = {pl.label: C.define_target(z_g1, pl, cut) for pl in planes}
-    g1df = pd.DataFrame(g1_quads)
-    _, g1_consensus = C.consensus_vote(g1df)
-    overlap = jaccard(consensus[g1], g1_consensus)
-    print(f"consensus target restricted to G1: {int(consensus[g1].sum()):,} cells")
-    print(f"consensus target recomputed within G1: {int(g1_consensus.sum()):,} cells")
-    print(f"Jaccard between the two: {overlap:.3f}")
-    print("A high Jaccard means the state is not an artefact of the cycle; a low one means the\n"
-          "target was largely 'cycling' and the readout does not survive the check.")
+        g1 = phase == "G1"
+        print(f"\nrecomputing the target region inside G1 alone ({g1.sum():,} cells), "
+              "i.e. with the cycle held out")
+        # The quantile cutoffs are recomputed WITHIN G1, not carried over: the point of the check
+        # is what the definition would have called had the cycling cells never been there.
+        z_g1 = z[g1]
+        g1_quads = {pl.label: C.define_target(z_g1, pl, cut) for pl in planes}
+        g1df = pd.DataFrame(g1_quads)
+        _, g1_consensus = C.consensus_vote(g1df)
+        overlap = jaccard(consensus[g1], g1_consensus)
+        print(f"consensus target restricted to G1: {int(consensus[g1].sum()):,} cells")
+        print(f"consensus target recomputed within G1: {int(g1_consensus.sum()):,} cells")
+        print(f"Jaccard between the two: {overlap:.3f}")
+        print("A high Jaccard means the state is not an artefact of the cycle; a low one means the\n"
+              "target was largely 'cycling' and the readout does not survive the check.")
 
-    cc_rows = [{"check": "phase_pct_G1_target", "value": float(comp.loc["G1", "target"]) if "G1" in comp.index else np.nan},
-               {"check": "phase_pct_G1_rest", "value": float(comp.loc["G1", "rest"]) if "G1" in comp.index else np.nan},
-               {"check": "n_target_all_phases", "value": float(consensus.sum())},
-               {"check": "n_target_within_G1_recomputed", "value": float(g1_consensus.sum())},
-               {"check": "jaccard_target_vs_G1_recomputed", "value": float(overlap)}]
+        cc_rows = [{"check": "phase_pct_G1_target", "value": float(comp.loc["G1", "target"]) if "G1" in comp.index else np.nan},
+                   {"check": "phase_pct_G1_rest", "value": float(comp.loc["G1", "rest"]) if "G1" in comp.index else np.nan},
+                   {"check": "n_target_all_phases", "value": float(consensus.sum())},
+                   {"check": "n_target_within_G1_recomputed", "value": float(g1_consensus.sum())},
+                   {"check": "jaccard_target_vs_G1_recomputed", "value": float(overlap)}]
 
-    # 2. is the low end of the primary axis just shallow sequencing? (`risks` contains "depth")
-    if "depth" in coll.risks and coll.depth_risk_readout:
-        r = coll.depth_risk_readout
-        low_grp = z[f"z_{r}"] <= z[f"z_{r}"].quantile(args.low_q)
-        depth = adata.obs["n_genes_by_counts"].values
-        u, pu = mannwhitneyu(depth[low_grp.values], depth[~low_grp.values], alternative="two-sided")
-        med_lo, med_hi = np.median(depth[low_grp.values]), np.median(depth[~low_grp.values])
-        auc_depth = roc_auc_score(low_grp.values, -depth)
-        print(f"\n{r}-low ({int(low_grp.sum()):,} cells) vs the rest, n_genes_by_counts:")
-        print(f"  median {med_lo:,.0f} vs {med_hi:,.0f}  (Mann-Whitney p = {pu:.3g})")
-        print(f"  AUROC of 'shallower' predicting {r}-low: {auc_depth:.3f}")
-        print("  0.5 means depth does not explain the group; well above it means the evasive\n"
-              "  group is largely the low-complexity group and the finding is technical.")
-        cc_rows += [{"check": "median_depth_immunogenic_low", "value": float(med_lo)},
-                    {"check": "median_depth_rest", "value": float(med_hi)},
-                    {"check": "mannwhitney_p_depth", "value": float(pu)},
-                    {"check": "auroc_depth_predicts_immunogenic_low", "value": float(auc_depth)}]
+        # 2. is the low end of the primary axis just shallow sequencing? (`risks` contains "depth")
+        if "depth" in coll.risks and coll.depth_risk_readout:
+            r = coll.depth_risk_readout
+            low_grp = z[f"z_{r}"] <= z[f"z_{r}"].quantile(args.low_q)
+            depth = adata.obs["n_genes_by_counts"].values
+            u, pu = mannwhitneyu(depth[low_grp.values], depth[~low_grp.values], alternative="two-sided")
+            med_lo, med_hi = np.median(depth[low_grp.values]), np.median(depth[~low_grp.values])
+            auc_depth = roc_auc_score(low_grp.values, -depth)
+            print(f"\n{r}-low ({int(low_grp.sum()):,} cells) vs the rest, n_genes_by_counts:")
+            print(f"  median {med_lo:,.0f} vs {med_hi:,.0f}  (Mann-Whitney p = {pu:.3g})")
+            print(f"  AUROC of 'shallower' predicting {r}-low: {auc_depth:.3f}")
+            print("  0.5 means depth does not explain the group; well above it means the evasive\n"
+                  "  group is largely the low-complexity group and the finding is technical.")
+            cc_rows += [{"check": "median_depth_immunogenic_low", "value": float(med_lo)},
+                        {"check": "median_depth_rest", "value": float(med_hi)},
+                        {"check": "mannwhitney_p_depth", "value": float(pu)},
+                        {"check": "auroc_depth_predicts_immunogenic_low", "value": float(auc_depth)}]
 
-    # 3. is the high end of the mesenchymal axis just ambient RNA or a doublet?
-    #    (`risks` contains "ambient")
-    #
-    # This subset was defined by a CNV call, so an actual fibroblast is not in it - but
-    # subsetting removes cells, not the fibroblast transcripts that leaked into the droplets of
-    # the cells that remain. VIM / FN1 / SPARC / ACTA2 high is therefore still the expected
-    # signature of contamination as much as of a transition, and without this check an EMT
-    # result cannot be told apart from a soup result. What the malignant subset buys is the
-    # other half of the risk: a high-mesenchymal cell here cannot simply BE a fibroblast.
-    # `doublet_score` comes from 01_2 via 05_2 (Scrublet) and is not recomputed here.
-    if "ambient" in coll.risks and coll.ambient_risk_axis:
-        on_axis = [n for n in raw.columns if coll.axis_of.get(n) == coll.ambient_risk_axis]
-        dbl = adata.obs["doublet_score"].astype(float).values
-        print(f"\n{coll.ambient_risk_axis}-high vs the rest, doublet_score (Scrublet, via 05_2):")
-        for r in on_axis:
-            high = (z[f"z_{r}"] >= z[f"z_{r}"].quantile(args.high_q)).values
-            auc = roc_auc_score(high, dbl)
-            rho_d, p_d = spearmanr(raw[r].values, dbl)
-            med_hi_d, med_lo_d = np.median(dbl[high]), np.median(dbl[~high])
-            print(f"  {r:24s} AUROC {auc:.3f}   median {med_hi_d:.4f} vs {med_lo_d:.4f}   "
-                  f"rho(score, doublet_score) {rho_d:+.3f}")
-            cc_rows += [{"check": f"auroc_doublet_predicts_{r}_high", "value": float(auc)},
-                        {"check": f"rho_doublet_score_{r}", "value": float(rho_d)}]
-        # The predicted-doublet flag is a harder call than the score and is reported next to it.
-        if "predicted_doublet" in adata.obs:
-            pred = adata.obs["predicted_doublet"].astype(bool).values
-            print(f"  predicted doublets in the consensus target: "
-                  f"{int(pred[consensus.values].sum()):,} / {int(consensus.sum()):,} "
-                  f"({100 * pred[consensus.values].mean():.2f}%) vs "
-                  f"{100 * pred[~consensus.values].mean():.2f}% in the rest")
-            cc_rows += [{"check": "pct_predicted_doublet_target",
-                         "value": float(100 * pred[consensus.values].mean())},
-                        {"check": "pct_predicted_doublet_rest",
-                         "value": float(100 * pred[~consensus.values].mean())}]
-        print("  AUROC near 0.5 means the mesenchymal signal is not the soup; well above it\n"
-              "  means the EMT readout is measuring contamination and nothing here is a state.")
+        # 3. is the high end of the mesenchymal axis just ambient RNA or a doublet?
+        #    (`risks` contains "ambient")
+        #
+        # This subset was defined by a CNV call, so an actual fibroblast is not in it - but
+        # subsetting removes cells, not the fibroblast transcripts that leaked into the droplets of
+        # the cells that remain. VIM / FN1 / SPARC / ACTA2 high is therefore still the expected
+        # signature of contamination as much as of a transition, and without this check an EMT
+        # result cannot be told apart from a soup result. What the malignant subset buys is the
+        # other half of the risk: a high-mesenchymal cell here cannot simply BE a fibroblast.
+        # `doublet_score` comes from 01_2 via 05_2 (Scrublet) and is not recomputed here.
+        if "ambient" in coll.risks and coll.ambient_risk_axis:
+            on_axis = [n for n in raw.columns if coll.axis_of.get(n) == coll.ambient_risk_axis]
+            dbl = adata.obs["doublet_score"].astype(float).values
+            print(f"\n{coll.ambient_risk_axis}-high vs the rest, doublet_score (Scrublet, via 05_2):")
+            for r in on_axis:
+                high = (z[f"z_{r}"] >= z[f"z_{r}"].quantile(args.high_q)).values
+                auc = roc_auc_score(high, dbl)
+                rho_d, p_d = spearmanr(raw[r].values, dbl)
+                med_hi_d, med_lo_d = np.median(dbl[high]), np.median(dbl[~high])
+                print(f"  {r:24s} AUROC {auc:.3f}   median {med_hi_d:.4f} vs {med_lo_d:.4f}   "
+                      f"rho(score, doublet_score) {rho_d:+.3f}")
+                cc_rows += [{"check": f"auroc_doublet_predicts_{r}_high", "value": float(auc)},
+                            {"check": f"rho_doublet_score_{r}", "value": float(rho_d)}]
+            # The predicted-doublet flag is a harder call than the score and is reported next to it.
+            if "predicted_doublet" in adata.obs:
+                pred = adata.obs["predicted_doublet"].astype(bool).values
+                print(f"  predicted doublets in the consensus target: "
+                      f"{int(pred[consensus.values].sum()):,} / {int(consensus.sum()):,} "
+                      f"({100 * pred[consensus.values].mean():.2f}%) vs "
+                      f"{100 * pred[~consensus.values].mean():.2f}% in the rest")
+                cc_rows += [{"check": "pct_predicted_doublet_target",
+                             "value": float(100 * pred[consensus.values].mean())},
+                            {"check": "pct_predicted_doublet_rest",
+                             "value": float(100 * pred[~consensus.values].mean())}]
+            print("  AUROC near 0.5 means the mesenchymal signal is not the soup; well above it\n"
+                  "  means the EMT readout is measuring contamination and nothing here is a state.")
 
-    write_shared(pd.DataFrame(cc_rows).set_index("check"), "confounder_checks", coll, index=True)
+        write_shared(pd.DataFrame(cc_rows).set_index("check"), "confounder_checks", coll, index=True)
 
     # ----------------------------------------------- A6 - dimensions x signatures
     C.banner(f"A6 - the dimensions of {emb.title} vs the standardised scores")
@@ -563,18 +595,21 @@ def main():
     for r in readouts:
         print(f"  {r:24s} {rho[r].abs().idxmax():>8s}  rho = {rho.loc[rho[r].abs().idxmax(), r]:+.3f}")
 
-    auroc = pd.Series({d: roc_auc_score(consensus.values, L[d].values) for d in dims},
-                      name="auroc_target_vs_rest")
-    # `sd == 0` is only reachable on a dead dimension, now that they are kept: 0 there, not inf.
-    smd = pd.Series({d: ((L[d][consensus.values].mean() - L[d][~consensus.values].mean())
-                         / L[d].std(ddof=0) if L[d].std(ddof=0) > 0 else 0.0)
-                     for d in dims}, name="standardised_mean_difference")
-    eff = pd.concat([auroc, smd], axis=1)
-    eff["abs_auroc_from_half"] = (eff["auroc_target_vs_rest"] - 0.5).abs()
-    eff = eff.sort_values("abs_auroc_from_half", ascending=False)
-    print("\neffect size of the consensus target quadrant on each dimension (top 10)")
-    print(eff.head(10).to_string(float_format="%+.3f"))
-    C.write_table(eff, "dim_target_effect_size", coll)
+    # The effect size of the consensus quadrant on each dimension. 05_8 reads this table
+    # only for a collection that has a quadrant, so it is simply not written otherwise.
+    if coll.has_target:
+        auroc = pd.Series({d: roc_auc_score(consensus.values, L[d].values) for d in dims},
+                          name="auroc_target_vs_rest")
+        # `sd == 0` is only reachable on a dead dimension, now that they are kept: 0 there, not inf.
+        smd = pd.Series({d: ((L[d][consensus.values].mean() - L[d][~consensus.values].mean())
+                             / L[d].std(ddof=0) if L[d].std(ddof=0) > 0 else 0.0)
+                         for d in dims}, name="standardised_mean_difference")
+        eff = pd.concat([auroc, smd], axis=1)
+        eff["abs_auroc_from_half"] = (eff["auroc_target_vs_rest"] - 0.5).abs()
+        eff = eff.sort_values("abs_auroc_from_half", ascending=False)
+        print("\neffect size of the consensus target quadrant on each dimension (top 10)")
+        print(eff.head(10).to_string(float_format="%+.3f"))
+        C.write_table(eff, "dim_target_effect_size", coll)
 
     # The row order every later heatmap uses, Route B included.
     # The order column is named for the embedding, so `drvi_order` is what the DRVI run
@@ -587,10 +622,12 @@ def main():
     # -------------------------------------------------------------- figures
     C.banner("figures")
 
-    # confounder heatmap
-    fig, ax = plt.subplots(figsize=(6.5, 5))
+    # confounder heatmap. One row per readout, so the height is the collection's width:
+    # 6.5 x 5 in at ten readouts, taller at forty rather than forty rows squeezed into five.
     m = conf[[f"rho_{k}" for k in conf_keys]]
     m.columns = conf_keys
+    fig, ax = plt.subplots(figsize=(6.5, 5.0 if len(m) <= 15
+                                    else C.fig_span(len(m), 0.28, 1.8, cap=16.0)))
     sns.heatmap(m, cmap="vlag", center=0, vmin=-1, vmax=1, annot=True, fmt="+.2f",
                 annot_kws={"size": 7}, cbar_kws={"label": "Spearman rho", "shrink": 0.7}, ax=ax)
     ax.set_title(f"Route A confounders, {coll.title}\n"
@@ -599,52 +636,54 @@ def main():
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
     savefig_shared("confounder_heatmap", "05_6_cell_first", coll, fig)
 
-    # the plane, one panel per definition of the target region
-    def cut_lines(a, v, rule, vertical: bool):
-        """Draw the cutoff(s) of one rule. 'mid' has two, which is what makes it visible as a
-        BAND rather than a corner - the reader has to be able to see that the EMT target is
-        not an extreme of the axis."""
-        draw = a.axvline if vertical else a.axhline
-        qs = {"high": [args.high_q], "low": [args.low_q],
-              "mid": [args.mid_lo_q, args.mid_hi_q]}[rule]
-        for q in qs:
-            draw(v.quantile(q), color="k", ls="--", lw=0.8)
+    # The two figures of the target region. Nothing to draw without one.
+    if coll.has_target:
+        # the plane, one panel per definition of the target region
+        def cut_lines(a, v, rule, vertical: bool):
+            """Draw the cutoff(s) of one rule. 'mid' has two, which is what makes it visible as a
+            BAND rather than a corner - the reader has to be able to see that the EMT target is
+            not an extreme of the axis."""
+            draw = a.axvline if vertical else a.axhline
+            qs = {"high": [args.high_q], "low": [args.low_q],
+                  "mid": [args.mid_lo_q, args.mid_hi_q]}[rule]
+            for q in qs:
+                draw(v.quantile(q), color="k", ls="--", lw=0.8)
 
-    ncol = min(4, len(planes))
-    nrow = int(np.ceil(len(planes) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(4 * ncol, 3.8 * nrow), squeeze=False)
-    rng = np.random.default_rng(C.SEED)
-    idx = rng.choice(adata.n_obs, size=min(20000, adata.n_obs), replace=False)
-    for a, pl in zip(axes.ravel(), planes):
-        zx, zy = z[f"z_{pl.x}"], z[f"z_{pl.y}"]
-        x, y = zx.values[idx], zy.values[idx]
-        tgt = qdf[pl.label].values[idx]
-        a.scatter(x[~tgt], y[~tgt], s=1.5, c="0.78", lw=0, rasterized=True)
-        a.scatter(x[tgt], y[tgt], s=1.5, c="#C44E52", lw=0, rasterized=True)
-        cut_lines(a, zx, pl.x_rule, vertical=True)
-        cut_lines(a, zy, pl.y_rule, vertical=False)
-        a.set_title(f"{pl.label}\n{int(qdf[pl.label].sum()):,} cells in the target region", fontsize=9)
-        a.set_xlabel(f"z {pl.x} ({pl.x_rule}) (within {' x '.join(GROUPBY)})", fontsize=8)
-        a.set_ylabel(f"z {pl.y} ({pl.y_rule})", fontsize=8)
-        a.tick_params(labelsize=7)
-        sns.despine(ax=a)
-    for a in axes.ravel()[len(planes):]:
-        a.axis("off")
-    fig.suptitle(f"Route A, {coll.title}: one definition per plane\n"
-                 f"target region in red = {coll.target_label}; {len(idx):,} cells shown",
-                 fontsize=10)
-    fig.tight_layout(rect=[0, 0, 1, 0.94])
-    savefig_shared(coll.plane_figure, "05_6_cell_first", coll, fig)
+        ncol = min(4, len(planes))
+        nrow = int(np.ceil(len(planes) / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(4 * ncol, 3.8 * nrow), squeeze=False)
+        rng = np.random.default_rng(C.SEED)
+        idx = rng.choice(adata.n_obs, size=min(20000, adata.n_obs), replace=False)
+        for a, pl in zip(axes.ravel(), planes):
+            zx, zy = z[f"z_{pl.x}"], z[f"z_{pl.y}"]
+            x, y = zx.values[idx], zy.values[idx]
+            tgt = qdf[pl.label].values[idx]
+            a.scatter(x[~tgt], y[~tgt], s=1.5, c="0.78", lw=0, rasterized=True)
+            a.scatter(x[tgt], y[tgt], s=1.5, c="#C44E52", lw=0, rasterized=True)
+            cut_lines(a, zx, pl.x_rule, vertical=True)
+            cut_lines(a, zy, pl.y_rule, vertical=False)
+            a.set_title(f"{pl.label}\n{int(qdf[pl.label].sum()):,} cells in the target region", fontsize=9)
+            a.set_xlabel(f"z {pl.x} ({pl.x_rule}) (within {' x '.join(GROUPBY)})", fontsize=8)
+            a.set_ylabel(f"z {pl.y} ({pl.y_rule})", fontsize=8)
+            a.tick_params(labelsize=7)
+            sns.despine(ax=a)
+        for a in axes.ravel()[len(planes):]:
+            a.axis("off")
+        fig.suptitle(f"Route A, {coll.title}: one definition per plane\n"
+                     f"target region in red = {coll.target_label}; {len(idx):,} cells shown",
+                     fontsize=10)
+        fig.tight_layout(rect=[0, 0, 1, 0.94])
+        savefig_shared(coll.plane_figure, "05_6_cell_first", coll, fig)
 
-    # quadrant stability
-    fig, ax = plt.subplots(figsize=(6, 5))
-    sns.heatmap(stab.astype(float), cmap="rocket_r", vmin=0, vmax=1, annot=True, fmt=".2f",
-                annot_kws={"size": 7}, square=True,
-                cbar_kws={"label": "Jaccard of the called cell set", "shrink": 0.7}, ax=ax)
-    ax.set_title(f"Stability of the target region across definitions, {coll.title}", fontsize=10)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
-    plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
-    savefig_shared("quadrant_stability", "05_6_cell_first", coll, fig)
+        # quadrant stability
+        fig, ax = plt.subplots(figsize=(6, 5))
+        sns.heatmap(stab.astype(float), cmap="rocket_r", vmin=0, vmax=1, annot=True, fmt=".2f",
+                    annot_kws={"size": 7}, square=True,
+                    cbar_kws={"label": "Jaccard of the called cell set", "shrink": 0.7}, ax=ax)
+        ax.set_title(f"Stability of the target region across definitions, {coll.title}", fontsize=10)
+        plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
+        plt.setp(ax.get_yticklabels(), rotation=0, fontsize=8)
+        savefig_shared("quadrant_stability", "05_6_cell_first", coll, fig)
 
     # dimensions x signatures
     #
@@ -655,7 +694,8 @@ def main():
     # colorbar and in its title, and without the same wording here the reader has a signed
     # colour scale with nothing telling them what the sign means. Hence both lines below.
     col_order = coll.order(list(rho.columns))
-    fig, ax = plt.subplots(figsize=(1.0 * len(col_order) + 4, 0.24 * len(dims) + 3))
+    fig, ax = plt.subplots(figsize=(C.fig_span(len(col_order), 1.0, 4.0),
+                                    C.fig_span(len(dims), 0.24, 3.0)))
     sns.heatmap(rho[col_order].astype(float), cmap="vlag", center=0, vmin=-0.6, vmax=0.6,
                 cbar_kws={"label": "Spearman rho (dimension vs within-stratum z-score)\n"
                                    "sign = direction: rho > 0 is DR n+, rho < 0 is DR n-",

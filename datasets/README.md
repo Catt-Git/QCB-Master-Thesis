@@ -46,7 +46,8 @@ lists read by 04_3, see below). Everything else is rebuilt by re-running the pha
 |---|---|
 | `fastq_raw/` | 00_3, the FASTQ as downloaded (~2.4 TB) |
 | `renamed_fastq/` | 00_4, Cell Ranger naming + `unique_samples.txt` |
-| `cellranger_out/<sample>/outs/filtered_feature_bc_matrix.h5` | 00_5 |
+| `cellranger_out/<sample>/outs/filtered_feature_bc_matrix.h5` | 00_5, what 00_6 concatenates |
+| `cellranger_out/<sample>/outs/raw_feature_bc_matrix.h5` | 00_5, the unfiltered matrix - unused until **06_1**, which reads the empty droplets out of it |
 | `all_samples_combined.h5ad` | 00_6, the concatenated raw object |
 
 ### 01_pre_processing
@@ -104,7 +105,7 @@ The R methods also write a `02_integration/<run_id>.rds` intermediate, deleted o
 | `04_epi/model_drvi_epi_<N>.pt` | 04_2, the trained DRVI model, one flat file per latent size |
 | `04_epi/embed_drvi_epi_<N>.h5ad` | 04_2, latent space + per-dimension stats + OOD/IND scores - what 04_3 reads |
 | `04_epi/shiao_epi_drvi_epi_<N>.h5ad` | 04_2, the 04_1 object (all genes) + `obsm['X_drvi']` |
-| **`signatures/*.txt`** | **input**, not written by any phase: the curated gene lists from the collaborator, one symbol per line, read by 04_3 via `SIG_DIR` (default `$DATA_DIR/signatures/`). Versioned in git, like `regev_lab_cell_cycle_genes.txt`. Two collections live here: the 11 stemness/immunogenicity lists (`--collection scie`) and the 9 `EMT_[ABC]_*` ones (`--collection emt`), the latter documented in `signatures/EMT_LISTS_NOTES.md`. |
+| **`signatures/*.txt`** | **input**, not written by any phase: the curated gene lists from the collaborator, one symbol per line, read by 04_3 via `SIG_DIR` (default `$DATA_DIR/signatures/`). Versioned in git, like `regev_lab_cell_cycle_genes.txt`. Three collections live here: the 11 stemness/immunogenicity lists (`--collection scie`), the 9 `EMT_[ABC]_*` ones (`--collection emt`, documented in `signatures/EMT_LISTS_NOTES.md`), and the 40 pan-cancer metaprograms of Gavish et al. 2023 in the `signatures/GAVISH_metaprograms/` subdirectory (`--collection gavish`), extracted from `GAVISH.csv` by `05_drvi_tumoral_epi/utils/gavish_extraction.py` — one `.txt` per metaprogram, same one-symbol-per-line format. `MP1` is absent from that CSV, so there are 40 files and not the paper's 41. |
 
 ### 05_drvi_tumoral_epi
 
@@ -121,22 +122,34 @@ The R methods also write a `02_integration/<run_id>.rds` intermediate, deleted o
 | **`05_tum/cnv_status.csv`** | 05_1, the call - one row per cell of `shiao.h5ad` |
 | **`05_tum/cell_annotation_cnv.csv`** | 05_1, `cell_type_cnv` after the CellTypist re-run - the table 05_2 joins |
 
-### 06_epi_treatment
+### 06_ambient_soupx
 
-One folder per treatment split, `<split>` being `base`, `pd1` or `rtpd1`.
+`06_amb/` holds everything phase 06 writes, and is also a **`DATA_DIR` in its own right**: the
+corrected object is deliberately called `shiao.h5ad`, so exporting `DATA_DIR=$DATA_DIR/06_amb`
+re-runs phase 05 on the ambient-corrected data with no change to any script. See
+`06_ambient_soupx/utils/link_shadow_data_dir.sh`, which symlinks the auxiliary inputs 05 also
+expects into it.
 
 | Path | Step |
 |---|---|
-| `06_epi_treat/<split>/shiao_epi_<split>_raw.h5ad` | 06_1, the split of `04_epi/shiao_epi_raw.h5ad` + refilter |
-| `06_epi_treat/<split>/shiao_epi_<split>_norm.h5ad`, `..._norm_cc.h5ad`, `..._reduced.h5ad` | 06_1 |
-| `06_epi_treat/<split>/shiao_epi_<split>_hvg_2k_list.csv` / `shiao_epi_<split>_hvg_2k.h5ad` | 06_1, the DRVI input, HVGs reselected inside the split |
-| **`06_epi_treat/<split>/shiao_epi_<split>.h5ad`** | 06_1, + leiden - the definitive object of the split |
-| `06_epi_treat/<split>/model_drvi_epi_<split>_<N>.pt` | 06_2, the trained DRVI model, one flat file per run |
-| `06_epi_treat/<split>/embed_drvi_epi_<split>_<N>.h5ad` | 06_2, latent space + per-dimension stats + OOD/IND scores - what `drvi_treat.ipynb` reads |
-| `06_epi_treat/<split>/shiao_epi_<split>_drvi_epi_<split>_<N>.h5ad` | 06_2, the 06_1 object (all genes) + `obsm['X_drvi']` |
+| `06_amb/soup/<sample>.csv.gz` | 06_1, the empty-droplet profile of one channel (~300 KB) - the only thing that comes off the cluster |
+| `06_amb/soup_census.csv` | 06_1, droplets in the soup range and UMIs per channel |
+| `06_amb/input/genes.tsv`, `06_amb/input/<sample>/` | 06_2, the gzipped Python→R handoff - removable with `soupx_all.sh --clean` |
+| `06_amb/adjusted/<sample>/removed.mtx.gz` | 06_2, the counts SoupX took out (the delta, not the adjusted matrix) |
+| `06_amb/adjusted/<sample>/rho.csv`, `cells.csv` | 06_2, the estimate per channel and the UMI totals per cell |
+| `06_amb/soupx_rho.csv` | 06_2, those merged - one row per channel, with how rho was obtained |
+| `06_amb/soupx_cells.csv` | 06_2, one row per cell: `soupx_frac_removed` and what it was computed from - what the 06_3 notebook reads |
+| `06_amb/shiao_soupx_all_cells.h5ad` | 06_2, all 619,693 cells, corrected, nothing dropped |
+| **`06_amb/ambient_keep.csv`** | 06_3, the call - one boolean per cell, with the reason columns |
+| `06_amb/cell_annotation_soupx.csv` | 06_4, phase-01 label vs the label on corrected counts |
+| **`06_amb/shiao.h5ad`** | 06_4, the drop-in replacement for `shiao.h5ad` |
+| `06_amb/Cells_Adult_Breast.pkl`, `regev_lab_cell_cycle_genes.txt`, `signatures/` | symlinks, made by `link_shadow_data_dir.sh` |
+| `06_amb/05_tum/` | phase **05** re-run with `DATA_DIR=$DATA_DIR/06_amb`; `datasets/05_tum/` is untouched |
 
-The three splits together are the 74,441 cells of `04_epi/shiao_epi.h5ad` minus the per-split
-cohort drops, so this folder roughly doubles the epithelial footprint on disk.
+In `06_amb/shiao.h5ad`, `.X` holds the corrected **counts** rather than a normalisation, and
+`obs['size_factors']` is gone: correcting the counts invalidates the phase-01 scran factors, and
+re-running scran on 619,693 cells is 01_3's 470 GB job. 05_2 copies `layers['counts']` into `.X`
+and re-runs scran on its own subset anyway. `uns['ambient_soupx']` records this in the object.
 
 ## Smoke-test artifacts
 

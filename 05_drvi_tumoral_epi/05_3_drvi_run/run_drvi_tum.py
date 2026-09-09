@@ -93,6 +93,12 @@ so up front, writes the other two and skips it.
 epithelial cell under the post-CNV labels. The two write different prefixes and different
 run ids (`drvi_tum_32` against `drvi_epicnv_32`), so both can live in `05_tum/`.
 
+`HVG_SET` is honoured the same way and is orthogonal to it: unset trains on the panel
+`reduce_data_tum.py` selected, `HVG_SET=nomt` on the one `05_2/hvg_no_mt.py` rebuilt with the
+11 mitochondrial genes replaced by the next 11 of the same batch-aware ranking. Same cells,
+same counts, a different gene panel - and a run id that says so (`drvi_epicnv_64_nomt`), so
+the two sit side by side on disk.
+
 The notebook's figures are redrawn here too, into the same figures/05_3_<run_id>/ folder,
 so a cluster run leaves nothing to redo locally except looking at them. A failure while
 plotting is reported but does not fail the run: by then every artifact above is on disk
@@ -109,6 +115,7 @@ Usage:
   python3 run_drvi_tum.py --overwrite      # retrain and rewrite everything
   python3 run_drvi_tum.py --early-stopping # stop early instead (see --epochs)
   CELL_SET=epi python3 run_drvi_tum.py     # the same run on the control set
+  HVG_SET=nomt python3 run_drvi_tum.py     # on the gene panel without the MT- genes
 
 On the cluster the same script is submitted by submit_drvi_tum.slurm, which trains on CPU
 (the cluster has no GPU) and takes its arguments unchanged.
@@ -195,7 +202,9 @@ UMAP_SEED = 0
 
 def parse_args():
     p = argparse.ArgumentParser(description="Run DRVI on the malignant epithelial subset")
-    p.add_argument("-n", "--n-latent", type=int, default=32,
+    # Defaults to $N_LATENT (32 when unset), the same variable 05_4 - 05_8 read, so one
+    # export drives the whole phase and this flag stays the way to override it for one run.
+    p.add_argument("-n", "--n-latent", type=int, default=C.n_latent(),
                    help="latent dimensions; the run id follows it [default: 32]")
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--epochs", type=int, default=400,
@@ -444,15 +453,20 @@ def main():
     # The compartment goes into the run id, so nothing here can be confused with 04's
     # `drvi_epi_*`, 03_2's `drvi_nonimm_*` or 02_2's whole-dataset `drvi_unscaled_*`, and
     # the latent size keeps the sizes side by side.
-    run_id = f"drvi_{C.compartment()}_{args.n_latent}"
+    # $HVG_SET appends its tag too (`_nomt`), so a run on the repaired gene panel cannot
+    # land on the files of the run on the original one.
+    # Built by cell_set.run_id(), which is the only place the string exists: 05_4 - 05_8
+    # reconstruct this exact name to find what this run writes.
+    run_id = C.run_id(args.n_latent)
 
     phase_dir = Path(__file__).resolve().parent.parent   # 05_drvi_tumoral_epi/
     tum_dir = C.tum_dir()                                # $DATA_DIR/05_tum
 
     # Input: the 2,000-gene object written by 05_2's reduce_data_tum.py. HVGs were
     # selected on the malignant cells only, .layers['counts'] are the raw counts DRVI
-    # trains on.
-    input_h5ad = C.path("_hvg_2k.h5ad")
+    # trains on. Under HVG_SET=nomt it is instead the panel hvg_no_mt.py rebuilt without
+    # the 11 mitochondrial genes (same cells, same counts, 11 genes swapped).
+    input_h5ad = C.hvg_path(".h5ad")
     # The definitive object of 05_2 (all genes, scran log-norm, leiden): read for the
     # leiden column and, at the end, to carry the latent space over for the steps after.
     full_h5ad = C.path(".h5ad")

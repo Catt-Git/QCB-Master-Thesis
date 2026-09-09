@@ -13,7 +13,13 @@
 #   <FIG_DIR>/infercnv_<cohort>.png                 the heatmap, the thing to actually look at
 #
 # The per-cell columns:
-#   group        ref_tcell / ref_myeloid / stromal / epi, as prepared
+#   group        ref_tcell / ref_myeloid / stromal / immune_heldout / epi, as prepared
+#   subcluster   the per-run leiden partition, "<group>_s<i>" (see analysis_mode below).
+#                This is the unit the malignant verdict is taken on: a median over the
+#                cells of a subcluster is stable where a per-cell threshold is not, and
+#                the partition is computed INSIDE this run, so it is private to this
+#                patient and a subcluster is a candidate clone rather than a
+#                cross-patient object.
 #   cnv_score    mean squared residual across genes. The residual is taken against the mean
 #                profile OF THE REFERENCE CELLS OF THIS RUN rather than against the value 1
 #                that inferCNV centres on, so the score does not depend on how a given
@@ -46,6 +52,12 @@ suppressPackageStartupMessages({
   library(infercnv)
 })
 
+# Not cosmetic, and not optional with analysis_mode="subclusters". inferCNV stitches the
+# per-subcluster trees through as.phylo()/Newick, and a branch length written as "1e-05"
+# is not parseable on the way back in - the run dies after the smoothing has already been
+# paid for. Forcing fixed notation avoids it. It changes no result, only how R prints.
+options(scipen = 100)
+
 option_list <- list(
   make_option("--cohort", type = "character", help = "cohort to run (required)"),
   make_option("--data-dir", type = "character", default = Sys.getenv("DATA_DIR"),
@@ -56,6 +68,12 @@ option_list <- list(
               help = "threads for infercnv::run() [%default]"),
   make_option("--hmm", action = "store_true", default = FALSE,
               help = "also run the i6 HMM (hours per cohort; not needed for the binary call)"),
+  make_option("--analysis-mode", type = "character", default = "subclusters",
+              dest = "analysis_mode",
+              help = "'subclusters' (default) or 'samples' to reproduce the pre-subcluster runs"),
+  make_option("--leiden-resolution", type = "character", default = "0.005",
+              dest = "leiden_resolution",
+              help = "leiden resolution for the subclustering, or 'auto' [%default]"),
   make_option("--keep-work", action = "store_true", default = FALSE, dest = "keep_work",
               help = "keep inferCNV's working directory (1-3 GB per cohort)"),
   make_option("--force", action = "store_true", default = FALSE,
@@ -100,8 +118,10 @@ if (file.exists(sum_path) && !opt$force) {
 }
 if (!dir.exists(in_dir)) stop(sprintf("no prepared input at %s; run prepare_infercnv_input.py", in_dir))
 
-cat(sprintf("cohort   : %s\ninput    : %s\nwork dir : %s\nfig dir  : %s\nthreads  : %d | HMM: %s\n\n",
-            cohort, in_dir, work_dir, fig_dir, opt$threads, opt$hmm))
+cat(sprintf(paste0("cohort   : %s\ninput    : %s\nwork dir : %s\nfig dir  : %s\n",
+                   "threads  : %d | HMM: %s | mode: %s | leiden res: %s\n\n"),
+            cohort, in_dir, work_dir, fig_dir, opt$threads, opt$hmm,
+            opt$analysis_mode, opt$leiden_resolution))
 
 # --------------------------------------------------------------------------------------
 # Load. The counts arrive as Matrix Market (genes x cells) with the names in side files,
@@ -139,9 +159,26 @@ rm(counts); invisible(gc())
 #                         all four only exist to write GB-scale intermediates to disk; the
 #                         object is returned in memory, which is where the summary is
 #                         computed from
-#   analysis_mode         left at "samples". 'subclusters' costs hours per cohort and buys
-#                         resolution on clonal structure, which is a question 05_1 does not
-#                         ask - it asks malignant vs not
+#   analysis_mode         "subclusters" (inferCNV's own default; this script used to
+#                         override it to "samples"). It partitions each observation group
+#                         with leiden INSIDE this run, and that partition is what the
+#                         malignant verdict is aggregated over downstream. Two reasons.
+#                         First, robustness: the per-cell call has no gap to find - 40% of
+#                         the epithelium sits within 1.5x of its own cut - and a median
+#                         over the cells of a subcluster is stable where a per-cell
+#                         threshold is not. This is also how Shiao et al. take the verdict.
+#                         Second, and this is what the previous aggregation got wrong: it
+#                         used 04's epithelial leiden, which is computed on the INTEGRATED
+#                         object and therefore mixes patients - its cluster 0 held 16,478
+#                         cells across 29 cohorts. A CNV profile is private to a patient,
+#                         so a cross-patient cluster cannot be a clone and could not carry
+#                         the claim being made about it. A per-run partition can.
+#   tumor_subcluster_partition_method
+#                         "leiden", inferCNV's own default and its documented preference.
+#   leiden_resolution     "auto" = (11.98/n_cells)^(1/1.165), so it FALLS as a cohort gets
+#                         bigger and the granularity is not comparable across cohorts.
+#                         Exposed as --leiden-resolution because that is a property worth
+#                         seeing rather than inheriting.
 # --------------------------------------------------------------------------------------
 t0 <- Sys.time()
 infercnv_obj <- infercnv::run(
@@ -152,7 +189,10 @@ infercnv_obj <- infercnv::run(
   denoise           = TRUE,
   HMM               = opt$hmm,
   HMM_type          = "i6",
-  analysis_mode     = "samples",
+  analysis_mode     = opt$analysis_mode,
+  tumor_subcluster_partition_method = "leiden",
+  leiden_resolution = if (opt$leiden_resolution == "auto") "auto" else
+                        as.numeric(opt$leiden_resolution),
   num_threads       = opt$threads,
   no_prelim_plot    = TRUE,
   output_format     = "png",
@@ -182,6 +222,35 @@ cnv_score <- colMeans(resid^2)
 group <- setNames(annot$group, annot$cell)[colnames(resid)]
 stopifnot(!anyNA(group))
 
+# --------------------------------------------------------------------------------------
+# The subcluster assignment. It lives ONLY in the returned object - nothing writes it to a
+# file this script keeps - so it has to be pulled out here, before the working directory is
+# removed. inferCNV stores it as a flat named list, "<group>_s<i>" -> integer column
+# indices; the character branch is defensive, older layouts stored cell names.
+# --------------------------------------------------------------------------------------
+subcluster <- rep(NA_character_, ncol(resid))
+sc <- infercnv_obj@tumor_subclusters$subclusters
+if (is.null(sc)) {
+  cat("no subclusters in the object (analysis_mode='samples'?)\n")
+} else {
+  for (nm in names(sc)) {
+    v <- sc[[nm]]
+    if (is.list(v)) {                      # nested one level, in some versions
+      for (nm2 in names(v)) {
+        ix <- v[[nm2]]
+        if (is.character(ix)) ix <- match(ix, colnames(resid))
+        subcluster[ix] <- nm2
+      }
+    } else {
+      if (is.character(v)) v <- match(v, colnames(resid))
+      subcluster[v] <- nm
+    }
+  }
+  cat(sprintf("subclusters: %d over %d cells (%d cells unassigned)\n",
+              length(unique(na.omit(subcluster))), ncol(resid), sum(is.na(subcluster))))
+  print(table(group, ifelse(is.na(subcluster), "<none>", "assigned")))
+}
+
 # cnv_corr: correlate every cell against the mean profile of the most-aneuploid epithelium.
 epi_cells <- which(group == "epi")
 n_top <- max(MIN_TOP_CELLS, ceiling(TOP_FRAC * length(epi_cells)))
@@ -201,11 +270,12 @@ chr_means <- sapply(chr_levels, function(ch) {
 })
 
 out <- data.frame(
-  cell      = colnames(resid),
-  cohort    = cohort,
-  group     = unname(group),
-  cnv_score = unname(cnv_score),
-  cnv_corr  = cnv_corr,
+  cell       = colnames(resid),
+  cohort     = cohort,
+  group      = unname(group),
+  subcluster = subcluster,
+  cnv_score  = unname(cnv_score),
+  cnv_corr   = cnv_corr,
   chr_means,
   check.names = FALSE, stringsAsFactors = FALSE
 )
@@ -214,6 +284,18 @@ cat(sprintf("Wrote %s (%d cells)\n", sum_path, nrow(out)))
 
 cat("\nmedian cnv_score by group:\n")
 print(round(tapply(out$cnv_score, out$group, median), 5))
+
+# The epithelial subclusters, which are what the verdict will be taken on. A cohort whose
+# epithelial subclusters all sit at the level of its stromal ones is a cohort with no
+# detectable tumour, and that is a result rather than a run to be retried.
+epi_sub <- out[out$group == "epi" & !is.na(out$subcluster), ]
+if (nrow(epi_sub)) {
+  cat("\nepithelial subclusters (n cells, median cnv_score):\n")
+  print(round(do.call(rbind, lapply(split(epi_sub, epi_sub$subcluster), function(d)
+    data.frame(n = nrow(d), median_cnv_score = median(d$cnv_score)))), 5))
+  cat(sprintf("stromal median for reference: %.5f\n",
+              median(out$cnv_score[out$group == "stromal"])))
+}
 
 # --------------------------------------------------------------------------------------
 # Keep the heatmap, drop the rest.

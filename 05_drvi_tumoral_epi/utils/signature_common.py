@@ -59,17 +59,40 @@ import cell_set as CS  # noqa: E402
 # The run this step reads
 # --------------------------------------------------------------------------- #
 
-N_LATENT = 32                       # the 05_3 run of this phase, see drvi_tum.ipynb
-# `drvi_tum_32` under the default CELL_SET, `drvi_epicnv_32` on the control set - the same
-# id 05_3 writes its model, embedding and downstream object under.
-DEFAULT_RUN_ID = f"drvi_{CS.compartment()}_{N_LATENT}"
+# WHICH RUN THIS CHAIN READS, AND HOW TO POINT IT AT ANOTHER ONE.
+#
+# 05_4 - 05_8 train nothing. They read what 05_3 wrote, and what they need from it is its
+# NAME. That name has three segments and each is an environment variable, resolved by
+# `cell_set.py` and nowhere else, so that 05_3 and this module cannot spell the same run
+# differently:
+#
+#   CELL_SET   tum (default) | epi          -> drvi_tum_...  | drvi_epicnv_...
+#   N_LATENT   32 (default) | 64 | ...      -> the latent size 05_3 was run at
+#   HVG_SET    unset (default) | nomt       -> the ..._nomt suffix, the MT-free gene panel
+#
+# These steps deliberately take no flag of their own for any of the three. A flag would be a
+# fourth place the run id is spelled, and the failure it invites is silent: a step reading
+# last week's embedding and writing a table that says nothing about it. The variables are in
+# the environment where DATA_DIR already is, one export moves the whole chain, and every
+# table and figure carries the resulting run id in its name and in its header.
+#
+#   export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+#   python cell_first_tum.py                          # drvi_tum_32, the run this phase reports
+#   N_LATENT=64 python cell_first_tum.py              # drvi_tum_64
+#   CELL_SET=epi HVG_SET=nomt N_LATENT=64 python cell_first_tum.py   # drvi_epicnv_64_nomt
+#
+# NOTHING IS SHARED BETWEEN TWO RUNS except the object-level tables, and those are keyed on
+# the object rather than on the run - see `gmt_path` below, which is the one file whose name
+# had to change for this.
+N_LATENT = CS.n_latent()            # $N_LATENT, default 32; see 05_3's README for the choice
+DEFAULT_RUN_ID = CS.run_id()        # drvi_<compartment>_<n_latent><hvg_tag>
 
 # The run every step writes under. This is the ONE mutable global of the module: 05_6 rebinds
 # it through `set_embedding()` when it is asked to read a coordinate system other than DRVI's,
 # so that every table and figure name follows the embedding without each writer having to be
 # told about it. 05_7 and 05_8 never call `set_embedding`, so for them nothing moves: they
-# read and write `drvi_tum_32` exactly as before. With only DRVI registered today, nothing
-# moves for 05_6 either - the mechanism is kept, not exercised.
+# read and write the run id resolved above. With only DRVI registered today, nothing moves
+# for 05_6 either - the mechanism is kept, not exercised.
 RUN_ID = DEFAULT_RUN_ID
 
 SEED = 0                            # scoring / subsampling seed, as in 01_4 and 03_1
@@ -113,7 +136,11 @@ TABLE_DIR = PHASE_DIR / "tables"
 # Inputs, all read-only here. Through `cell_set.path()`, so `CELL_SET=epi` reads the control
 # set's objects and writes under its own prefix without a second copy of this module.
 FULL_H5AD = CS.path(".h5ad")                            # 05_2: all genes, log-normalised
-HVG_H5AD = CS.path("_hvg_2k.h5ad")                      # 05_2: the DRVI training features
+# Through `hvg_path`, not `path`, so HVG_SET reaches it: with HVG_SET=nomt the Route B ORA
+# background has to be the panel DRVI was actually trained on. Reading the default panel
+# against a `_nomt` embedding would put 11 genes in the background that the model never saw,
+# which is not a big error and is the wrong background all the same.
+HVG_H5AD = CS.hvg_path(".h5ad")                         # 05_2: the DRVI training features
 EMBED_H5AD = TUM_DIR / f"embed_{RUN_ID}.h5ad"           # 05_3: latent space + scores
 
 # --------------------------------------------------------------------------- #
@@ -208,7 +235,7 @@ EMBEDDINGS = {
         name="drvi", run_id=DEFAULT_RUN_ID, title="DRVI", dim_prefix="DR",
         n_dims=N_LATENT, is_reference=True,
         description=f"05_3: DRVI, n_latent {N_LATENT}, trained on the 2,000 batch-aware "
-                    "HVGs of 05_2"),
+                    f"HVGs of 05_2{' without the MT- genes' if CS.hvg_tag() else ''}"),
 }
 
 DEFAULT_EMBEDDING = "drvi"
@@ -257,8 +284,19 @@ CYTOTRACE_CSV = TUM_DIR / f"cytotrace2_{DEFAULT_RUN_ID}.csv"   # per cell, 05_5:
 
 
 def gmt_path(coll) -> Path:
-    """The collection as actually used - mapped genes only - which is also the Appendix table."""
-    return TABLE_DIR / coll.name / f"signatures_{coll.name}.gmt"
+    """The collection as actually used - mapped genes only - which is also the Appendix table.
+
+    Named for the OBJECT and not for the run, because that is what it depends on: it holds the
+    signature genes that exist in `FULL_H5AD`, and `shiao_tum.h5ad` (24,779 genes) and
+    `shiao_epicnv.h5ad` do not have the same gene axis. Without the compartment in the name a
+    CELL_SET=epi run would overwrite the malignant set's .gmt in place, and 05_7 would then do
+    its ORA on the other object's mapping and report nothing unusual. N_LATENT and HVG_SET are
+    NOT in the name, and must not be: neither changes which genes the object has.
+
+    04 has one object and one name, `signatures_<collection>.gmt`; this is one of the things
+    that differ, and it differs because this phase has a second cell set.
+    """
+    return TABLE_DIR / coll.name / f"signatures_{coll.name}_{CS.compartment()}.gmt"
 
 
 def scores_csv(coll) -> Path:
@@ -329,6 +367,58 @@ CAVEAT_SHORT = (
 
 MIN_SIGNATURE_GENES = 10      # below this a signature is skipped and reported
 MIN_MAPPED_FRACTION = 0.60    # below this the step stops: low coverage means NOT MEASURED
+
+
+# --------------------------------------------------------------------------- #
+# Figure sizing, for collections of very different widths
+# --------------------------------------------------------------------------- #
+#
+# Every heatmap in this stage is `n_dimensions` rows by `n_readouts` columns, and the two
+# collections these steps were written for are nine and ten columns wide. `gavish` is forty.
+# A figure size computed as "inches per column" is right at ten and unreadable at forty: the
+# canvas grows past what any renderer or page can use, the printed annotations shrink to
+# noise, and a legend built from a ten-colour qualitative palette starts repeating colours.
+#
+# These three helpers are the whole fix, and they are here rather than in the steps so that
+# the SAME figure of 04_3 and of 05_4 cannot end up sized by two different rules. None of
+# them changes anything for a collection under the thresholds: `scie` and `emt` get exactly
+# the figures they got before.
+
+MAX_FIG_IN = 26.0        # beyond this a canvas is not a figure any more, it is a wall
+ANNOT_MAX_CELLS = 400    # above ~20 x 20 the printed numbers are smaller than the cells
+
+
+def fig_span(n: int, per_item: float, base: float, cap: float = MAX_FIG_IN) -> float:
+    """Inches for `n` rows or columns at `per_item` each, plus `base`, capped at `cap`.
+
+    The cap is the point: past it the cells get thinner instead of the figure getting wider,
+    which is the correct trade - a 40-column heatmap read at 0.4 in per column is still a
+    heatmap, a 44-inch one is not.
+
+    NOTHING MOVES FOR `scie` AND `emt`. Where a figure already sized itself per column, the
+    coefficients here are the ones it used and the cap only ever binds above them. Where it
+    used a fixed size, the call site keeps that fixed size below a threshold and only reaches
+    for this above it. That is deliberate: a figure already in the write-up has to come back
+    identical from a re-run.
+    """
+    return min(base + per_item * n, cap)
+
+
+def annotate_cells(n_rows: int, n_cols: int) -> bool:
+    """Whether a heatmap that size can carry its numbers legibly. Under 400 cells, yes."""
+    return n_rows * n_cols <= ANNOT_MAX_CELLS
+
+
+def axis_palette(n: int):
+    """`n` distinguishable colours, one per axis of a collection.
+
+    `deep` is seaborn's default qualitative palette and has ten colours; asked for more it
+    recycles them, which would give two axis blocks the same colour in a legend. Above ten,
+    `husl` is generated at the requested size and stays distinguishable. `scie` (2 axes) and
+    `emt` (4) are unaffected.
+    """
+    import seaborn as _sns
+    return _sns.color_palette("deep" if n <= 10 else "husl", n)
 
 # --------------------------------------------------------------------------- #
 # The target region, and the vote over its definitions
@@ -498,9 +588,19 @@ def read_gmt(path: Path) -> dict[str, list[str]]:
 # --------------------------------------------------------------------------- #
 
 
-def table_dir(coll) -> Path:
-    """tables/<collection>/. Created on demand, one folder per readout."""
-    d = TABLE_DIR / coll.name
+def table_dir(coll, run_id: str | None = None) -> Path:
+    """tables/<collection>/<run_id>/. Created on demand: one folder per readout, then per run.
+
+    THE RUN SUBFOLDER. The collection folder is what stops two readouts overwriting each
+    other; the run folder inside it is what stops two RUNS doing the same, and it exists
+    because a phase can have several. The run id is still in every filename as well, which is
+    not redundancy: a file dragged out of here has to stay identifiable, and the folder is a
+    convenience for reading the directory rather than the thing that makes the name unique.
+
+    The `.gmt` deliberately sits ABOVE this level - see `gmt_path`, it depends on the object
+    rather than on the run, so several runs share one.
+    """
+    d = TABLE_DIR / coll.name / (run_id or RUN_ID)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -511,12 +611,13 @@ def table_path(name: str, coll, run_id: str | None = None) -> Path:
     Nothing in this phase passes it today - it is what a step reading several runs in one
     process would need, since such a step cannot go through the module global.
     """
-    return table_dir(coll) / f"{name}_{coll.name}_{run_id or RUN_ID}.csv"
+    run_id = run_id or RUN_ID
+    return table_dir(coll, run_id) / f"{name}_{coll.name}_{run_id}.csv"
 
 
 def write_table(df: pd.DataFrame, name: str, coll, index: bool = True,
                 run_id: str | None = None) -> Path:
-    """Write a small result table to tables/<collection>/, caveat as a leading comment.
+    """Write a small result table to tables/<collection>/<run_id>/, caveat as a leading comment.
 
     Read it back with `pd.read_csv(path, comment='#', index_col=0)`. The comment lines
     are how the caveat travels with the table when it is pulled out of this folder.
@@ -550,21 +651,22 @@ def read_table(name: str, coll, run_id: str | None = None) -> pd.DataFrame:
     return pd.read_csv(table_path(name, coll, run_id), comment="#", index_col=0)
 
 
-def fig_dir(step: str, coll) -> Path:
-    """figures/<step>/<collection>/, `step` being the full step-folder name, e.g. '05_6_cell_first'.
+def fig_dir(step: str, coll, run_id: str | None = None) -> Path:
+    """figures/<step>/<collection>/<run_id>/, `step` being the full step-folder name.
 
     The step folders mirror the Methods sections and stay one per step; the collection is a
     subfolder of each, so the SCIE and EMT versions of the same figure sit side by side
-    without either being able to overwrite the other.
+    without either being able to overwrite the other, and the run is a subfolder of that, for
+    the reason `table_dir` gives. `step` is e.g. '05_6_cell_first'.
     """
-    d = PHASE_DIR / "figures" / step / coll.name
+    d = PHASE_DIR / "figures" / step / coll.name / (run_id or RUN_ID)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def savefig(name: str, step: str, coll, fig=None, dpi: int = 300, caveat: bool = True,
             run_id: str | None = None):
-    """Save a figure into figures/<step>/<collection>/, collection and run id appended.
+    """Save a figure into figures/<step>/<collection>/<run_id>/, collection and run id appended.
 
     Same helper as 05_3 and 04_2 except for the footnote, which is the mandatory
     caveat: a figure showing cells or states must carry it wherever it ends up.
@@ -580,7 +682,8 @@ def savefig(name: str, step: str, coll, fig=None, dpi: int = 300, caveat: bool =
     if caveat:
         fig.text(0.5, -0.02, CAVEAT_SHORT, ha="center", va="top", fontsize=6,
                  style="italic", color="0.35", linespacing=1.4)
-    path = fig_dir(step, coll) / f"{name}_{coll.name}_{run_id or RUN_ID}.png"
+    run_id = run_id or RUN_ID
+    path = fig_dir(step, coll, run_id) / f"{name}_{coll.name}_{run_id}.png"
     fig.savefig(path, dpi=dpi, bbox_inches="tight")
     print(f"[fig] {path}")
     return path

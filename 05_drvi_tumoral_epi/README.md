@@ -40,6 +40,13 @@ the two sets write different file prefixes so both can be run in the same direct
 | `tum` (default) | `cnv_status == 'malignant'` | `shiao_tum_*` | the phase |
 | `epi` | all epithelium under the post-CNV labels | `shiao_epicnv_*` | a control |
 
+A second flag, `HVG_SET`, is orthogonal to it and picks **which 2,000 genes** the DRVI input is
+made of: unset is the panel `05_2/reduce_data_tum.py` selected, `nomt` the one
+`05_2/hvg_no_mt.py` rebuilt with the 11 mitochondrial (`MT-`) genes replaced by the next 11 of
+the same batch-aware ranking. It tags the files and the run id the same way `CELL_SET` does
+(`drvi_epicnv_64_nomt` beside `drvi_epicnv_64`), so nothing is overwritten and the two are read
+against each other. See `05_2_subsetting/README.md`.
+
 **Why `tum` is the primary line.** 05_6 and 05_7 read the DRVI latent dimensions and ask which
 gene programmes load on them. If DRVI is trained on all epithelium, its dominant dimensions
 encode malignant-versus-normal — a contrast that is nearly **constant** inside the malignant
@@ -120,6 +127,106 @@ What it does not buy is discreteness. Partial EMT in carcinoma is a continuum; e
 each tumour cell on an E–M axis and identify the co-expressing region, not to find three leiden
 clusters that name themselves. A sparse mesenchymal tail is the usual result and is a result.
 
+## Which run 05_4 - 05_8 read
+
+Those five steps train nothing: they read what 05_3 wrote, and what they need from it is its
+**name**. That name has three segments, each an environment variable resolved by
+`05_2_subsetting/cell_set.py` and nowhere else, so 05_3 and the interpretation chain cannot
+spell the same run differently:
+
+| variable | default | what it changes |
+|---|---|---|
+| `CELL_SET` | `tum` | `tum` the malignant subset, `epi` the all-epithelium control → `drvi_tum_…` / `drvi_epicnv_…` |
+| `N_LATENT` | `32` | the DRVI latent size 05_3 was run at |
+| `HVG_SET` | unset | `nomt` selects the gene panel without the MT- genes → the `_nomt` suffix |
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+
+python3 build_signatures_tum.py --collection gavish                    # drvi_tum_32
+N_LATENT=64 python3 build_signatures_tum.py --collection gavish        # drvi_tum_64
+CELL_SET=epi HVG_SET=nomt N_LATENT=64 \
+    python3 build_signatures_tum.py --collection gavish                # drvi_epicnv_64_nomt
+```
+
+05_3 keeps its `--n-latent` flag and the flag wins; its default is `$N_LATENT`, so one export
+moves the whole phase. These five steps deliberately have **no flag of their own** for any of
+the three: a flag would be a fourth place the run id is spelled, and the failure that invites is
+silent — a step reading last week's embedding and writing a table that says nothing about it.
+
+Nothing is shared between two runs. Every table and figure carries the run id in its filename
+**and in a folder of its own**, so several runs of one collection sit side by side without
+either the reader or the code having to filter a directory by suffix:
+
+```
+tables/gavish/
+    drvi_tum_32/          coverage_gavish_drvi_tum_32.csv, convergence_..., 12 files
+    drvi_tum_64/          the same twelve, for that run
+    drvi_epicnv_64_nomt/  and for that one
+    signatures_gavish_tum.gmt      <- above the run level, see below
+    signatures_gavish_epicnv.gmt
+
+figures/05_8_convergence/gavish/drvi_tum_64/routes_side_by_side_gavish_drvi_tum_64.png
+```
+
+The run id stays in the filename as well, and that is not redundancy: a file dragged out of
+its folder has to remain identifiable, and the folder is there to make the directory readable
+rather than to make the name unique.
+
+The one exception is the `.gmt`, which depends on the **object** rather than on the run and is
+therefore named `signatures_<collection>_<compartment>.gmt` and sits one level up, beside the
+run folders rather than inside one — `shiao_tum.h5ad` has 24,779 genes
+and `shiao_epicnv.h5ad` 26,379, so a single name would have let a `CELL_SET=epi` run overwrite
+the malignant set's mapping in place and 05_7 would then have done its ORA against the wrong
+gene universe without complaining. `N_LATENT` and `HVG_SET` are **not** in that name, and must
+not be: neither changes which genes the object has.
+
+## The third collection: naming the dimensions from outside
+
+`scie` and `emt` each ask whether a **named state exists**, and each defines a region of the
+cell-first plane to call cells in. A third collection, `gavish`, asks the question the other way
+round — *given a latent dimension, what is it?* — and therefore defines **no** target region.
+`Collection.has_target` is False for it, and each step drops exactly what depends on a region:
+05_6 writes the per-cell scores, the confounder table and the dimensions × metaprograms
+correlations but skips A5, the consensus quadrant and the two figures that draw it; 05_8 runs
+unchanged except for the target-axis test at the end. 05_4 and 05_7 are untouched.
+
+The lists are the pan-cancer metaprograms of Gavish et al. 2023 (Nature 618:598-606), in
+`$DATA_DIR/signatures/GAVISH_metaprograms/`, derived by NMF over ~1,000 tumours of 24 cancer
+types with no knowledge of this project. Two things they buy:
+
+* **a name from outside.** A dimension on which Route A and Route B independently land on the
+  same metaprogram is a dimension named by prior knowledge that was not chosen for this project.
+  On `drvi_tum_32` that is 28 of the 64 dimension-directions, led by `DR 9- = MP5_STRESS`
+  (ρ 0.813, FDR 7e-40), `DR 5- = MP2_CELL_CYCLE_G1_S` and `DR 17+ = MP6_HYPOXIA`.
+* **an independent check on `emt`.** MP12–MP16 are four EMT metaprograms plus the glioma
+  mesenchymal one, curated by other people from other tumours. An EMT axis visible on the
+  collaborator's lists *and* on those is an axis that does not depend on whose EMT list was used.
+
+Eleven of the 40 describe lineages that cannot be in this compartment (neural, skin
+pigmentation, haematopoietic). They are marked `primary=False` and kept on purpose: they are the
+floor the other readings are measured against, and `MP36_IG` doubles as this dataset's
+ambient-immunoglobulin readout. `MP1` (Cell Cycle G2/M) is absent from `datasets/GAVISH.csv` and
+so from the text files — there are 40 lists, not 41.
+
+**Only 27 of the 40 are scored by default.** Eighteen name a lineage or a tissue a
+triple-negative breast carcinoma cannot express, and each of them is a column of both heatmaps
+and one more test inside the FDR correction of 05_7. `--collection gavish` therefore scores the
+22 states reported in basal-like / TNBC malignant cells — cycle (MP2, MP3), chromatin (MP4),
+stress and hypoxia (MP5, MP6), proteostasis (MP8–MP11), the four EMT programmes (MP12–MP15),
+interferon / MHC-II (MP17, MP18), epithelial senescence (MP19), MYC (MP20), respiration (MP21),
+the secreted pair (MP22, MP23) and the detoxification pair (MP38, MP39) — plus five kept only to
+bound them: `MP7` (in-vitro stress, the dissociation control on the stress axis), `MP36` (IG) and
+`MP33` (RBCs), the two ambient-RNA readouts that phase 06 removes with SoupX, `MP25`
+(astrocytes) as the impossible lineage that shows what zero looks like, and `MP41` (unassigned)
+as the residual sink. `--all-metaprograms` restores all 40. The set is one editable tuple,
+`_GAVISH_TNBC_MPS` in `utils/sig_collections.py`; `MP30` and `MP40` are the first candidates to
+add back, their genes being the generic secretory-epithelial ones that are luminal in breast.
+
+The two widths are two collections on disk — slug `gavish_tnbc` and slug `gavish` — so their
+tables and figures never share a folder or a filename, and the numbers quoted above, measured on
+all 40, stay exactly where they were written.
+
 ## Status
 
 `05_1` through `05_8` are written. `05_9_cycle_confound` is not, and neither is an
@@ -139,16 +246,16 @@ cd ../05_2_subsetting                                  # then subset_and_qc.ipyn
 cd ../05_3_drvi_run                                    # drvi_tum.ipynb, or headless:
 python3 run_drvi_tum.py                                # n_latent 32, see that README
 
-cd ../05_4_signatures && python3 build_signatures_tum.py   # + --collection emt
+cd ../05_4_signatures && python3 build_signatures_tum.py   # + --collection emt|gavish [--all-metaprograms]
 cd ../05_5_cytotrace2                                      # in the cytotrace2-py env
 python3 cytotrace2_tum.py
-cd ../05_6_cell_first    && python3 cell_first_tum.py      # Route A   + --collection emt
-cd ../05_7_factor_first  && python3 factor_first_tum.py    # Route B   + --collection emt
-cd ../05_8_convergence   && python3 convergence_tum.py     # Route C   + --collection emt
+cd ../05_6_cell_first    && python3 cell_first_tum.py      # Route A   + --collection emt|gavish
+cd ../05_7_factor_first  && python3 factor_first_tum.py    # Route B   + --collection emt|gavish
+cd ../05_8_convergence   && python3 convergence_tum.py     # Route C   + --collection emt|gavish
 ```
 
 Steps 05_4 - 05_8 share `utils/signature_common.py` (paths, the caveat, the figure and table
-writers) and `utils/sig_collections.py` (the two collections and everything that differs
+writers) and `utils/sig_collections.py` (the three collections and everything that differs
 between them), both duplicated from 04's `utils/` as every phase in this repo duplicates rather
 than imports. What is *not* a copy is listed at the top of each: for `signature_common.py` it is
 the object and run id, the caveat, the grouping keys that replace the constant `cell_type`, and

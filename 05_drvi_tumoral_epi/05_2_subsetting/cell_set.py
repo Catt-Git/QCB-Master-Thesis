@@ -18,6 +18,25 @@ be interpreting the leftovers. It is the same argument 04 makes for existing at 
 labels cost phase 04?", which is a methods question worth a paragraph and not the biology.
 Its results are named differently, live in different files, and never overwrite `tum`.
 
+A second flag, `HVG_SET`, picks WHICH 2,000 genes the DRVI input is made of - unset for the
+panel `reduce_data_tum.py` selected, `nomt` for the same panel with the mitochondrial genes
+replaced (see `_HVG_SETS` and `hvg_no_mt.py`). It is orthogonal to CELL_SET: same cells, same
+normalization, same clustering, a different gene panel and therefore a different run id.
+
+A third, `N_LATENT`, picks the DRVI latent size. It is not a property of the cells at all -
+it is 05_3's hyperparameter - and it lives here for one reason: it is the third segment of
+the run id, and `run_id()` below is the only place that string is built. 05_3 takes it as
+`--n-latent` and the flag wins; everything downstream of 05_3 has no flag and reads the
+environment, so ONE variable moves the whole chain from `drvi_tum_32` to `drvi_tum_64`.
+
+The three are independent, and the run id carries all three, so no two combinations can
+overwrite each other:
+
+    CELL_SET  HVG_SET  N_LATENT   run id
+    tum       -        32         drvi_tum_32          the run this phase reports
+    tum       -        64         drvi_tum_64
+    epi       nomt     64         drvi_epicnv_64_nomt
+
 This module exists so that the mapping CELL_SET -> file prefix lives in exactly one place.
 Four scripts write into the same directory; a prefix computed independently in each of them
 is a silent-overwrite bug waiting to happen.
@@ -117,6 +136,26 @@ _SETS = {
     "epi": ("shiao_epicnv", "epicnv", "every epithelial cell under the post-CNV labels"),
 }
 
+# A second, orthogonal knob: WHICH 2,000 genes the DRVI input is made of. It is not a cell
+# set - the cells, the normalization and the clustering are identical - so it does not go
+# through _SETS; it only appends a tag to the two files reduce_data_tum.py writes and to the
+# run id 05_3 derives from them.
+#
+#   HVG_SET unset / ''   the panel reduce_data_tum.py selected, mitochondrial genes included
+#   HVG_SET=nomt         the same panel with the 11 MT- genes dropped and the next 11 in the
+#                        same batch-aware ranking put in their place, so it is still 2,000
+#                        (built by hvg_no_mt.py, which is the only script that writes it)
+#
+# The MT- genes are transcription of the mitochondrial genome: they track how much of a
+# cell's RNA came from mitochondria, which is a dissociation-stress and lysis readout rather
+# than a cell state, and DRVI has no reason to spend a latent dimension on it. `pct_counts_mt`
+# already filters on them upstream (MAX_PCT_MT), and the metallothioneins (MT1*, MT2A) and
+# MTRNR2L12 are nuclear genes that only share the prefix - they are NOT dropped.
+_HVG_SETS = {
+    "": "",
+    "nomt": "_nomt",
+}
+
 
 def cell_set() -> str:
     """The active cell set, from $CELL_SET. Defaults to 'tum'."""
@@ -160,10 +199,71 @@ def path(suffix: str, value: str | None = None) -> Path:
     return tum_dir() / f"{prefix(value)}{suffix}"
 
 
+def hvg_set() -> str:
+    """The active HVG panel variant, from $HVG_SET. Defaults to '' (the original panel)."""
+    value = os.environ.get("HVG_SET", "").strip().lower()
+    if value not in _HVG_SETS:
+        raise SystemExit(
+            f"HVG_SET={value!r} is not one of {sorted(k for k in _HVG_SETS if k)}; "
+            "unset it for the panel reduce_data_tum.py selected"
+        )
+    return value
+
+
+def hvg_tag() -> str:
+    """The filename/run-id tag of the active panel: '' or '_nomt'."""
+    return _HVG_SETS[hvg_set()]
+
+
+def hvg_path(suffix: str, value: str | None = None) -> Path:
+    """`hvg_path('.h5ad')` -> .../shiao_epicnv_hvg_2k.h5ad, or ..._hvg_2k_nomt.h5ad."""
+    return path(f"_hvg_2k{hvg_tag()}{suffix}", value)
+
+
+# The size 05_3 trained the run this phase reports at. 05_3 judges it by how many dimensions
+# DRVI lets vanish, which is why it is a knob and not a constant: see that step's README.
+DEFAULT_N_LATENT = 32
+
+
+def n_latent() -> int:
+    """The DRVI latent size, from $N_LATENT. Defaults to DEFAULT_N_LATENT.
+
+    Read by 05_4 - 05_8, which take no flag of their own: they do not train anything, they
+    read what 05_3 wrote, and what they need is its NAME. 05_3 itself defaults `--n-latent`
+    to this and overrides it when the flag is given.
+    """
+    raw = os.environ.get("N_LATENT", "").strip()
+    if not raw:
+        return DEFAULT_N_LATENT
+    try:
+        value = int(raw)
+    except ValueError:
+        raise SystemExit(f"N_LATENT={raw!r} is not an integer") from None
+    if value <= 0:
+        raise SystemExit(f"N_LATENT={value} must be positive")
+    return value
+
+
+def run_id(n: int | None = None, value: str | None = None) -> str:
+    """`drvi_<compartment>_<n_latent><hvg_tag>` - the id 05_3 names every output after.
+
+    THE ONLY PLACE THIS STRING IS BUILT, for the reason the whole module exists: 05_3 writes
+    the model, the embedding and the downstream object under it, and 05_4 - 05_8 find them by
+    reconstructing it. Two spellings of it is a step reading last week's run and saying
+    nothing. `n` is for 05_3, which has the value on its command line and must not go through
+    the environment to get it back.
+    """
+    return f"drvi_{compartment(value)}_{n or n_latent()}{hvg_tag()}"
+
+
 def banner(step: str) -> None:
     """Every script prints the same three lines, so a log says which set it was run on."""
     s = cell_set()
     print(f"{step}  |  CELL_SET={s} ({describe(s)})", flush=True)
     print(f"DATA_DIR : {data_dir()}", flush=True)
     print(f"prefix   : {prefix(s)}", flush=True)
+    if hvg_set():
+        print(f"HVG_SET  : {hvg_set()} (panel tag {hvg_tag()!r})", flush=True)
+    if os.environ.get("N_LATENT", "").strip():
+        print(f"N_LATENT : {n_latent()}", flush=True)
     print(flush=True)

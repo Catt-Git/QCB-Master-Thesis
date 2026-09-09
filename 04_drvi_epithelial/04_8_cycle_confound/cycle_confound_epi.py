@@ -107,10 +107,21 @@ def within_stratum_z(df: pd.DataFrame, keys: list) -> pd.DataFrame:
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
 
     C.banner(f"04_8 - the cell cycle behind the stemness axis: {coll.title}")
     print(f"question    how much of what these lists call 'stemness' is proliferation?")
+
+    # This step exists to interrogate a TARGET REGION: panel C asks what agreeing between two
+    # definitions of it buys, and panels A/B are read against the quadrant those definitions
+    # produce. A vocabulary collection defines none, so there is nothing here to ask - and the
+    # question it would answer is already answered for such a collection by the confounder
+    # table of 04_5, which carries the S_score / G2M_score coupling of every readout.
+    if not coll.has_target:
+        sys.exit(f"[STOP] the {coll.name} collection defines no target region (it is a "
+                 "vocabulary, not a hypothesis), and this step has nothing to ask of one.\n"
+                 "       Its cell-cycle question is answered for that collection by the "
+                 "`confounders` table of 04_5.")
 
     scores_path = C.scores_csv(coll)
     if not scores_path.exists():

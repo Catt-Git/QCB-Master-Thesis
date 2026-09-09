@@ -1,0 +1,17 @@
+cohort,resolution,n_epi,n_subclusters,n_subclusters_ge_min,median_subcluster_size,min_subcluster_size,pct_cells_in_subclusters_ge_min,n_subclusters_positive,frac_epi_positive,verdict,median_nullpos_heldout,median_nullpos_stromal
+Patient16,0.005,8028,113,86,63,1,98.9,111,0.9568,CNV-positive,0.0322,0.3167
+Patient16,0.01,8028,200,134,32,1,92.9,197,0.9571,CNV-positive,0.0322,0.3167
+Patient16,0.02,8028,354,156,18,1,75.5,350,0.9578,CNV-positive,0.0322,0.3167
+Patient16,0.05,8028,745,97,9,1,35.3,730,0.9567,CNV-positive,0.0322,0.3167
+Patient43,0.005,5394,53,30,45,1,98.5,25,0.5128,CNV-positive,0.0582,0.338
+Patient43,0.01,5394,88,56,46,1,96.9,44,0.5425,CNV-positive,0.0582,0.338
+Patient43,0.02,5394,169,91,22,1,88.4,86,0.548,CNV-positive,0.0582,0.338
+Patient43,0.05,5394,377,93,10,1,57.2,191,0.5358,CNV-positive,0.0582,0.338
+Patient52,0.005,9243,146,126,54,1,97.9,1,0.0135,CNV-negative,0.0055,0.3268
+Patient52,0.01,9243,261,190,30,1,92.2,9,0.015,CNV-negative,0.0055,0.3268
+Patient52,0.02,9243,462,184,17,1,68.3,13,0.0168,CNV-negative,0.0055,0.3268
+Patient52,0.05,9243,974,71,8,1,22.6,33,0.0206,CNV-negative,0.0055,0.3268
+Patient64,0.005,502,3,3,167,49,100.0,2,0.9024,CNV-positive,0.0059,0.3109
+Patient64,0.01,502,4,3,109,3,99.4,3,0.9024,CNV-positive,0.0059,0.3109
+Patient64,0.02,502,6,4,90,8,96.8,5,0.9024,CNV-positive,0.0059,0.3109
+Patient64,0.05,502,16,6,10,1,86.3,15,0.9024,CNV-positive,0.0059,0.3109

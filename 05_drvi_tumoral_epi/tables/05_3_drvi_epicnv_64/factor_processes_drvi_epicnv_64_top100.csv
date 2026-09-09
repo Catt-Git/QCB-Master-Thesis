@@ -1,0 +1,111 @@
+factor,smi_cell_type,smi_cell_type_value,smi_cnv_status,smi_cnv_status_value,smi_leiden,smi_leiden_value,smi_celltypist_01_4,smi_celltypist_01_4_value,any_smi,enrichr_term,enrichr_padj,gprofiler_term,gprofiler_p,decoupler_tf,decoupler_padj,n_tools,top_genes,max_score,has_program
+DR 38-,,,,,,,,,False,Defense Response To Symbiont (GO:0140546),1.5509064647525634e-23,negative regulation of viral genome replication,2.4780141666813135e-08,IRF3,0.041064457102805825,3,"IFIT2, IFIT1, IFIT3, RSAD2, ISG15, OASL, TNFSF10, IFI6",3.807097,True
+DR 39+,,,,,,,,,False,Supramolecular Fiber Organization (GO:0097435),8.470072673000373e-06,mesenchyme migration,0.008894230441125552,SRF,0.0035934699189183713,3,"ACTG2, ACTA1, TAGLN, CNN1, MYL9, ACTA2, KRT17, KRT81",5.1863647,True
+DR 47-,,,,,,,,,False,Heat Acclimation (GO:0010286),5.63250738207213e-07,protein refolding,2.0245444289711107e-05,SATB1,1.214671845384707e-20,3,"HSPA6, HSPA1B, HSPA1A, HSPB1, CRYAB",8.075077,True
+DR 10+,,,,,,,,,False,,,oxidative phosphorylation,2.0572880021533748e-08,THRA,1.4092968025136919e-05,2,"MT-CO2, MT-CO3, MT-CYB, MT-CO1, MT-ND1, MT-ND4, MT-ND2, MT-ATP8",0.31093726,True
+DR 13-,,,,,,,,,False,DNA Metabolic Process (GO:0006259),1.323907104522181e-13,,,TFDP1,0.0231441863766669,2,"TYMS, HIST1H1B, PKMYT1, TK1, UHRF1, ESCO2, ASF1B, RRM2",3.0112555,True
+DR 15+,,,,,,,,,False,Regulation Of Cellular Catabolic Process (GO:0031329),0.00023669007227877182,,,RELA,0.00017198056642225802,2,"TRIB3, PSAT1, ASNS, NUPR1, PYCR1, EIF4EBP1, DDIT3, PHGDH",1.3276865,True
+DR 18+,,,,,,,,,False,Positive Regulation Of Epithelial Cell Proliferation Involved In Wound Healing (GO:0060054),0.028485283348149315,,,RUNX2,1.6117929291253425e-13,2,"FDCSP, ODAM",4.948439,True
+DR 25-,,,,,,,,,False,Defense Response To Virus (GO:0051607),9.602560486564771e-05,,,KLF4,4.314411164434243e-06,2,"CXCL10, CXCL11, IDO1, CXCL9, UBD, WARS, GBP1, CCL8",19.60016,True
+DR 27-,,,,,,,,,False,MHC Class II Protein Complex Assembly (GO:0002399),1.6830053199566306e-14,MHC protein complex assembly,6.842821085224148e-09,,,2,"LTF, CD74, HLA-DQA1, HLA-DRA, HLA-DRB5, HLA-DRB1, HLA-DMA, PYDC1",0.3352972,True
+DR 28-,,,,,,,,,False,Regulation Of Sprouting Angiogenesis (GO:1903670),0.026307396529610057,,,NCOA1,0.02149690393932172,2,"SCRG1, S100A1, S100B",0.4081178,True
+DR 32-,,,,,,,,,False,Dicarboxylic Acid Metabolic Process (GO:0043648),0.030434996635943734,,,POU2F2,1.5942815737949133e-07,2,"MUCL1, APOD, DCD, LINC02303, SPINK8, TSPAN8, AC093001.1, TFPI2",43.753693,True
+DR 33-,,,,,,,,,False,Positive Regulation Of Transcription By RNA Polymerase II (GO:0045944),7.736314726446362e-05,,,HES1,0.0002533896780865731,2,"RCAN1, ATF3, NR4A1, RBKS, CTGF, KLF4, CYR61, TRIB1",1.0846685,True
+DR 34+,,,,,,,,,False,Positive Regulation Of Proteasomal Protein Catabolic Process (GO:1901800),0.021248097879550783,,,RUNX2,1.1163538298535576e-08,2,"MGP, CLU",0.7899966,True
+DR 35+,,,,,,,,,False,Defense Response To Bacterium (GO:0042742),0.0010160781544499183,,,CEBPE,0.00017286215576082882,2,"S100A8, S100A7, S100A9, PI3, ORM1, LCN2, SAA2, SAA1",29.669691,True
+DR 42-,,,,,,,,,False,Regulation Of Wound Healing (GO:0061041),0.00022427629406375707,,,SNAI2,0.003921374448543706,2,"CLDN1, EDN1, TM4SF1, CLDN4, TACSTD2, EMP1, PLAUR, TNFRSF12A",1.9979407,True
+DR 49-,,,,,,,,,False,Positive Regulation Of Fat Cell Differentiation (GO:0045600),0.03588262417820701,,,MEF2C,2.5172203768544493e-08,2,"PRR4, SFRP2",0.31911358,True
+DR 51+,,,,,,,,,False,Epithelial Structure Maintenance (GO:0010669),0.02501450788784419,,,MECP2,0.016591774757807393,2,"TFF1, SERPINA6, FGB, CPB1, SERPINA1, TFF3, PIP, FGG",15.31388,True
+DR 53+,,,,,,,,,False,Defense Response To Symbiont (GO:0140546),3.1009179574583896e-05,,,ETV6,8.005261434464177e-05,2,"MMP3, MMP7, CHI3L1, MMP1, SERPING1, RRAD, GEM, CXCL9",9.861779,True
+DR 54-,,,,,,,,,False,Intermediate Filament Organization (GO:0045109),0.0056197944558851005,,,TAF1,1.8687566956646533e-07,2,"CARD18, LGALS7B, S100A2, LGALS7, CALML3, ANXA8, KRT5, GPX2",10.67159,True
+DR 2+,,,,,,,,,False,Fatty Acid Transport (GO:0015908),0.0008598913956378846,,,,,1,"CRABP1, UCHL1, TMSB15A, FABP7, ACTL8, S100A1, PHGDH, FABP5",1.0673524,True
+DR 2-,,,,,,,,,False,Regulation Of Transcription By RNA Polymerase II (GO:0006357),1.1760570277550266e-05,,,,,1,"TCIM, ATF3, RND1, CEBPD, MAFF, STC2, BAMBI, EFNA1",2.1249864,True
+DR 7-,,,,,,,,,False,Negative Regulation Of Wnt Signaling Pathway (GO:0030178),0.011264797322300119,,,,,1,"MEST, CRABP1, IGFBP5, FRZB, AL589182.1, PCSK1N, MFAP2, CTHRC1",0.50923234,True
+DR 10-,,,,,,,,,False,,,,,CREM,3.0961235748662276e-18,1,,0.010084158,False
+DR 11+,,,,,,,,,False,Intermediate Filament Organization (GO:0045109),0.027238542897203795,,,,,1,"S100A6, S100A10, S100A16, TNNT1, LGALS1, IFI27, TUBB2B, S100A2",0.8159187,True
+DR 11-,,,,,,,,,False,Response To Estrogen (GO:0043627),0.04801654251724386,,,,,1,"STC2, PHGR1, AGR2, AC008663.1, SCUBE2, AZGP1, MGP, AKR7A3",3.1485379,True
+DR 16-,,,,,,,,,False,Cellular Response To Hypoxia (GO:0071456),0.02818025676048243,,,,,1,"NDUFA4L2, CA9, NRN1, HILPDA, ADM, CASP14, NDRG1, IGFBP3",4.3817472,True
+DR 18-,,,,,,,,,False,,,,,FOSL2,1.2970917936567055e-06,1,"PTHLH, DIO2, PNMT, TNFSF11, CXCL13, EFHD1, TFF3, SLC7A2",4.735054,True
+DR 19+,,,,,,,,,False,Regulation Of Transcription By RNA Polymerase II (GO:0006357),7.106812324048998e-09,,,,,1,"JUN, FOS, EGR1, IER2, ATF3, ZFP36, GADD45B, HSPA1B",0.8484462,True
+DR 24+,,,,,,,,,False,Mitotic G1 DNA Damage Checkpoint Signaling (GO:0031571),0.0037688084124352385,,,,,1,"GDF15, PVALB, CLCA2, LY6D, CDKN1A, PMP22, MDM2, PLK2",2.1387815,True
+DR 24-,,,,,,,,,False,,,,,ZBTB16,0.038967125408910425,1,,0.08270463,False
+DR 26+,,,,,,,,,False,,,,,JUND,0.013401273305030239,1,"PTN, MUC7, SCGB2A2, STAC2, CHI3L1, ANPEP, OPRPN, SYNM",4.4352603,True
+DR 28+,,,,,,,,,False,Negative Regulation Of G1/S Transition Of Mitotic Cell Cycle (GO:2000134),0.03117132719971657,,,,,1,"SPTSSB, FILIP1L, DEFB1, GDF15, KRT7, SDC1, CXCL1, TM4SF1",3.6404593,True
+DR 29+,,,,,,,,,False,Regulation Of Monoatomic Anion Transport (GO:0044070),0.016962102092962766,,,,,1,"ARHGAP36, GFRA1, CFD, TFPI2, NPY1R, PI15, GLRA3, ESR1",4.4164996,True
+DR 36+,,,,,,,,,False,,,,,HNF1A,0.00029277833558310346,1,"SPINK1, ALB, UGT2B15, ZNF385B, SPON1, CDH2, HSD17B2, CLEC3A",18.658695,True
+DR 41+,,,,,,,,,False,,,,,EWSR1,6.039209123558225e-05,1,,0.012080939,False
+DR 43-,,,,,,,,,False,Endodermal Cell Differentiation (GO:0035987),0.005450425990711678,,,,,1,"TNC, COL6A2, LAMB3, FN1, COL6A1, CDH3, COMP, COL4A1",1.234754,True
+DR 45-,,,,,,,,,False,,,,,EZH2,1.9650014827579063e-12,1,"CLEC3A, MSMB, AC100801.1, SCGB1B2P, PRSS23, GLRA3, CA2, CYP4X1",1.7755752,True
+DR 46-,,,,,,,,,False,Epidermis Development (GO:0008544),3.7782141021447553e-07,,,,,1,"KRT16, KRT6A, KRTDAP, KRT6B, C6orf15, MYEOV, KRT14, KLK10",3.40345,True
+DR 47+,,,,,,,,,False,,,,,PGR,2.1077887194136496e-06,1,"LTF, OLFM4, FABP7, RARRES1, C3, SAA2, SLC34A2, CLU",1.9790938,True
+DR 48-,,,,,,,,,False,Inflammatory Response (GO:0006954),5.894392518118576e-08,,,,,1,"CXCL1, CXCL3, TNFAIP6, CCL20, CXCL8, PTX3, CXCL2, SOD2",3.7906988,True
+DR 52+,,,,,,,,,False,,,,,AHR,1.2063427776768945e-24,1,CA3,0.34882843,True
+DR 1+,,,,,,,,,False,,,,,,,0,,0.0002751979,False
+DR 3-,,,,,,,,,False,,,,,,,0,,0.0028244948,False
+DR 4+,,,,,,,,,False,,,,,,,0,"SLC40A1, CYP4Z1, CYP4X1, TM4SF18, PLAT, GALNT6, DEGS2, GATA3",2.2781188,True
+DR 4-,,,,,,,,,False,,,,,,,0,"NPB, MARCO, VCAM1, CALML5, RBP5, PRRX1, FDCSP, CSTA",1.6921562,True
+DR 5+,,,,,,,,,False,,,,,,,0,,0.0009992846,False
+DR 6+,,,,,,,,,False,,,,,,,0,,0.0021018125,False
+DR 7+,,,,,,,,,False,,,,,,,0,,0.0034728185,False
+DR 8+,,,,,,,,,False,,,,,,,0,,0.00036671956,False
+DR 9-,,,,,,,,,False,,,,,,,0,,0.00094065024,False
+DR 13+,,,,,,,,,False,,,,,,,0,,0.008528677,False
+DR 14-,,,,,,,,,False,,,,,,,0,,0.0041192556,False
+DR 19-,,,,,,,,,False,,,,,,,0,,0.002302299,False
+DR 20+,,,,,,,,,False,,,,,,,0,,0.005829775,False
+DR 21+,,,,,,,,,False,,,,,,,0,"SOX4, CEBPD, JUND, BRI3, C4orf48, FOSB, CSTA, S100A10",0.7239466,True
+DR 21-,,,,,,,,,False,,,,,,,0,,0.0098049,False
+DR 23+,,,,,,,,,False,,,,,,,0,"MALAT1, NEAT1, ANKRD30A, HIST1H3J, XIST, HIST1H2BB, KCNQ1OT1, AC073195.1",3.7105594,True
+DR 23-,,,,,,,,,False,,,,,,,0,,0.0024739355,False
+DR 25+,,,,,,,,,False,,,,,,,0,,0.0017057003,False
+DR 26-,,,,,,,,,False,,,,,,,0,"HIST1H1C, HIST1H4H, HIST1H2BJ, HIST1H2BC, HIST1H2AC, HIST1H2BF, HIST2H2AA4, HIST1H2BK",1.8483852,True
+DR 27+,,,,,,,,,False,,,,,,,0,,0.0010982588,False
+DR 30-,,,,,,,,,False,,,,,,,0,,5.2960702e-05,False
+DR 31+,,,,,,,,,False,,,,,,,0,"SLPI, TCN1, CLDN10, CXCL17, LTF, PI3, SNCG, IL33",2.234922,True
+DR 31-,,,,,,,,,False,,,,,,,0,,0.002570801,False
+DR 32+,,,,,,,,,False,,,,,,,0,,0.00012607318,False
+DR 33+,,,,,,,,,False,,,,,,,0,,0.0008337098,False
+DR 34-,,,,,,,,,False,,,,,,,0,,0.0015521607,False
+DR 35-,,,,,,,,,False,,,,,,,0,,0.00029123473,False
+DR 36-,,,,,,,,,False,,,,,,,0,,3.3641783e-05,False
+DR 37-,,,,,,,,,False,,,,,,,0,,4.032726e-05,False
+DR 38+,,,,,,,,,False,,,,,,,0,,0.00032618936,False
+DR 39-,,,,,,,,,False,,,,,,,0,,0.00026270407,False
+DR 41-,,,,,,,,,False,,,,,,,0,,0.00025076233,False
+DR 42+,,,,,,,,,False,,,,,,,0,,0.00041068203,False
+DR 43+,,,,,,,,,False,,,,,,,0,,0.0007696604,False
+DR 44+,,,,,,,,,False,,,,,,,0,,0.08648756,False
+DR 44-,,,,,,,,,False,,,,,,,0,,0.00021489683,False
+DR 45+,,,,,,,,,False,,,,,,,0,,1.319193e-05,False
+DR 46+,,,,,,,,,False,,,,,,,0,,0.00036997529,False
+DR 48+,,,,,,,,,False,,,,,,,0,,0.00022241152,False
+DR 50+,,,,,,,,,False,,,,,,,0,,0.00054765143,False
+DR 52-,,,,,,,,,False,,,,,,,0,,4.043526e-05,False
+DR 53-,,,,,,,,,False,,,,,,,0,,0.00022580553,False
+DR 54+,,,,,,,,,False,,,,,,,0,,5.0562856e-05,False
+DR 9+,,,,,,,T_prol,0.456,True,Mitotic Sister Chromatid Segregation (GO:0000070),6.756885356722151e-19,nuclear chromosome segregation,8.724182129043635e-12,TP53,0.0009475020677508131,3,"UBE2C, CDC20, PLK1, DEPDC1, CCNB1, CCNB2, NEK2, CENPA",6.9791737,True
+DR 5-,basal,0.552,,,4,0.704,basal,0.569,True,Muscle Contraction (GO:0006936),0.014399474548450602,,,SRF,0.0005882905954258144,2,"C2orf40, CXCL14, MYH11, MYLK, TAGLN, SYT8, ACTA2, GRP",12.1470995,True
+DR 8-,,,,,27,0.414,Macro-IFN,0.507,True,Inflammatory Response (GO:0006954),0.00010431113097887079,cell junction disassembly,0.04360561230048653,,,2,"IL1B, C1QB, C1QC, LYZ, OLR1, C1QA, MS4A6A, SPP1",9.746534,True
+DR 14+,,,,,,,Lumsec-HLA,0.446,True,Intermediate Filament Organization (GO:0045109),6.742010090543016e-08,,,NFATC4,2.5172203768544493e-08,2,"KLK7, CST6, KLK5, KLK6, KRT81, LCN2, GAL, S100P",6.1154456,True
+DR 17-,,,,,21,0.793,pericytes,0.401,True,Hydrogen Peroxide Catabolic Process (GO:0042744),2.1067055666845006e-06,,,NR2F2,1.4730225859685408e-08,2,"HBB, HBA2, HBA1, ALAS2, CA1, HBM, SNCA, AHSP",70.197075,True
+DR 20-,,,,,,,Lumsec-HLA,0.682,True,Retina Homeostasis (GO:0001895),0.028812070048572974,,,ELK3,0.0001012872955476161,2,"ZG16B, AQP5, AC084866.1, CSN3, PPP1R1B, CLDN10, S100B, ELF5",3.098037,True
+DR 37+,,,,,24,0.766,mDC,0.46,True,B Cell Receptor Signaling Pathway (GO:0050853),4.0210586407986564e-05,adaptive immune response,1.8145167349769545e-22,,,2,"IGLV3-21, IGHV3-21, IGKV3-20, JCHAIN, IGHG1, IGKV4-1, IGKC, IGKV1-5",28.183043,True
+DR 50-,,,,,28,0.487,,,True,Cellular Response To Zinc Ion (GO:0071294),3.031099878645106e-21,detoxification of copper ion,3.789973134192653e-14,,,2,"MT1G, MT1M, MT1H, MT2A, MT1E, MT1X, MT1F, MT1A",3.6399965,True
+DR 1-,,,,,27,0.628,Vas-arterial,0.481,True,Extracellular Matrix Organization (GO:0030198),4.3151500208418175e-08,,,,,1,"COL1A1, COL3A1, COL1A2, DCN, LUM, CCL21, VWF, SFRP2",11.740725,True
+DR 12+,,,,,26,0.787,,,True,Regulation Of Intracellular Protein Transport (GO:0033157),0.007874841236500802,,,,,1,IFI27,0.1432923,True
+DR 15-,,,,,,,Lumsec-KIT,0.508,True,,,,,GLI3,0.0034106478876118674,1,"ANKRD36C, KCNQ1OT1, NEAT1, VMP1, MACC1, LINC01285, DLGAP1, NABP1",2.4654305,True
+DR 22-,,,,,19,0.479,CD8-Tem,0.825,True,T Cell Activation (GO:0042110),1.7126136839184625e-09,,,,,1,"MS4A1, CD69, GZMK, IFNG, PTPRC, NKG7, CD8B, CXCR4",36.21525,True
+DR 30+,,,,,,,CD8-Tem,0.516,True,Negative Regulation Of DNA-binding Transcription Factor Activity (GO:0043433),0.01413292057221457,,,,,1,"TRBV6-6, GNLY, GZMB, CTSW, CST7, CD7, CCL5, S100A4",0.28678766,True
+DR 40-,,,,,19,0.751,,,True,Regulation Of Transcription By RNA Polymerase II (GO:0006357),0.014876658397297075,,,,,1,"HIST3H2A, PDGFA, CKS1B, CPE, S100A6, PCOLCE, CAV1, BIRC5",1.9423932,True
+DR 3+,,,,,23,0.629,,,True,,,,,,,0,"PRR27, CSN3, SERHL2, TBX10, APOD, ALOX15B, DDC, FDCSP",2.5225506,True
+DR 6-,,,,,2,0.615,Lumsec-myo,0.527,True,,,,,,,0,"CSN1S1, SCGB3A1, SNORC, PIGR, CCL28, KIT, FAM3D, KRT15",7.9155493,True
+DR 12-,,,,,17,0.401,,,True,,,,,,,0,,3.044338e-05,False
+DR 16+,,,,,,,mDC,0.424,True,,,,,,,0,,0.0011354513,False
+DR 17+,,,,,,,Lumsec-HLA,0.531,True,,,,,,,0,,1.5845095e-05,False
+DR 22+,,,,,5,0.478,,,True,,,,,,,0,,0.00011078106,False
+DR 29-,,,,,,,Lumsec-HLA,0.568,True,,,,,,,0,,0.00033491597,False
+DR 40+,,,,,5,0.639,,,True,,,,,,,0,,3.6102974e-05,False
+DR 49+,,,,,23,0.609,,,True,,,,,,,0,,0.00021245815,False
+DR 51-,,,,,,,Lumsec-HLA,0.5,True,,,,,,,0,,0.00012709919,False
+DR 63+,,,,,,,Macro-IFN,0.437,True,,,,,,,0,,2.0641433e-05,False
+DR 63-,,,,,1,0.495,,,True,,,,,,,0,"SCGB1D2, SCGB2A2, SCGB2A1, SCGB1B2P, SCGB3A1, CYP4X1, CRISP3, PIP",16.25462,True

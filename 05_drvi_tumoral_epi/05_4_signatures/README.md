@@ -17,8 +17,19 @@ and Route B and doubles as the Appendix table.
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 build_signatures_tum.py                      # scie, the default
 python3 build_signatures_tum.py --collection emt     # the EMT lists
+python3 build_signatures_tum.py --collection gavish  # the 27 TNBC-relevant metaprograms
+python3 build_signatures_tum.py --collection gavish --all-metaprograms  # all 40 instead
 python3 build_signatures_tum.py --allow-low-coverage # report, do not stop
+
+N_LATENT=64 python3 build_signatures_tum.py --collection gavish   # the drvi_tum_64 run
+CELL_SET=epi HVG_SET=nomt N_LATENT=64 \
+    python3 build_signatures_tum.py --collection gavish           # drvi_epicnv_64_nomt
 ```
+
+`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32` by
+default, `N_LATENT=64` for `drvi_tum_64`, `CELL_SET=epi HVG_SET=nomt N_LATENT=64` for
+`drvi_epicnv_64_nomt`. See [the phase README](../README.md#which-run-05_4---05_8-read); the
+run id is in the name of everything written.
 
 ## Why this is re-run and not inherited from 04
 
@@ -50,16 +61,24 @@ so Route A's inputs are comparable between the phases.
 
 ## What comes out
 
-`../tables/<collection>/`:
+`../tables/<collection>/<run_id>/`:
 
 ```
-signatures_<collection>.gmt              the collection as actually used (mapped genes)
+signatures_<collection>_<compartment>.gmt  the collection as actually used (mapped genes)
 coverage_<collection>_<run_id>.csv       per list: mapped fraction, HVG count
 jaccard_<collection>_<run_id>.csv        pairwise overlap
 shared_genes_<collection>_<run_id>.csv   the same as counts
 ```
 
-Figures in `../figures/05_4_signatures/<collection>/`.
+Figures in `../figures/05_4_signatures/<collection>/<run_id>/`.
+
+The `.gmt` is the one output named after the **object** and not after the run, because that is
+what it depends on: it holds the signature genes that exist in the object, and `shiao_tum.h5ad`
+(24,779 genes) and `shiao_epicnv.h5ad` (26,379) do not have the same gene axis. `N_LATENT` and
+`HVG_SET` are not in the name and must not be — neither changes which genes the object has — so
+`drvi_tum_32` and `drvi_tum_64` correctly share one `.gmt` while `CELL_SET=epi` gets its own.
+04 has a single object and so a single `signatures_<collection>.gmt`; this is one more of the
+things that differ here, and it differs because this phase has a second cell set.
 
 Both tables have to be read before any result of this stage is believed:
 
@@ -76,4 +95,11 @@ Five EMT lists sit under the 10-gene floor inside the HVG background and are eff
 untestable on Route B (`EMT_A_EPITHELIAL` has 2 genes there). They are still scored in full by
 Route A, which reads the all-genes object — the asymmetry is reported, not silently resolved.
 
-Both collections pass the mapping floor on this object; nothing had to be forced.
+All three collections pass the mapping floor on this object; nothing had to be forced. On
+`gavish` (all 40, which is what these numbers were measured on) the lowest is `MP24_CILIA` at 0.796 and nothing else is under 0.83, which is expected:
+the metaprograms were published in 2023 against a modern reference, where the SCIE lists date
+from 2007-2012. What the coverage table shows there instead is a **Route B** limit — nine of the
+40 have fewer than 10 genes inside the 2,000-HVG background and are effectively untestable by
+the ORA of 05_7, `MP4_CHROMATIN`, `MP20_MYC` and `MP21_RESPIRATION` among them. They are still
+scored per cell by Route A; a dimension can only fail to match them on one route, and the
+convergence table has to be read knowing which nine those are.

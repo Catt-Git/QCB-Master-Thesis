@@ -1,6 +1,6 @@
 # environments
 
-Conda/mamba environment files used across the thesis. Five environments, each with a
+Conda/mamba environment files used across the thesis. Six environments, each with a
 distinct role.
 
 ## The environments
@@ -12,6 +12,7 @@ distinct role.
 | `scgen-py.yml` | `scgen-py` | **Isolated legacy env for scGen only.** Old pinned deps (Python 3.9, `anndata 0.10`, `scanpy 1.9`, `torch 2.0`, `scvi-tools 0.19.0`, `scgen 2.1.0`) that conflict with the main stack, so scGen gets its own env. |
 | `cytotrace2-py.yml` | `cytotrace2-py` | **Isolated env for CytoTRACE2 only** (`04_drvi_epithelial/04_4_cytotrace2`). `cytotrace2-py` pins `numpy<2.0.0`, so it cannot live beside the main stack; CPU-only torch, Python 3.11. |
 | `infercnv-r.yml` | `infercnv-r` | **Isolated env for inferCNV only** (`05_drvi_tumoral_epi/05_1_infercnv`). R 4.5 + `bioconductor-infercnv` + JAGS. R only: the Python half of that step runs in `benchmark-py-r`. |
+| `soupx-r.yml` | `soupx-r` | **Isolated env for SoupX only** (`06_ambient_soupx/06_2_soupx`). R 4.5 + `r-soupx=1.6.2`. R only, same as above: the Python halves of that step run in `benchmark-py-r` and `soupx_all.sh` switches per stage. |
 
 ## Usage
 
@@ -30,6 +31,9 @@ Then run the code as described in each phase's README (`export DATA_DIR=...` fir
 - CytoTRACE2 (04_4) only: `cytotrace2-py`.
 - inferCNV (05_1) only: `infercnv-r`. That step runs its Python half in `benchmark-py-r` and
   switches environment per stage; `05_1_infercnv/infercnv_all.sh` does it with `conda run`.
+- SoupX (06_2) only: `soupx-r`. Same pattern: `06_2_soupx/soupx_all.sh` runs stages 1 and 3 in
+  `benchmark-py-r` and stage 2 in `soupx-r`, with `conda run`, so neither environment can leak
+  into the other across the 148-channel loop.
 
 > **Why inferCNV is not in `benchmark-py-r`.** Unlike the two cases below this is not a
 > conflict that was observed - it is one that was not risked. `benchmark-py-r` already carries

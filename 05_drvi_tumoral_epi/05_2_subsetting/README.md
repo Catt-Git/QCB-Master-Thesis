@@ -27,6 +27,12 @@ The mapping lives in `cell_set.py` and nowhere else — four scripts write into 
 and a prefix computed independently in each of them is a silent-overwrite bug waiting to
 happen. `cell_set.py` also holds every threshold, with the argument for each in a comment.
 
+`cell_set.py` is also where the other two knobs of the phase live, for the same reason: `HVG_SET`
+(below) and `N_LATENT`, which is not a property of the cells at all but is the third segment of
+the run id — and `run_id()` there is the only place that string is built. 05_3 takes `N_LATENT`
+as the default of `--n-latent`; 05_4 - 05_8 read it and have no flag of their own. See
+[the phase README](../README.md#which-run-05_4---05_8-read).
+
 Resuming is per cell set, because the outputs are named differently: running `epi` after `tum`
 re-runs all four steps, as it should.
 
@@ -41,6 +47,7 @@ re-runs all four steps, as it should.
 | 5 | `reduce_data_tum.py` | Batch-aware HVG (`cohort`, 2000) + PCA(50) + neighbours + UMAP; writes the HVG list **and** the 2,000-gene DRVI input, plus the overlap with the 01_5, 03_1 and 04_1 HVG lists. | local |
 | 6 | `clustering_tum.py` | Leiden optimal-resolution sweep (0.1-2.0) → `shiao_tum.h5ad`. | local |
 | 7 | `visualization_tum.ipynb` | Figures on the final object. Read-only. | local (notebook) |
+| — | `hvg_no_mt.py` | **Off-chain, on demand.** Rebuilds step 5's panel without the 11 `MT-` genes, refilling to 2,000 with the next 11 of the same ranking → `<prefix>_hvg_2k_nomt_list.csv` + `<prefix>_hvg_2k_nomt.h5ad`. See *The MT-free panel* below. | local |
 
 ```bash
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
@@ -91,8 +98,45 @@ construction. Either way the post-condition asserts no `not_tested` cell survive
 <prefix>_reduced.h5ad                 + HVG / PCA / neighbours / UMAP
 <prefix>_hvg_2k_list.csv              the 2,000 selected genes
 <prefix>_hvg_2k.h5ad                  the DRVI input for 05_3
+<prefix>_hvg_2k_nomt_list.csv         the same panel without the MT- genes  (hvg_no_mt.py)
+<prefix>_hvg_2k_nomt.h5ad             the DRVI input for 05_3 under HVG_SET=nomt
 <prefix>.h5ad                         + leiden - the definitive object
 <prefix>_leiden_resolution_profile.csv
 ```
 
 Figures go to `../figures/05_2_*/`.
+
+
+## The MT-free panel (`HVG_SET=nomt`)
+
+Step 5 selects 2,000 batch-aware HVGs and, on the `epi` object, **11 of them are
+mitochondrial**: `MT-ND1`, `MT-ND2`, `MT-CO1`, `MT-CO2`, `MT-ATP8`, `MT-CO3`, `MT-ND3`,
+`MT-ND4L`, `MT-ND4`, `MT-ND6`, `MT-CYB`. What they vary with is the mitochondrial fraction of a
+cell's RNA - dissociation stress, membrane damage, ambient lysate - which is the quantity
+`MAX_PCT_MT` already filters cells on. That is QC, not epithelial state, and a DRVI latent
+dimension answering to it is a dimension not spent on biology.
+
+`hvg_no_mt.py` drops them and refills the panel to 2,000 with **the next 11 genes of the same
+ranking**: `PTPRB`, `SVOPL`, `TMEM47`, `TGFB3`, `FLRT2`, `KCNA1`, `AC091057.3`, `HIST2H2AB`,
+`RHBDL1`, `CILP`, `AC009041.2`, all highly variable in 6 cohorts with normalized dispersion
+0.502-0.509 against the 0.510 of the last gene inside the cut. The other **1,989 genes are gene
+for gene** the ones already in `<prefix>_hvg_2k_list.csv` - the script reproduces scib's
+selection over the *unchanged* `sc.pp.highly_variable_genes(n_top_genes=2000)` call and asserts
+the reproduction against the file on disk before touching anything, because
+`hvg_batch(target_genes=2011)` would feed 2011 into scanpy and reshuffle the ranking rather than
+extend it.
+
+The metallothioneins `MT1A/E/F/G/H/M/X` and `MT2A`, and `MTRNR2L12`, share the prefix and
+nothing else: nuclear genes, real epithelial biology, kept. The match is the exact prefix `MT-`.
+
+Nothing is overwritten. The outputs carry the `_nomt` tag `cell_set.py` derives from `$HVG_SET`,
+and so does the 05_3 run id built on them (`drvi_epicnv_64_nomt` against `drvi_epicnv_64`), so
+the two runs sit side by side and the difference between them is readable. `<prefix>.h5ad` and
+its `optscib_tum_leiden` clustering are **not** rebuilt - leiden stays the partition both runs
+are read against.
+
+```bash
+export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
+CELL_SET=epi python3 hvg_no_mt.py          # ~10 min: the HVG scan, then PCA/neighbours/UMAP
+CELL_SET=epi python3 hvg_no_mt.py --force  # rebuild over an existing panel
+```

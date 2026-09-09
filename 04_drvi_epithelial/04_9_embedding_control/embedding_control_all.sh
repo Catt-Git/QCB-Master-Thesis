@@ -44,6 +44,7 @@ LOG_DIR="$PHASE_DIR/logs"
 PYTHON="${PYTHON:-python3}"
 
 COLLECTIONS="${COLLECTIONS:-scie emt}"
+ALL_METAPROGRAMS="${ALL_METAPROGRAMS:-0}"
 EMBEDDINGS="${EMBEDDINGS:-harmony}"
 FORCE=0; DRY_RUN=0
 STEP_FILTER=()
@@ -52,6 +53,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --collection) COLLECTIONS="${2:?--collection needs a value}"; shift 2 ;;
     --collection=*) COLLECTIONS="${1#*=}"; shift ;;
+    --all-metaprograms) ALL_METAPROGRAMS=1; shift ;;
     --embeddings) EMBEDDINGS="${2:?--embeddings needs a value}"; shift 2 ;;
     --embeddings=*) EMBEDDINGS="${1#*=}"; shift ;;
     --force|-f) FORCE=1; shift ;;
@@ -64,6 +66,17 @@ done
 
 : "${DATA_DIR:?set DATA_DIR to the directory holding the datasets (outside the repo)}"
 EPI_DIR="$DATA_DIR/04_epi"
+
+# `gavish` names the TNBC-relevant subset unless --all-metaprograms widens it, and the subset
+# writes under its own slug. The tables below are looked up by slug; --collection still passes
+# what was typed. Mirrors `sig_collections.resolve()`.
+slug_of() {
+  if [ "$1" = "gavish" ] && [ "$ALL_METAPROGRAMS" -eq 0 ]; then echo "gavish_tnbc"; else echo "$1"; fi
+}
+# A plain string and not an array: an empty array expanded inside quotes hands the script one
+# empty argument, which argparse rejects. This has no spaces in it, so unquoted is correct.
+MP_FLAG=""
+if [ "$ALL_METAPROGRAMS" -eq 1 ]; then MP_FLAG="--all-metaprograms"; fi
 
 in_list() { local x="$1"; shift; local e; for e in "$@"; do [ "$e" = "$x" ] && return 0; done; return 1; }
 want() { [ "${#STEP_FILTER[@]}" -eq 0 ] || in_list "$1" "${STEP_FILTER[@]}"; }
@@ -139,9 +152,10 @@ fi
 if want cellfirst; then
   for e in $EMBEDDINGS; do
     for c in $COLLECTIONS; do
+      s="$(slug_of "$c")"
       run "cellfirst $e/$c" "$PHASE_DIR/04_5_cell_first" cell_first_epi.py \
-        "$PHASE_DIR/tables/$c/dim_signature_spearman_${c}_$(run_id_of "$e").csv" \
-        --collection "$c" --embedding "$e"
+        "$PHASE_DIR/tables/$s/dim_signature_spearman_${s}_$(run_id_of "$e").csv" \
+        --collection "$c" $MP_FLAG --embedding "$e"
     done
   done
 fi
@@ -149,9 +163,10 @@ fi
 # 3. the comparison, one per collection, always against the DRVI run.
 if want compare; then
   for c in $COLLECTIONS; do
+    s="$(slug_of "$c")"
     run "compare $c" "$STEP_DIR" compare_embeddings_epi.py \
-      "$PHASE_DIR/tables/$c/embedding_comparison_${c}_epi_embeddings.csv" \
-      --collection "$c" --embeddings drvi $EMBEDDINGS
+      "$PHASE_DIR/tables/$s/embedding_comparison_${s}_epi_embeddings.csv" \
+      --collection "$c" $MP_FLAG --embeddings drvi $EMBEDDINGS
   done
 fi
 

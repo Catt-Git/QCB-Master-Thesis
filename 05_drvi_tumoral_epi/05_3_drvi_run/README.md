@@ -31,12 +31,29 @@ python3 run_drvi_tum.py                  # n_latent 32, the run of this step
 python3 run_drvi_tum.py --n-latent 64    # another size, beside it, nothing overwritten
 python3 run_drvi_tum.py --overwrite      # retrain and rewrite everything
 CELL_SET=epi python3 run_drvi_tum.py     # the same run on the control set
+HVG_SET=nomt python3 run_drvi_tum.py     # on the gene panel without the MT- genes
+N_LATENT=64 python3 run_drvi_tum.py      # the same as --n-latent 64, see below
 ```
+
+`--n-latent` **defaults to `$N_LATENT`** (32 when unset) and the flag overrides it. That is not
+a convenience: 05_4 - 05_8 read the same variable and have no flag of their own, so one export
+points the whole phase at one run. The run id itself is built by `cell_set.run_id()` and nowhere
+else — `drvi_<compartment>_<n_latent><hvg_tag>` — because two spellings of it is a downstream
+step silently reading a different embedding than the one it names.
 
 `CELL_SET` works here as in 05_2 and through the same `05_2_subsetting/cell_set.py`, imported
 rather than duplicated: `tum` (default) is the malignant subset, `epi` the control set of all
 epithelium under the post-CNV labels. They produce different run ids — `drvi_tum_32` against
 `drvi_epicnv_32` — and therefore different models, embeddings, figures and tables.
+
+`HVG_SET` comes from the same module and is orthogonal to it: it picks **which 2,000 genes** the
+model sees. Unset is the panel `reduce_data_tum.py` selected; `nomt` is the one
+`05_2/hvg_no_mt.py` rebuilt with the 11 mitochondrial genes replaced by the next 11 of the same
+batch-aware ranking (1,989 of 2,000 unchanged — see the 05_2 README). Same cells, same counts,
+a different panel, and a run id that says so: `drvi_epicnv_64_nomt` beside `drvi_epicnv_64`. The
+`MT-` genes track the mitochondrial fraction of a cell's RNA, i.e. dissociation stress and lysis
+— the quantity `pct_counts_mt` already filtered on — so a latent dimension spent on them is a
+dimension not spent on biology, and the two runs side by side are what says how much that cost.
 
 ## Why 32 latent dimensions
 
@@ -168,8 +185,9 @@ embed_<run_id>.h5ad            latent space + per-dimension stats + OOD/IND gene
 shiao_tum_<run_id>.h5ad        the 05_2 object (all genes) + obsm['X_drvi']
 ```
 
-with `<run_id>` = `drvi_tum_32`. Figures go to `../figures/05_3_<run_id>/` and tables to
-`../tables/05_3_<run_id>/`.
+with `<run_id>` = `drvi_tum_32`, or `drvi_<compartment>_<n_latent><hvg_tag>` in general —
+`drvi_epicnv_64_nomt` for the control set at 64 dimensions on the MT-free panel. Figures go to
+`../figures/05_3_<run_id>/` and tables to `../tables/05_3_<run_id>/`.
 
 - **`embed_<run_id>.h5ad` is the file 05_4 reads.** It needs neither the model nor a GPU.
 - `shiao_tum_<run_id>.h5ad` is for the steps that need genes and latent coordinates in the same
@@ -189,6 +207,7 @@ cd 05_drvi_tumoral_epi/05_3_drvi_run && mkdir -p logs
 export DATA_DIR=/users/genomics/albertoc/Tesi/hopes_and_dreams/datasets
 sbatch --export=ALL,DATA_DIR=$DATA_DIR submit_drvi_tum.slurm                # n_latent 32
 sbatch --export=ALL,DATA_DIR=$DATA_DIR submit_drvi_tum.slurm --n-latent 64  # another size
+sbatch --export=ALL,DATA_DIR=$DATA_DIR,CELL_SET=epi,HVG_SET=nomt submit_drvi_tum.slurm --n-latent 64
 ```
 
 Everything after the script path reaches `run_drvi_tum.py` unchanged. Three things have to be

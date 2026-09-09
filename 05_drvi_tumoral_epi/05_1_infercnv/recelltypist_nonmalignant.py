@@ -91,6 +91,16 @@ Local usage (benchmark-py-r):
     python3 recelltypist_nonmalignant.py
     python3 recelltypist_nonmalignant.py --no-majority-voting   # per-cell only, much faster
     python3 recelltypist_nonmalignant.py --scope non-immune     # faster, but see above
+    python3 recelltypist_nonmalignant.py --tag newcnv           # the call_malignant_newcnv call
+
+`--tag newcnv` reads cnv_status_newcnv.csv and writes cell_annotation_newcnv.csv, leaving the
+untagged pair untouched. That call has a fourth status, `borderline` - the cells whose two
+criteria disagree - and it is treated here exactly like `not_tested`: it is not `malignant`,
+so the cell goes through the re-annotation and gets a normal-breast label, and its
+`cnv_status` travels into the output next to that label so 05_2 can see the label is not a
+claim. The reasoning is the one in the section above: the re-run covers every non-malignant
+cell because restricting the input would change the neighbourhood structure the vote is
+computed over, which is a worse problem than carrying a label 05_2 is going to ignore.
 """
 
 from __future__ import annotations
@@ -123,6 +133,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--scope", choices=("all", "non-immune"), default="all",
                    help="which non-malignant cells to re-annotate; 'all' (default) reproduces "
                         "01_4's population minus the malignant cells, see the module docstring")
+    p.add_argument("--tag", default="",
+                   help="which call to read. Empty (default) = cnv_status.csv -> "
+                        "cell_annotation_cnv.csv, i.e. call_malignant.ipynb. 'newcnv' = "
+                        "cnv_status_newcnv.csv -> cell_annotation_newcnv.csv, i.e. "
+                        "call_malignant_newcnv.ipynb. The two never overwrite each other.")
     return p.parse_args()
 
 
@@ -132,12 +147,17 @@ def main() -> int:
     data_dir = Path(os.environ["DATA_DIR"]).expanduser().resolve()
     in_path = data_dir / "shiao.h5ad"
     cnv_dir = data_dir / "05_tum"
-    status_path = cnv_dir / "cnv_status.csv"
+    tag = args.tag.strip().strip("_")
+    suffix = f"_{tag}" if tag else ""
+    status_path = cnv_dir / f"cnv_status{suffix}.csv"
     model_path = data_dir / "Cells_Adult_Breast.pkl"
-    out_path = cnv_dir / "cell_annotation_cnv.csv"
+    # The default call writes cell_annotation_cnv.csv; a tagged one writes its own file, so
+    # the two calls can be carried side by side and compared rather than one replacing the other.
+    out_path = cnv_dir / (f"cell_annotation{suffix}.csv" if tag else "cell_annotation_cnv.csv")
+    notebook = f"call_malignant{suffix}.ipynb"
 
     for path, hint in ((in_path, "phase 01"),
-                       (status_path, "call_malignant.ipynb"),
+                       (status_path, notebook),
                        (model_path, "01_4")):
         assert path.exists(), f"missing {path} (produced by {hint})"
 

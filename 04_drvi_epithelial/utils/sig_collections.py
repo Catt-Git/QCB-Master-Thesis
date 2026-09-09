@@ -2,8 +2,8 @@
 
 04_3 - 04_7 implement ONE procedure: score prior knowledge on the cells (Route A), read the
 gene programme off the DRVI decoder (Route B), and call a cell state only where the two
-converge (Route C). That procedure is applied twice, to two independent bodies of prior
-knowledge:
+converge (Route C). That procedure is applied to three independent bodies of prior knowledge,
+the third of which uses only the part of it that does not need a target region:
 
   * `scie`  - stemness x immunogenicity. Is there an epithelial state that is stem-like AND
               immune-evasive? Ten lab lists on two axes, plus CytoTRACE2 as a stemness
@@ -13,18 +13,30 @@ knowledge:
               hybrid / mesenchymal axes, plus a derived E-to-M score per version. The hybrid
               state is called by CO-EXPRESSION of the epithelial and mesenchymal programmes;
               the hybrid lists validate that call rather than making it.
+  * `gavish` - the recurrent pan-cancer metaprograms of Gavish et al. 2023, used as a
+              VOCABULARY rather than as a hypothesis: it defines no target region and calls no
+              cells, it names the latent dimensions from outside this dataset and gives the
+              other two collections an independent check. It comes in two widths: the 27
+              relevant to a triple-negative breast carcinoma, which is what it scores by
+              default, and all 40 with `--all-metaprograms`. Either way a handful of them are
+              lineages that cannot be here, kept as negative controls.
 
 Nothing about the procedure changes between them. What changes is the input lists, the axis
-names, the shape of the target region on the cell-first plane, and which named risk has to be
-checked before the result is believed. All of that lives here, so the five step scripts stay
-single files taking `--collection {scie,emt}` rather than being duplicated per readout.
+names, the shape of the target region on the cell-first plane - or whether there is one at all,
+see `Collection.has_target` - and which named risk has to be checked before the result is
+believed. All of that lives here, so the step scripts stay single files taking
+`--collection {scie,emt,gavish}` rather than being duplicated per readout.
 
 The outputs never mix: every table and figure is written to `<tables|figures>/<collection>/`
 and carries the collection in its filename. The Benjamini-Hochberg correction of 04_6 is
 likewise computed inside a collection, so adding the EMT lists cannot move a single SCIE
-p-value.
+p-value, and neither can adding the forty Gavish metaprograms.
 
-Adding a third collection means appending a `Collection` below. No step script changes.
+Adding a collection means appending a `Collection` below and nothing else - with one exception,
+now on the record: a collection WITHOUT a target region needed the steps taught to skip what
+depends on one. That is `has_target`, it was added for `gavish`, and it is now part of the
+contract rather than a special case. The two steps that exist only to interrogate a target
+region, 04_8 and 04_9, stop with a message on such a collection instead of running.
 """
 
 from __future__ import annotations
@@ -50,6 +62,12 @@ class Signature:
     table across list versions is a reported result, not a diagnostic. Which KIND of check it is
     matters and is stated in `provenance`: a strict subset of the primary list is a sensitivity
     analysis, only a separately curated list is a replicate. See the EMT block below.
+
+    A NEGATIVE CONTROL is the third kind, and it is the one the flag does not name: a list that
+    is scored so that the OTHER results have a floor to be read against, and whose expected
+    value is zero. `primary=False` marks those too, for the same reason - it is not an
+    independent test of anything - and `provenance` again says which kind it is. See the
+    lineage metaprograms of the GAVISH block.
     """
 
     name: str
@@ -120,11 +138,23 @@ class Collection:
     question: str                   # the biological question, printed by every step
     signatures: tuple[Signature, ...]
     axes: tuple[str, ...]           # column / block order in every heatmap
-    planes: Callable[["Collection", list[str]], list[Plane]]
-    plane_figure: str               # figure basename for the cell-first plane
-    target_label: str               # what the target region is called in prose
-    risks: tuple[str, ...]          # named checks 04_5 must run, see its header
-    criteria: tuple[Criterion, ...]  # the 04_7 target-axis test
+    # THE TARGET REGION, AND WHAT A COLLECTION IS WITHOUT ONE.
+    #
+    # A collection that asks whether a NAMED STATE EXISTS defines all five: the planes that
+    # define the region, what to call it, the named risks 04_5 must check, and the
+    # criteria 04_7 tests the axes against. `scie` and `emt` do.
+    #
+    # A collection can instead be a VOCABULARY: a body of prior knowledge used to NAME the
+    # dimensions rather than to call cells. It leaves all five at their defaults, `has_target`
+    # is then False, and each step drops exactly what depends on a region - the cell-first
+    # plane, the consensus quadrant and everything computed on it, the target-axis test - and
+    # keeps the two heatmaps, the per-cell scores and the convergence table, which need no
+    # region to mean anything. `gavish` is one; see its block at the bottom of this file.
+    planes: Callable[["Collection", list[str]], list[Plane]] | None = None
+    plane_figure: str | None = None  # figure basename for the cell-first plane
+    target_label: str | None = None  # what the target region is called in prose
+    risks: tuple[str, ...] = ()      # named checks 04_5 must run, see its header
+    criteria: tuple[Criterion, ...] = ()  # the 04_7 target-axis test
     derived: tuple[Derived, ...] = ()
     extra_readouts: dict[str, str] = field(default_factory=dict)  # name -> axis, joined at runtime
     depth_risk_readout: str | None = None      # the readout whose LOW group could just be shallow
@@ -132,6 +162,16 @@ class Collection:
     extra_flags: Callable[["Collection", str, float], list[str]] = lambda c, n, r: []
 
     # ---------------------------------------------------------------- accessors
+
+    @property
+    def has_target(self) -> bool:
+        """Does this collection define a region of the cell-first plane to call cells in?
+
+        The single question every step asks before running anything downstream of a quadrant.
+        It is derived from `planes` rather than stored, so a collection cannot end up claiming
+        a target it has no way to draw.
+        """
+        return self.planes is not None
 
     @property
     def names(self) -> list[str]:
@@ -397,9 +437,316 @@ EMT = Collection(
 
 
 # --------------------------------------------------------------------------- #
+# gavish - the recurrent pan-cancer metaprograms, as a vocabulary
+# --------------------------------------------------------------------------- #
+#
+# Gavish et al. 2023 (Nature 618:598-606, "Hallmarks of transcriptional intratumour
+# heterogeneity across a thousand tumours") ran NMF on the malignant cells of ~1,000 tumours
+# across 24 cancer types and clustered the resulting programmes into 41 METAPROGRAMS: the
+# expression programmes that recur across patients and across cancer types rather than in a
+# single tumour. Each is published as a list of 50 genes.
+#
+# THIS COLLECTION IS A VOCABULARY, NOT A HYPOTHESIS, and that is the whole difference between
+# it and the two above. `scie` and `emt` each ask whether a NAMED state exists, and each
+# defines a region of the cell-first plane to call cells in. This one asks the question in the
+# opposite direction - given a latent dimension, what is it? - so it defines no plane, no
+# target region, no named risks and no criteria: `has_target` is False and every step skips
+# what depends on them. What it does produce is the half that a latent space actually needs:
+#
+#   * Route A  every metaprogram scored per cell, standardised within cohort, correlated
+#              against every dimension -> the dimensions x metaprograms heatmap;
+#   * Route B  ORA of each dimension's top decoder genes against the same sets - the
+#              standard way NMF and latent programmes are named in this literature;
+#   * Route C  the per-dimension convergence table, which is the point of running it: a
+#              dimension on which the two routes independently land on the SAME metaprogram
+#              is a dimension that has a name coming from outside this dataset.
+#
+# It is also the outside check on the other two collections. `scie` and `emt` are lab and
+# collaborator lists, chosen because the project is about those states; MP12 - MP16 and
+# MP17 - MP18 were derived with no knowledge of this project, from other tumours and other
+# cancer types. An EMT axis that appears on the collaborator's lists AND on Gavish's EMT
+# metaprograms is an axis that does not depend on whose EMT list was used.
+#
+# WHAT IS MISSING, AND IT IS NOT MISSING HERE. Two things, both properties of the export and
+# neither of them fixable from this file. Eight of the forty columns of `datasets/GAVISH.csv`
+# carry 48 or 49 genes rather than 50, which is why the provenance below says "as exported"
+# and why the coverage table is the place to read the per-list count. And there are 40 lists,
+# not 41: MP1 (Cell Cycle G2/M) is absent from that same export, so it was never on disk. The
+# cycle is still represented - MP2 (G1/S) and MP3 (HMG-rich) are here, and `S_score` /
+# `G2M_score` are in the confounder table of every run - but a dimension that is specifically
+# G2/M has no metaprogram to match against and will read as MP2 or as nothing at all.
+# Re-export MP1 and it is one line below.
+#
+# THE NAMES ARE THE PAPER'S, THE AXES ARE OURS. Gavish numbers and names the metaprograms;
+# grouping them into the fifteen families below is a decision taken here, and it is not
+# cosmetic. `axis` is what orders and blocks every heatmap AND what Route C reads as
+# `same_family`, so two metaprograms placed on one axis are two metaprograms whose agreement
+# across the routes will be counted as convergence. The families are therefore drawn
+# conservatively - MP4 (chromatin) is not folded into the cycle, MP38 / MP39 are not folded
+# into metabolism - and a metaprogram with no relative sits on an axis of its own rather than
+# in a bin of leftovers.
+#
+# THE LINEAGE METAPROGRAMS ARE KEPT, AS NEGATIVE CONTROLS. Eleven of the 40 describe lineages
+# that cannot be in a breast epithelial or malignant-epithelial compartment: the neural five
+# (MP25 - MP29, glioma and oligodendrocyte), skin pigmentation (MP32), and the haematopoietic
+# five (MP33 - MP37, erythrocytes, platelets, immunoglobulin). They are marked
+# `primary=False` and they are not there to be found. They are there because forty correlated
+# scores need a floor: if a dimension lands on MP25 (astrocytes) as strongly as on MP12 (EMT),
+# then the MP12 reading is worth nothing either, and without the controls in the same table
+# there is nothing to say so. Their expected result is a near-zero row; a non-zero one is a
+# finding about the scoring rather than about the tumour - MP36 (IG) in particular is this
+# dataset's ambient-immunoglobulin readout, and it is the one to look at first.
 
-COLLECTIONS = {c.name: c for c in (SCIE, EMT)}
+_GAVISH_PAPER = "Gavish et al. 2023, Nature 618:598-606, pan-cancer malignant metaprogram"
+
+# The two families that cannot be present in this compartment. Membership of one is what
+# makes a metaprogram a control rather than a test, in one place.
+GAVISH_CONTROL_AXES = ("neural", "other_lineage")
+
+
+def _mp(stem: str, axis: str, label: str, note: str = "", name: str | None = None) -> Signature:
+    """One metaprogram. `stem` is the filename `utils/gavish_extraction.py` wrote.
+
+    The files live in a subdirectory of `$DATA_DIR/signatures/`, which `Signature.file`
+    carries verbatim - `load_signatures` joins it to the signature directory and never
+    assumed a flat layout.
+
+    `name` overrides the default only for MP3, whose file is `MP3_CELL_CYLCE_HMG_RICH.txt`:
+    the typo comes from the column header of GAVISH.csv and renaming the file would break a
+    re-export rather than fix anything, so the readout carries the corrected spelling and the
+    path keeps what is on disk.
+    """
+    # "as exported" and not "the 50 published genes": the metaprograms are 50 genes each in
+    # the paper, and eight of the columns of GAVISH.csv carry 48 or 49. The per-list count is
+    # in the coverage table of 04_3 / 05_4, which is where it belongs.
+    provenance = (f"{_GAVISH_PAPER} MP{stem.split('_')[0][2:]} ({label}), "
+                  "the published gene list as exported to datasets/GAVISH.csv")
+    if note:
+        provenance += f"; {note}"
+    return Signature(name=name or stem, file=f"GAVISH_metaprograms/{stem}.txt", axis=axis,
+                     provenance=provenance, primary=axis not in GAVISH_CONTROL_AXES)
+
+
+_CONTROL_NOTE = ("lineage absent from a breast epithelial compartment by construction - kept "
+                 "as an internal negative control, its expected correlation is zero")
+
+_GAVISH_SIGNATURES = (
+    # MP1 (Cell Cycle G2/M) would go here; it is not in GAVISH.csv. See the note above.
+    _mp("MP2_CELL_CYCLE_G1_S",           "cell_cycle",         "Cell Cycle - G1/S"),
+    _mp("MP3_CELL_CYLCE_HMG_RICH",       "cell_cycle",         "Cell Cycle - HMG-rich",
+        name="MP3_CELL_CYCLE_HMG_RICH"),
+    _mp("MP4_CHROMATIN",                 "chromatin",          "Chromatin"),
+    _mp("MP5_STRESS",                    "stress",             "Stress"),
+    _mp("MP6_HYPOXIA",                   "stress",             "Hypoxia"),
+    _mp("MP7_STRESS_IN_VITRO",           "stress",             "Stress (in vitro)",
+        note="derived from cultured cells, so a high score on fresh tissue is a dissociation "
+             "readout before it is a biological one"),
+    _mp("MP8_PROTEASOMAL_DEGRADATION",   "proteostasis",       "Proteasomal degradation"),
+    _mp("MP9_UNFOLDED_PROTEIN_RESPONSE", "proteostasis",       "Unfolded protein response"),
+    _mp("MP10_PROTEIN_MATURATION",       "proteostasis",       "Protein maturation"),
+    _mp("MP11_TRANSLATION_INITIATION",   "proteostasis",       "Translation initiation",
+        note="ribosomal-protein heavy, so it tracks library complexity as readily as a "
+             "programme - read it next to rho_n_genes_by_counts in the confounder table"),
+    _mp("MP12_EMT_1",                    "emt",                "EMT-I"),
+    _mp("MP13_EMT_2",                    "emt",                "EMT-II"),
+    _mp("MP14_EMT_3",                    "emt",                "EMT-III"),
+    _mp("MP15_EMT_4",                    "emt",                "EMT-IV"),
+    _mp("MP16_MES_GLIOMA",               "emt",                "MES (glioma)",
+        note="the glioma mesenchymal programme, on the EMT axis because it is the "
+             "mesenchymal one, not because gliomas are expected here"),
+    _mp("MP17_INTERFERON_MHC_II_1",      "immune",             "Interferon/MHC-II (I)"),
+    _mp("MP18_INTERFERON_MHC_II_2",      "immune",             "Interferon/MHC-II (II)"),
+    _mp("MP19_EPITHELIAL_SENESCENCE",    "senescence",         "Epithelial Senescence"),
+    _mp("MP20_MYC",                      "metabolic",          "MYC"),
+    _mp("MP21_RESPIRATION",              "metabolic",          "Respiration"),
+    _mp("MP38_GLUTATHIONE",              "detoxification",     "Glutathione"),
+    _mp("MP39_METAL_RESPONSE",           "detoxification",     "Metal-response"),
+    _mp("MP22_SECRETED_1",               "secreted",           "Secreted-I"),
+    _mp("MP23_SECRETED_2",               "secreted",           "Secreted-II"),
+    _mp("MP24_CILIA",                    "cilia",              "Cilia"),
+    _mp("MP25_ASTROCYTES",               "neural",             "Astrocytes",           _CONTROL_NOTE),
+    _mp("MP26_NPC_GLIOMA",               "neural",             "NPC (glioma)",         _CONTROL_NOTE),
+    _mp("MP27_OLIGO_PROGENITOR",         "neural",             "Oligo Progenitor",     _CONTROL_NOTE),
+    _mp("MP28_OLIGO_NORMAL",             "neural",             "Oligo normal",         _CONTROL_NOTE),
+    _mp("MP29_NPC_OPC",                  "neural",             "NPC/OPC",              _CONTROL_NOTE),
+    _mp("MP30_PDAC_CLASSICAL",           "epithelial_lineage", "PDAC-classical",
+        note="a carcinoma epithelial-identity programme from another organ: not a control, "
+             "an out-of-tissue epithelial reference"),
+    _mp("MP31_ALVEOLAR",                 "epithelial_lineage", "Alveolar",
+        note="lung epithelial identity; an out-of-tissue epithelial reference, as MP30"),
+    _mp("MP40_PDAC_RELATED",             "epithelial_lineage", "PDAC-related",
+        note="an out-of-tissue epithelial reference, as MP30"),
+    _mp("MP32_SKIN_PIGMENTATION",        "other_lineage",      "Skin-pigmentation",    _CONTROL_NOTE),
+    _mp("MP33_RBCS",                     "other_lineage",      "RBCs",                 _CONTROL_NOTE),
+    _mp("MP34_PLATELET_ACTIVATION",      "other_lineage",      "Platelet activation",  _CONTROL_NOTE),
+    _mp("MP35_HEMATO_RELATED_1",         "other_lineage",      "Hemato-related-I",     _CONTROL_NOTE),
+    _mp("MP36_IG",                       "other_lineage",      "IG",
+        note="immunoglobulin; the ambient-RNA readout of this dataset as much as a control - "
+             "plasma-cell transcripts are the classic soup, so read it first"),
+    _mp("MP37_HEMATO_RELATED_2",         "other_lineage",      "Hemato-related-II",    _CONTROL_NOTE),
+    _mp("MP41_UNASSIGNED",               "unassigned",         "Unassigned",
+        note="the paper's own residual metaprogram: it has no interpretation to lend, and it "
+             "is here so that a dimension matching nothing else can match it instead"),
+)
+
+# The column order of every gavish heatmap, kept in one place because the two variants below
+# share it: each takes the families it actually has, in this order.
+_GAVISH_AXES = ("cell_cycle", "chromatin", "stress", "proteostasis", "emt", "immune",
+                "senescence", "metabolic", "detoxification", "secreted", "cilia", "neural",
+                "epithelial_lineage", "other_lineage", "unassigned")
+
+
+# --------------------------------------------------------------------------- #
+# The TNBC-relevant subset, which is what `--collection gavish` scores by default
+# --------------------------------------------------------------------------- #
+#
+# WHY A SUBSET AT ALL. Forty scores against thirty-two or sixty-four dimension-directions is
+# not a free vocabulary: every metaprogram is a column of both heatmaps, a row of the coverage
+# and Jaccard tables, and - this is the part that costs something - one more test inside the
+# Benjamini-Hochberg correction of 04_6 / 05_7. Eighteen of the forty name a lineage or a
+# tissue that a triple-negative breast carcinoma cannot express, and they are spending that
+# budget to confirm what is already known. Scoring the states a TNBC malignant epithelial cell
+# can actually be in leaves the same result better resolved and the figures readable.
+#
+# WHAT IS IN, AND ON WHAT GROUND. Twenty-two metaprograms, every one of them a state that has
+# been reported in breast - and in most cases specifically in basal-like / triple-negative -
+# malignant cells: the cycle (MP2, MP3), chromatin (MP4), stress and hypoxia (MP5, MP6), the
+# proteostasis block (MP8 - MP11), all four EMT programmes (MP12 - MP15, the axis this project
+# is about), interferon / MHC-II (MP17, MP18, the immune-visibility axis `scie` asks about
+# from the other side), epithelial senescence (MP19), MYC (MP20, the classic basal-like
+# amplification), respiration (MP21), the two secreted programmes (MP22, MP23), and the two
+# detoxification ones (MP38 glutathione, MP39 metal-response, both of them chemoresistance
+# programmes in this disease).
+#
+# WHAT IS OUT. Cilia (MP24), which breast epithelium does not have; the glioma mesenchymal
+# programme (MP16), whose EMT-like genes are already covered four times over by MP12 - MP15;
+# the out-of-tissue epithelial identities (MP30, MP31, MP40); and most of the lineage controls.
+#
+# FIVE OF THE EXCLUDED ONES COME BACK, AND NOT AS AN OVERSIGHT. The block above says why the
+# lineage metaprograms are in the full collection: correlations need a floor, or the ones that
+# look large have nothing to be large against. Dropping all eighteen would remove that floor
+# together with the noise, so the subset keeps the smallest set that still provides it:
+#
+#   * MP7  (Stress in vitro) - the specificity control on the stress axis. MP5 and MP6 are
+#          scored, and the honest question about any dimension that matches them is whether it
+#          is in-vivo stress or dissociation. MP7 was derived in culture; a dimension that
+#          matches MP5 and MP7 equally is answering that question the wrong way.
+#   * MP36 (IG) and MP33 (RBCs) - the two ambient-RNA readouts. Immunoglobulin from plasma
+#          cells and haemoglobin from erythrocytes are the classic soup of a solid-tumour
+#          dissociation, they are what phase 06 removes with SoupX, and a malignant dimension
+#          loading on either is a contamination result, not a biological one.
+#   * MP25 (Astrocytes) - one impossible lineage, kept as the zero. It is the row that says
+#          what a correlation of nothing looks like on this data and at this depth.
+#   * MP41 (Unassigned) - the paper's own residual. It is the sink that lets a dimension
+#          matching no real programme match it instead of being forced onto the nearest one.
+#
+# Those five are marked in the table by the same machinery as in the full collection: MP25,
+# MP33 and MP36 sit on the control axes, so they are `primary=False` and `_gavish_flags` flags
+# any claim on them.
+#
+# CHANGING THE SET IS THE ONE LINE BELOW. The first candidates to add back are MP30 and MP40:
+# they are pancreatic in name only, their genes are the generic secretory-epithelial ones
+# (TFF, AGR2, mucins, CEACAM), and those are luminal-breast genes - so a dimension carrying
+# epithelial identity rather than EMT has somewhere to land if they are in, and reads as
+# "matches nothing" if they are out. They were left out because this compartment is
+# basal-like, not because the reading would be wrong.
+#
+# THE TWO VARIANTS NEVER OVERWRITE EACH OTHER. They are two collections with two slugs -
+# `gavish_tnbc` and `gavish` - so tables and figures land in two folders and carry the slug in
+# their filenames, exactly as `scie` and `emt` do. Nothing produced with all forty has to be
+# deleted or re-run to use the subset, and a table cannot be read as the other set's.
+
+_GAVISH_TNBC_MPS = (
+    # the twenty-two states a TNBC malignant epithelial cell can be in
+    2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 38, 39,
+    # and the five that are there to bound them: dissociation, the two ambient readouts,
+    # one impossible lineage, and the residual sink
+    7, 33, 36, 25, 41,
+)
+
+
+def _mp_number(sig: Signature) -> int:
+    """The MP number of a metaprogram signature, read off the filename stem.
+
+    The stem is the one identifier that is stable: `name` carries a corrected spelling for
+    MP3 and the labels are prose. `MP3_CELL_CYLCE_HMG_RICH.txt` -> 3.
+    """
+    return int(sig.file.rsplit("/", 1)[-1].split("_")[0][2:])
+
+
+_GAVISH_BY_NUMBER = {_mp_number(s): s for s in _GAVISH_SIGNATURES}
+
+# A number in the list above with no metaprogram behind it is a typo, and it would otherwise
+# surface as a quietly shorter collection. MP1 is the one that will legitimately fail here,
+# the day it is re-exported and added to `_GAVISH_TNBC_MPS` before the file exists.
+_unknown = sorted(set(_GAVISH_TNBC_MPS) - set(_GAVISH_BY_NUMBER))
+if _unknown:
+    raise ValueError(f"_GAVISH_TNBC_MPS names metaprograms that are not in the registry: "
+                     f"{', '.join(f'MP{n}' for n in _unknown)}")
+
+# Registry order, not the order of `_GAVISH_TNBC_MPS`: the tuple above is grouped by intent so
+# that it can be read, and the collection is ordered by family like every other one.
+_GAVISH_TNBC_SIGNATURES = tuple(s for s in _GAVISH_SIGNATURES
+                                if _mp_number(s) in set(_GAVISH_TNBC_MPS))
+
+
+def _gavish_flags(coll: "Collection", claimed: str, a_rho: float) -> list[str]:
+    """The two things that would make a metaprogram match mean something other than it says.
+
+    Neither is a verdict. Both are printed next to the claim so that the reader does not have
+    to remember which of the lists is which.
+    """
+    axis = coll.axis_of.get(claimed)
+    flags = []
+    if axis == "emt":
+        # The same risk the `emt` collection carries, for the same reason: a mesenchymal
+        # programme read on an epithelial compartment is ambient fibroblast RNA or a doublet
+        # until the doublet check says otherwise.
+        flags.append("mesenchymal_may_be_ambient_or_doublet")
+    if axis in GAVISH_CONTROL_AXES:
+        # A dimension whose best match is a lineage that cannot be here is not a discovery.
+        # It bounds what any OTHER match in the same table is worth.
+        flags.append("lineage_control_claim_bounds_the_rest")
+    return flags
+
+
+def _gavish_collection(name: str, scope: str, signatures: tuple[Signature, ...]) -> Collection:
+    """One of the two metaprogram collections. They differ ONLY in which lists they carry.
+
+    Written as a factory rather than as two literals so that they cannot drift: the question,
+    the flags, the family order and the absence of a target region are the same object twice.
+    """
+    return Collection(
+        name=name,
+        title=f"pan-cancer malignant metaprograms (Gavish, {scope})",
+        question=("which recurrent pan-cancer metaprogram, if any, does each latent dimension "
+                  "carry?"),
+        signatures=signatures,
+        # Only the families this variant actually has, in the shared order: an axis with no
+        # member would otherwise show up as an empty block edge in every heatmap.
+        axes=tuple(a for a in _GAVISH_AXES if any(s.axis == a for s in signatures)),
+        # No planes, no target label, no risks, no criteria: this collection names dimensions,
+        # it does not call cells. `has_target` is False and the steps say so rather than
+        # inventing a region nobody asked for.
+        extra_flags=_gavish_flags,
+    )
+
+
+GAVISH = _gavish_collection("gavish", "all 40", _GAVISH_SIGNATURES)
+GAVISH_TNBC = _gavish_collection("gavish_tnbc", "TNBC-relevant", _GAVISH_TNBC_SIGNATURES)
+
+# --------------------------------------------------------------------------- #
+
+COLLECTIONS = {c.name: c for c in (SCIE, EMT, GAVISH)}
 DEFAULT_COLLECTION = "scie"
+
+# `gavish_tnbc` is deliberately NOT a `--collection` value. There is one name for the
+# metaprogram vocabulary, `gavish`, and one flag deciding how much of it is scored - so a
+# command cannot ask for the subset and the full set at once, and `--all-metaprograms` reads
+# as what it is: a widening of the default, not a different body of prior knowledge. The two
+# still have two slugs on disk, which is what `resolve` returns and what every path is built
+# from; see the block above.
+GAVISH_VARIANTS = {False: GAVISH_TNBC, True: GAVISH}
 
 
 def get(name: str) -> Collection:
@@ -408,7 +755,24 @@ def get(name: str) -> Collection:
     return COLLECTIONS[name]
 
 
+def resolve(args) -> Collection:
+    """The collection a step actually runs on: `--collection`, narrowed by `--all-metaprograms`.
+
+    Every step goes through this rather than through `get(args.collection)`, because the slug
+    the outputs are named for is decided here and nowhere else.
+    """
+    coll = get(args.collection)
+    if coll is GAVISH:
+        return GAVISH_VARIANTS[bool(getattr(args, "all_metaprograms", False))]
+    return coll
+
+
 def add_argument(parser) -> None:
     """The `--collection` flag, spelled identically by all five step scripts."""
     parser.add_argument("--collection", choices=sorted(COLLECTIONS), default=DEFAULT_COLLECTION,
                         help=f"which signature collection to interpret (default {DEFAULT_COLLECTION})")
+    parser.add_argument("--all-metaprograms", action="store_true",
+                        help="with --collection gavish, score all 40 metaprograms instead of "
+                             f"the {len(_GAVISH_TNBC_SIGNATURES)} TNBC-relevant ones; outputs "
+                             "are written under the 'gavish' slug rather than 'gavish_tnbc'. "
+                             "No effect on the other collections")

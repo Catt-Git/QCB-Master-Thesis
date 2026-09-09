@@ -43,6 +43,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python signature_composition_epi.py                      # the scie collection, the default
     python signature_composition_epi.py --collection emt     # the same, on the EMT lists
+    python signature_composition_epi.py --collection gavish  # the 27 TNBC-relevant metaprograms
+    python signature_composition_epi.py --collection gavish --all-metaprograms  # all 40
 """
 
 from __future__ import annotations
@@ -144,7 +146,7 @@ def gini(shares: np.ndarray) -> float:
 
 def main():
     args = parse_args()
-    coll = SC.get(args.collection)
+    coll = SC.resolve(args)
 
     C.banner(f"04_3b - signature composition: {coll.title}")
     print(f"question    which genes carry each score, and are they measurable in this object?")
@@ -302,9 +304,11 @@ def main():
 
     # ----------------------------------------------------------------- figures
     order = list(summary_tbl.index)
-    axis_colors = dict(zip(coll.axes, sns.color_palette("deep", len(coll.axes))))
+    axis_colors = dict(zip(coll.axes, C.axis_palette(len(coll.axes))))
 
-    fig, axes = plt.subplots(1, 2, figsize=(13, 0.42 * len(order) + 3.2))
+    # One row per signature in panel A, so the height is the collection's width. Capped, for
+    # the forty rows of `gavish`; the nine and ten of `emt` and `scie` are nowhere near it.
+    fig, axes = plt.subplots(1, 2, figsize=(13, C.fig_span(len(order), 0.42, 3.2, cap=20.0)))
 
     # A. mapped genes vs the number the score behaves as if it had. The gap is the point.
     ax = axes[0]
@@ -353,7 +357,9 @@ def main():
     ax.set_ylim(0, 1.05)
     ax.set_title("Where each score's spread across cells comes from\n"
                  "(dashed = flagged)", fontsize=10)
-    ax.legend(fontsize=6, ncol=2, loc="lower right")
+    # One curve per signature: two columns of names fit ten of them and not forty.
+    ax.legend(fontsize=6 if len(order) <= 12 else 5, ncol=2 if len(order) <= 12 else 4,
+              loc="lower right")
 
     for a in axes:
         sns.despine(ax=a)

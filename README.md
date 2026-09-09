@@ -52,15 +52,25 @@ they run (local vs SLURM) and on the parameters used for the thesis run.
 | [03_drvi_non_immune](03_drvi_non_immune/) | non-immune subset + DRVI latent space | local |
 | [04_drvi_epithelial](04_drvi_epithelial/) | epithelial subset (one lineage deeper than 03) | local |
 | [05_drvi_tumoral_epi](05_drvi_tumoral_epi/) | inferCNV → `malignant` / `non_malignant`, CellTypist re-run on the non-malignant, then 04's procedure redone on that basis | local |
-| [06_epi_treatment](06_epi_treatment/) | the epithelial subset cut by treatment (BASE / PD1 / RTPD1) + one DRVI run each | local (or a SLURM array) |
+| [06_ambient_soupx](06_ambient_soupx/) | SoupX ambient-RNA removal on `shiao.h5ad`, CellTypist re-run on the corrected counts → a corrected object phase 05 can be re-run against | soup profiles on SLURM, the rest local |
 
 Phase 00 is skippable if the counts are obtained another way: everything downstream needs only
-`$DATA_DIR/all_samples_combined.h5ad`, and phases 01→06 chain from there. 03, 04 and 05 are three
-independent branches off `shiao.h5ad`: none of them reads what another wrote. 04 and 05 apply the
-same procedure to two different definitions of the cell set - 04 to the epithelial compartment as
-CellTypist labelled it, 05 to the same compartment after inferCNV has separated the malignant
-cells - so their step numbering runs in parallel and their results are meant to be read side by
-side. 06 is the one branch that continues another: it splits 05's object by treatment.
+`$DATA_DIR/all_samples_combined.h5ad`, and phases 01→06 chain from there. 03, 04, 05 and 06 are
+four independent branches off `shiao.h5ad`: none of them reads what another wrote. 04 and 05
+apply the same procedure to two different definitions of the cell set - 04 to the epithelial
+compartment as CellTypist labelled it, 05 to the same compartment after inferCNV has separated
+the malignant cells - so their step numbering runs in parallel and their results are meant to be
+read side by side.
+
+06 is not a fifth analysis but a **correction of the input to the fourth**: it removes the
+ambient RNA from `shiao.h5ad` and writes the result as `$DATA_DIR/06_amb/shiao.h5ad`. Because
+every script of phase 05 addresses its inputs as `$DATA_DIR/<name>`, that directory works as a
+`DATA_DIR` in its own right - so phase 05 is re-run on the corrected data by exporting
+`DATA_DIR=$DATA_DIR/06_amb` and **changing no code**. Nothing under `05_drvi_tumoral_epi/` is
+edited by phase 06, and the uncorrected results stay where they are. See
+[06_ambient_soupx/README.md](06_ambient_soupx/README.md), which also documents the one thing that
+mechanism does not redirect (05 writes its figures and tables into the repo, not into
+`DATA_DIR`).
 
 **What is not in git.** Everything under `datasets/` except three small non-regenerable inputs
 (the CellTypist model, the Tirosh/Regev cell cycle list, and that README), plus the run logs.

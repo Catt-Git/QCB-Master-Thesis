@@ -7,10 +7,17 @@ Where the two routes agree. **The main result of this stage.** Counterpart of
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 convergence_tum.py                     # scie, the default
 python3 convergence_tum.py --collection emt    # the EMT lists
+python3 convergence_tum.py --collection gavish # the metaprograms: no target axis, see below
+N_LATENT=64 python3 convergence_tum.py         # join the drvi_tum_64 run's tables instead
 python3 convergence_tum.py --rho-min 0.30      # a stricter cell-level bar
 ```
 
-Reads five tables written by 05_6 and 05_7, all from `../tables/<collection>/`, so a run can only
+`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32` by
+default, `N_LATENT=64` for `drvi_tum_64`, `CELL_SET=epi HVG_SET=nomt N_LATENT=64` for
+`drvi_epicnv_64_nomt`. See [the phase README](../README.md#which-run-05_4---05_8-read); the
+run id is in the name of everything written.
+
+Reads five tables written by 05_6 and 05_7, all from `../tables/<collection>/<run_id>/`, so a run can only
 ever join a collection with itself.
 
 ## Why agreement is the criterion
@@ -57,13 +64,20 @@ A convergent dimension carrying a flag is not a result, it is a lead.
 ## What comes out
 
 ```
-../tables/<collection>/convergence_*.csv    one row per dimension-direction: both routes, the flags
-../tables/<collection>/target_axes_*.csv    the axes that pass the collection's own criteria
+../tables/<collection>/<run_id>/convergence_*.csv    one row per dimension-direction: both routes, the flags
+../tables/<collection>/<run_id>/target_axes_*.csv    the axes that pass the collection's own criteria
 ```
 
-Figures in `../figures/05_8_convergence/<collection>/`: the two routes side by side on the same
+Figures in `../figures/05_8_convergence/<collection>/<run_id>/`: the two routes side by side on the same
 row order, and the convergence scatter.
 
 `target_axes` is the answer to the question each collection was built to ask — "is there a
 malignant state that is stem-like and immune-evasive?" for `scie`, "which cells are in the hybrid
 E/M state?" for `emt` — restricted to the axes on which both routes agree.
+
+**`gavish` writes no `target_axes`, and that is the whole point of it.** It states no target: it
+is a vocabulary, so it has no state it is looking for, and `Collection.has_target` is False. The
+`convergence` table *is* the result there — a dimension-direction where Route A and Route B
+independently land on the same metaprogram is a dimension with a name that came from outside this
+dataset. Two columns are absent from that table for the same reason (`A_auroc_target_this_side`,
+`A_standardised_mean_difference`): there is no cell set for a dimension to separate.
