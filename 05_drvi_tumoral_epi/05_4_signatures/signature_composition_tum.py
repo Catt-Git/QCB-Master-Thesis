@@ -43,8 +43,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python signature_composition_tum.py                      # the scie collection, the default
     python signature_composition_tum.py --collection emt     # the same, on the EMT lists
-    python signature_composition_tum.py --collection gavish  # the 27 TNBC-relevant metaprograms
-    python signature_composition_tum.py --collection gavish --all-metaprograms  # all 40
+    python signature_composition_tum.py --collection gavish  # the 22 TNBC-relevant metaprograms
+    python signature_composition_tum.py --collection gavish --all-metaprograms  # all 41
 """
 
 from __future__ import annotations
@@ -121,7 +121,7 @@ def spearman_against(scores: np.ndarray, X: sp.spmatrix, chunk: int = 250) -> np
     when reading a value next to a detection rate of 0.002.
 
     Chunked because the dense rank matrix, not the sparse counts, is what would not fit:
-    36,192 cells x 1,698 genes in float64 is 0.5 GB, and every list is scored separately.
+    42,096 cells x 1,698 genes in float64 is 0.5 GB, and every list is scored separately.
     """
     y = rankdata(scores)
     y = (y - y.mean()) / y.std()

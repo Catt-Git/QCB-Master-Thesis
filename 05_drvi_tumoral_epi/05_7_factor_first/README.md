@@ -16,8 +16,8 @@ readable gene-level footprint. Without this stage any integration method would h
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 factor_first_tum.py                      # scie, the default
 python3 factor_first_tum.py --collection emt     # the EMT lists
-python3 factor_first_tum.py --collection gavish  # the 27 TNBC-relevant metaprograms
-python3 factor_first_tum.py --collection gavish --all-metaprograms  # all 40 instead
+python3 factor_first_tum.py --collection gavish  # the 22 TNBC-relevant metaprograms
+python3 factor_first_tum.py --collection gavish --all-metaprograms  # all 41 instead
 N_LATENT=64 python3 factor_first_tum.py          # read the drvi_tum_64 run instead
 python3 factor_first_tum.py --n-top-genes 500    # a deeper list
 python3 factor_first_tum.py --no-hallmark        # custom signatures only, fully offline

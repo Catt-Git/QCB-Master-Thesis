@@ -15,7 +15,7 @@ a copy is listed under "What differs from 04" below - four things, each of them 
 
 What differs from 04, and why:
 
-  1. The object is the malignant subset (36,192 cells x 24,779 genes) and the run is
+  1. The object is the malignant subset (42,096 cells x 25,133 genes) and the run is
      `drvi_tum_32`, both resolved through `05_2_subsetting/cell_set.py` so that `CELL_SET`
      works here exactly as it does in 05_2 and 05_3.
   2. `CAVEAT` is new. 04's says no CNV inference has been run, which stays true of 04's
@@ -277,7 +277,7 @@ def add_embedding_argument(parser) -> None:
 # that is not an oversight: both are properties of the malignant OBJECT, not of any latent
 # space. CytoTRACE2 is a measurement on raw counts and the signature scores come from
 # `sc.tl.score_genes` on the all-genes matrix; neither has ever seen a dimension. Binding
-# them to the embedding would make a control run re-score 36,192 cells for a byte-identical
+# them to the embedding would make a control run re-score 42,096 cells for a byte-identical
 # result, and leave two copies free to drift. The `drvi_tum_32` in their names is a label,
 # not a dependency.
 CYTOTRACE_CSV = TUM_DIR / f"cytotrace2_{DEFAULT_RUN_ID}.csv"   # per cell, 05_5: a readout, not a collection
@@ -287,7 +287,7 @@ def gmt_path(coll) -> Path:
     """The collection as actually used - mapped genes only - which is also the Appendix table.
 
     Named for the OBJECT and not for the run, because that is what it depends on: it holds the
-    signature genes that exist in `FULL_H5AD`, and `shiao_tum.h5ad` (24,779 genes) and
+    signature genes that exist in `FULL_H5AD`, and `shiao_tum.h5ad` (25,133 genes) and
     `shiao_epicnv.h5ad` do not have the same gene axis. Without the compartment in the name a
     CELL_SET=epi run would overwrite the malignant set's .gmt in place, and 05_7 would then do
     its ORA on the other object's mapping and report nothing unusual. N_LATENT and HVG_SET are

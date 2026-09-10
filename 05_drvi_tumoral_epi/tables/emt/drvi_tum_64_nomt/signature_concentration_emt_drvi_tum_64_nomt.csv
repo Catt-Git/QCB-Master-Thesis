@@ -1,0 +1,14 @@
+# signature_concentration | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+signature,axis,primary,n_mapped,effective_n_genes,effective_n_fraction,top_gene,top_gene_share_of_variance,top_gene_share_of_mean_signal,top_gene_detection_rate,top_gene_spearman_with_score,share_top3_of_variance,median_detection_rate,n_genes_below_noise_floor,frac_genes_below_noise_floor,frac_cells_all_zero,gini_of_mean_signal,flags
+EMT_B_EPITHELIAL,epithelial,True,27,10.2171,0.3784,KRT19,0.1438,0.1792,0.7917,0.5849,0.372,0.1948,1,0.037,0.0174,0.6287,none
+EMT_A_EPITHELIAL,epithelial,False,15,8.1147,0.541,CD24,0.1548,0.1961,0.7437,0.5463,0.4477,0.4062,0,0.0,0.0414,0.5091,low_effective_n
+EMT_C_EPITHELIAL,epithelial,False,28,8.6623,0.3094,KRT19,0.1712,0.2112,0.7917,0.607,0.4421,0.1772,1,0.0357,0.0239,0.6697,low_effective_n
+EMT_B_HYBRID,hybrid,True,20,3.7328,0.1866,YBX1,0.286,0.4808,0.7694,0.5318,0.5865,0.0688,3,0.15,0.1286,0.7257,"low_effective_n,undetectable_in_many_cells"
+EMT_A_HYBRID,hybrid,False,12,6.1239,0.5103,CD44,0.3015,0.3017,0.3786,0.5149,0.5719,0.1284,1,0.0833,0.3513,0.5009,"dominated_by_one_gene,low_effective_n,undetectable_in_many_cells"
+EMT_C_HYBRID,hybrid,False,33,6.1317,0.1858,CD24,0.1672,0.2672,0.7437,0.4633,0.4266,0.076,4,0.1212,0.046,0.7325,low_effective_n
+EMT_B_MESENCHYMAL,mesenchymal,True,33,6.3408,0.1921,VIM,0.2717,0.2427,0.6585,0.6349,0.5042,0.0472,5,0.1515,0.043,0.7535,low_effective_n
+EMT_A_MESENCHYMAL,mesenchymal,False,19,3.4743,0.1829,VIM,0.4127,0.4859,0.6585,0.6964,0.7007,0.0305,4,0.2105,0.1793,0.7775,"dominated_by_one_gene,low_effective_n,undetectable_in_many_cells"
+EMT_C_MESENCHYMAL,mesenchymal,False,41,8.5065,0.2075,VIM,0.2006,0.2034,0.6585,0.5628,0.4187,0.0615,6,0.1463,0.0339,0.7283,low_effective_n

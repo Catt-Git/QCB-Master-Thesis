@@ -1,0 +1,27 @@
+# signature_concentration | collection gavish_tnbc (pan-cancer malignant metaprograms (Gavish, TNBC-relevant)) | DRVI run drvi_epicnv_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+signature,axis,primary,n_mapped,effective_n_genes,effective_n_fraction,top_gene,top_gene_share_of_variance,top_gene_share_of_mean_signal,top_gene_detection_rate,top_gene_spearman_with_score,share_top3_of_variance,median_detection_rate,n_genes_below_noise_floor,frac_genes_below_noise_floor,frac_cells_all_zero,gini_of_mean_signal,flags
+MP1_CELL_CYCLE_G2_M,cell_cycle,True,50,19.9386,0.3988,STMN1,0.0655,0.1157,0.5626,0.5406,0.1682,0.1072,0,0.0,0.0923,0.5092,none
+MP2_CELL_CYCLE_G1_S,cell_cycle,True,49,29.0246,0.5923,HMGB2,0.0547,0.0605,0.2798,0.3804,0.1461,0.1048,0,0.0,0.1459,0.4149,undetectable_in_many_cells
+MP3_CELL_CYCLE_HMG_RICH,cell_cycle,True,46,34.0973,0.7412,STMN1,0.0424,0.0266,0.5626,0.5949,0.1157,0.5469,0,0.0,0.0004,0.3278,none
+MP4_CHROMATIN,chromatin,True,45,36.2223,0.8049,GOLGA4,0.0443,0.0462,0.3062,0.2966,0.1323,0.158,0,0.0,0.1092,0.2758,undetectable_in_many_cells
+MP5_STRESS,stress,True,49,31.8189,0.6494,FOS,0.0662,0.0751,0.7208,0.7181,0.1725,0.3428,0,0.0,0.0162,0.3907,none
+MP6_HYPOXIA,stress,True,49,19.81,0.4043,S100A10,0.0764,0.1041,0.7781,0.4901,0.2134,0.1726,1,0.0204,0.003,0.5726,none
+MP7_STRESS_IN_VITRO,stress,True,44,28.9834,0.6587,XBP1,0.0638,0.0607,0.527,0.4412,0.1693,0.2772,0,0.0,0.0101,0.3899,none
+MP8_PROTEASOMAL_DEGRADATION,proteostasis,True,50,35.0935,0.7019,PRDX1,0.0585,0.0761,0.7894,0.5642,0.1396,0.3706,0,0.0,0.0031,0.3337,none
+MP9_UNFOLDED_PROTEIN_RESPONSE,proteostasis,True,47,31.7486,0.6755,PPIB,0.0613,0.0683,0.7267,0.5443,0.1603,0.3732,0,0.0,0.0064,0.3707,none
+MP10_PROTEIN_MATURATION,proteostasis,True,49,29.4284,0.6006,HLA-C,0.0576,0.0582,0.7082,0.5532,0.1589,0.4055,0,0.0,0.0079,0.4058,none
+MP12_EMT_1,emt,True,48,15.3288,0.3194,VIM,0.061,0.0897,0.6255,0.4176,0.1808,0.1353,0,0.0,0.0094,0.5598,none
+MP13_EMT_2,emt,True,50,19.6041,0.3921,LGALS1,0.0869,0.0916,0.617,0.5318,0.2087,0.1401,0,0.0,0.0097,0.582,none
+MP14_EMT_3,emt,True,50,34.0655,0.6813,S100A6,0.0539,0.0527,0.8233,0.6361,0.1441,0.4952,0,0.0,0.0001,0.3783,none
+MP15_EMT_4,emt,True,49,13.1073,0.2675,CD74,0.1173,0.0949,0.6595,0.5189,0.2641,0.1813,3,0.0612,0.0007,0.605,none
+MP17_INTERFERON_MHC_II_1,immune,True,48,25.5837,0.533,HLA-B,0.0498,0.0616,0.7025,0.7777,0.1388,0.3144,0,0.0,0.0096,0.4577,none
+MP18_INTERFERON_MHC_II_2,immune,True,50,25.1172,0.5023,CD74,0.0738,0.0659,0.6595,0.6675,0.199,0.2616,1,0.02,0.0021,0.5192,none
+MP19_EPITHELIAL_SENESCENCE,senescence,True,50,23.3719,0.4674,ANXA1,0.0662,0.0534,0.4068,0.4719,0.1949,0.154,8,0.16,0.0182,0.5631,none
+MP20_MYC,metabolic,True,49,32.727,0.6679,LDHA,0.0484,0.0596,0.6896,0.3985,0.1416,0.3478,0,0.0,0.004,0.3883,none
+MP21_RESPIRATION,metabolic,True,47,36.4029,0.7745,ATP5F1E,0.0398,0.0461,0.7989,0.5956,0.1123,0.55,0,0.0,0.0013,0.2943,none
+MP39_METAL_RESPONSE,detoxification,True,50,18.2943,0.3659,S100A6,0.1194,0.1448,0.8233,0.5697,0.2955,0.1542,0,0.0,0.0046,0.5903,none
+MP22_SECRETED_1,secreted,True,49,23.1298,0.472,TM4SF1,0.0859,0.1226,0.6342,0.4998,0.2239,0.1696,2,0.0408,0.0509,0.4884,none
+MP23_SECRETED_2,secreted,True,50,18.6936,0.3739,RARRES1,0.1027,0.064,0.4183,0.5322,0.244,0.1355,2,0.04,0.0103,0.6072,none

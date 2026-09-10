@@ -16,10 +16,10 @@ the third of which uses only the part of it that does not need a target region:
   * `gavish` - the recurrent pan-cancer metaprograms of Gavish et al. 2023, used as a
               VOCABULARY rather than as a hypothesis: it defines no target region and calls no
               cells, it names the latent dimensions from outside this dataset and gives the
-              other two collections an independent check. It comes in two widths: the 27
+              other two collections an independent check. It comes in two widths: the 22
               relevant to a triple-negative breast carcinoma, which is what it scores by
-              default, and all 40 with `--all-metaprograms`. Either way a handful of them are
-              lineages that cannot be here, kept as negative controls.
+              default, and all 41 with `--all-metaprograms`. The wider one also carries the
+              lineages that cannot be here, as negative controls; the default no longer does.
 
 Nothing about the procedure changes between them. What changes is the input lists, the axis
 names, the shape of the target region on the cell-first plane - or whether there is one at all,
@@ -30,7 +30,7 @@ believed. All of that lives here, so the step scripts stay single files taking
 The outputs never mix: every table and figure is written to `<tables|figures>/<collection>/`
 and carries the collection in its filename. The Benjamini-Hochberg correction of 04_6 is
 likewise computed inside a collection, so adding the EMT lists cannot move a single SCIE
-p-value, and neither can adding the forty Gavish metaprograms.
+p-value, and neither can adding the forty-one Gavish metaprograms.
 
 Adding a collection means appending a `Collection` below and nothing else - with one exception,
 now on the record: a collection WITHOUT a target region needed the steps taught to skip what
@@ -467,15 +467,27 @@ EMT = Collection(
 # cancer types. An EMT axis that appears on the collaborator's lists AND on Gavish's EMT
 # metaprograms is an axis that does not depend on whose EMT list was used.
 #
-# WHAT IS MISSING, AND IT IS NOT MISSING HERE. Two things, both properties of the export and
-# neither of them fixable from this file. Eight of the forty columns of `datasets/GAVISH.csv`
-# carry 48 or 49 genes rather than 50, which is why the provenance below says "as exported"
-# and why the coverage table is the place to read the per-list count. And there are 40 lists,
-# not 41: MP1 (Cell Cycle G2/M) is absent from that same export, so it was never on disk. The
-# cycle is still represented - MP2 (G1/S) and MP3 (HMG-rich) are here, and `S_score` /
-# `G2M_score` are in the confounder table of every run - but a dimension that is specifically
-# G2/M has no metaprogram to match against and will read as MP2 or as nothing at all.
-# Re-export MP1 and it is one line below.
+# WHAT IS MISSING, AND IT IS NOT MISSING HERE. Eight of the forty columns of
+# `datasets/GAVISH.csv` carry 48 or 49 genes rather than 50, which is why the provenance below
+# says "as exported" and why the coverage table is the place to read the per-list count.
+#
+# MP1 IS THE ONE LIST THAT DOES NOT COME FROM THAT CSV. The export has 40 columns and not 41:
+# MP1 (Cell Cycle - G2/M) is absent from it, and from the MSigDB release the CSV was taken
+# from - `GAVISH_3CA_MALIGNANT_METAPROGRAM_1_CELL_CYCLE_G2_M` does not exist there while every
+# other number does. That left a hole in the vocabulary rather than in the export: a dimension
+# that is specifically G2/M had nothing to match and read as MP2 or as nothing at all, on a
+# compartment where proliferation is one of the states most likely to take a dimension of its
+# own. It is now on disk, taken from the authors' own object - `MP_list.RDS` of
+# github.com/tiroshlab/3ca, `ITH_hallmarks/MPs_distribution/`, entry `$Cancer[[1]]`, 50 genes
+# in the paper's order - and written by `utils/gavish_extraction.py` alongside the forty from
+# the CSV. The two sources are the same list: the MP2 of that object is identical
+# gene-for-gene to `MP2_CELL_CYCLE_G1_S.txt` apart from two symbols MSigDB updated
+# (HIST1H4C -> H4C3, KIAA0101 -> PCLAF).
+#
+# MP1 KEEPS THE PAPER'S SPELLING, AND THAT IS WHY ALL 50 OF ITS GENES MAP. Applying the same
+# update would rename HIST1H4C to H4C3, and this dataset is on an older reference: it has
+# HIST1H4C and not H4C3, so the updated spelling would cost MP1 a gene - as it already costs
+# MP2 and MP3 one each. The coverage table is where that is visible for every list.
 #
 # THE NAMES ARE THE PAPER'S, THE AXES ARE OURS. Gavish numbers and names the metaprograms;
 # grouping them into the fifteen families below is a decision taken here, and it is not
@@ -486,7 +498,7 @@ EMT = Collection(
 # into metabolism - and a metaprogram with no relative sits on an axis of its own rather than
 # in a bin of leftovers.
 #
-# THE LINEAGE METAPROGRAMS ARE KEPT, AS NEGATIVE CONTROLS. Eleven of the 40 describe lineages
+# THE LINEAGE METAPROGRAMS ARE KEPT HERE, AS NEGATIVE CONTROLS. Eleven of the 41 describe lineages
 # that cannot be in a breast epithelial or malignant-epithelial compartment: the neural five
 # (MP25 - MP29, glioma and oligodendrocyte), skin pigmentation (MP32), and the haematopoietic
 # five (MP33 - MP37, erythrocytes, platelets, immunoglobulin). They are marked
@@ -496,6 +508,9 @@ EMT = Collection(
 # there is nothing to say so. Their expected result is a near-zero row; a non-zero one is a
 # finding about the scoring rather than about the tumour - MP36 (IG) in particular is this
 # dataset's ambient-immunoglobulin readout, and it is the one to look at first.
+#
+# All of that is true of THIS collection, the full one. The TNBC subset below carries none of
+# them any more; the block that defines it says what that costs and how to get the floor back.
 
 _GAVISH_PAPER = "Gavish et al. 2023, Nature 618:598-606, pan-cancer malignant metaprogram"
 
@@ -504,7 +519,8 @@ _GAVISH_PAPER = "Gavish et al. 2023, Nature 618:598-606, pan-cancer malignant me
 GAVISH_CONTROL_AXES = ("neural", "other_lineage")
 
 
-def _mp(stem: str, axis: str, label: str, note: str = "", name: str | None = None) -> Signature:
+def _mp(stem: str, axis: str, label: str, note: str = "", name: str | None = None,
+        source: str = "the published gene list as exported to datasets/GAVISH.csv") -> Signature:
     """One metaprogram. `stem` is the filename `utils/gavish_extraction.py` wrote.
 
     The files live in a subdirectory of `$DATA_DIR/signatures/`, which `Signature.file`
@@ -519,8 +535,7 @@ def _mp(stem: str, axis: str, label: str, note: str = "", name: str | None = Non
     # "as exported" and not "the 50 published genes": the metaprograms are 50 genes each in
     # the paper, and eight of the columns of GAVISH.csv carry 48 or 49. The per-list count is
     # in the coverage table of 04_3 / 05_4, which is where it belongs.
-    provenance = (f"{_GAVISH_PAPER} MP{stem.split('_')[0][2:]} ({label}), "
-                  "the published gene list as exported to datasets/GAVISH.csv")
+    provenance = f"{_GAVISH_PAPER} MP{stem.split('_')[0][2:]} ({label}), {source}"
     if note:
         provenance += f"; {note}"
     return Signature(name=name or stem, file=f"GAVISH_metaprograms/{stem}.txt", axis=axis,
@@ -531,7 +546,9 @@ _CONTROL_NOTE = ("lineage absent from a breast epithelial compartment by constru
                  "as an internal negative control, its expected correlation is zero")
 
 _GAVISH_SIGNATURES = (
-    # MP1 (Cell Cycle G2/M) would go here; it is not in GAVISH.csv. See the note above.
+    _mp("MP1_CELL_CYCLE_G2_M",           "cell_cycle",         "Cell Cycle - G2/M",
+        source="the published gene list, taken from the authors' MP_list.RDS rather than from "
+               "GAVISH.csv, which does not carry it - see the note above"),
     _mp("MP2_CELL_CYCLE_G1_S",           "cell_cycle",         "Cell Cycle - G1/S"),
     _mp("MP3_CELL_CYLCE_HMG_RICH",       "cell_cycle",         "Cell Cycle - HMG-rich",
         name="MP3_CELL_CYCLE_HMG_RICH"),
@@ -600,56 +617,92 @@ _GAVISH_AXES = ("cell_cycle", "chromatin", "stress", "proteostasis", "emt", "imm
 # The TNBC-relevant subset, which is what `--collection gavish` scores by default
 # --------------------------------------------------------------------------- #
 #
-# WHY A SUBSET AT ALL. Forty scores against thirty-two or sixty-four dimension-directions is
-# not a free vocabulary: every metaprogram is a column of both heatmaps, a row of the coverage
-# and Jaccard tables, and - this is the part that costs something - one more test inside the
-# Benjamini-Hochberg correction of 04_6 / 05_7. Eighteen of the forty name a lineage or a
-# tissue that a triple-negative breast carcinoma cannot express, and they are spending that
-# budget to confirm what is already known. Scoring the states a TNBC malignant epithelial cell
-# can actually be in leaves the same result better resolved and the figures readable.
+# WHY A SUBSET AT ALL. Forty-one scores against thirty-two or sixty-four dimension-directions
+# is not a free vocabulary: every metaprogram is a column of both heatmaps, a row of the
+# coverage and Jaccard tables, and - this is the part that costs something - one more test
+# inside the Benjamini-Hochberg correction of 04_6 / 05_7. Nineteen of the forty-one name a
+# lineage or a tissue that a triple-negative breast carcinoma cannot express, or were measured
+# to carry nothing here, and they are spending that budget to confirm what is already known.
+# Scoring the states a TNBC malignant epithelial cell can actually be in leaves the same result
+# better resolved and the figures readable.
 #
-# WHAT IS IN, AND ON WHAT GROUND. Twenty-two metaprograms, every one of them a state that has
+# WHAT IS IN, AND ON WHAT GROUND. Twenty-one metaprograms, every one of them a state that has
 # been reported in breast - and in most cases specifically in basal-like / triple-negative -
-# malignant cells: the cycle (MP2, MP3), chromatin (MP4), stress and hypoxia (MP5, MP6), the
-# proteostasis block (MP8 - MP11), all four EMT programmes (MP12 - MP15, the axis this project
-# is about), interferon / MHC-II (MP17, MP18, the immune-visibility axis `scie` asks about
-# from the other side), epithelial senescence (MP19), MYC (MP20, the classic basal-like
-# amplification), respiration (MP21), the two secreted programmes (MP22, MP23), and the two
-# detoxification ones (MP38 glutathione, MP39 metal-response, both of them chemoresistance
-# programmes in this disease).
+# malignant cells: the whole cycle (MP1 G2/M, MP2 G1/S, MP3 HMG-rich), chromatin (MP4), stress
+# and hypoxia (MP5, MP6), the proteostasis block (MP8 - MP10), all four EMT programmes
+# (MP12 - MP15, the axis this project is about), interferon / MHC-II (MP17, MP18, the
+# immune-visibility axis `scie` asks about from the other side), epithelial senescence (MP19),
+# MYC (MP20, the classic basal-like amplification), respiration (MP21), the two secreted
+# programmes (MP22, MP23), and metal-response (MP39, a chemoresistance programme in this
+# disease).
+#
+# PLUS ONE THAT IS ONLY THERE TO BOUND THEM. MP7 (Stress in vitro) is the specificity control
+# on the stress axis. MP5 and MP6 are scored, and the honest question about any dimension that
+# matches them is whether it is in-vivo stress or dissociation. MP7 was derived in culture; a
+# dimension that matches MP5 and MP7 equally is answering that question the wrong way. It is
+# the one non-state list the subset carries.
 #
 # WHAT IS OUT. Cilia (MP24), which breast epithelium does not have; the glioma mesenchymal
 # programme (MP16), whose EMT-like genes are already covered four times over by MP12 - MP15;
-# the out-of-tissue epithelial identities (MP30, MP31, MP40); and most of the lineage controls.
+# the out-of-tissue epithelial identities (MP30, MP31, MP40); the neural five (MP25 - MP29);
+# skin pigmentation (MP32); the haematopoietic five (MP33 - MP37); and the paper's own
+# residual (MP41). That is every lineage control, and it is a decision taken by reading the
+# full 41 and naming the ones that do not belong on this compartment - not the default of an
+# earlier version of this file, which kept five of them.
 #
-# FIVE OF THE EXCLUDED ONES COME BACK, AND NOT AS AN OVERSIGHT. The block above says why the
-# lineage metaprograms are in the full collection: correlations need a floor, or the ones that
-# look large have nothing to be large against. Dropping all eighteen would remove that floor
-# together with the noise, so the subset keeps the smallest set that still provides it:
+# AND TWO THAT WERE MEASURED OUT RATHER THAN ARGUED OUT: MP38 and MP11. Both were in the set
+# on the reasoning above - MP38 as a chemoresistance programme, MP11 as proteostasis - and
+# both fail against a null. The null is 200 random 50-gene lists, matched bin-for-bin to the
+# expression profile of the real metaprograms, scored with the Route A settings of 04_5 / 05_6
+# and correlated against the same 64 dimension-directions of `drvi_tum_64_nomt`; its max |rho|
+# has p50 0.225, p95 0.325, p99 0.372 and never exceeded 0.432 in 200 draws.
 #
-#   * MP7  (Stress in vitro) - the specificity control on the stress axis. MP5 and MP6 are
-#          scored, and the honest question about any dimension that matches them is whether it
-#          is in-vivo stress or dissociation. MP7 was derived in culture; a dimension that
-#          matches MP5 and MP7 equally is answering that question the wrong way.
-#   * MP36 (IG) and MP33 (RBCs) - the two ambient-RNA readouts. Immunoglobulin from plasma
-#          cells and haemoglobin from erythrocytes are the classic soup of a solid-tumour
-#          dissociation, they are what phase 06 removes with SoupX, and a malignant dimension
-#          loading on either is a contamination result, not a biological one.
-#   * MP25 (Astrocytes) - one impossible lineage, kept as the zero. It is the row that says
-#          what a correlation of nothing looks like on this data and at this depth.
-#   * MP41 (Unassigned) - the paper's own residual. It is the sink that lets a dimension
-#          matching no real programme match it instead of being forced onto the nearest one.
+#   * MP38 (Glutathione) reaches |rho| 0.165, the 25th percentile of that null: a random list
+#     beats it three times in four. Its genes say why - ACSM2A/B, AGXT2, CUBN, AMN, CLTRN,
+#     FOLR1, AQP1 are proximal-tubule renal, so this is an out-of-tissue lineage wearing the
+#     name of a metabolic programme, and it belongs with MP30 / MP31 / MP40.
+#   * MP11 (Translation initiation) reaches 0.216, the 42nd percentile - nothing on Route A -
+#     while firing 18 significant pairs on Route B. That split is the finding: EIF2/EIF3
+#     genes land in the top decoder genes of several dimensions without the per-cell score
+#     tracking any of them, which is what a library-complexity artefact looks like from both
+#     sides. It was already flagged for this in its note below; the null settles it.
 #
-# Those five are marked in the table by the same machinery as in the full collection: MP25,
-# MP33 and MP36 sit on the control axes, so they are `primary=False` and `_gavish_flags` flags
-# any claim on them.
+# The null is NOT in this file and NOT a threshold applied anywhere in the pipeline. It is a
+# Methods number, and the two lists above are the only decision taken with it. Note also what
+# it does NOT justify: the number of genes a list has inside the 2,000-HVG panel predicts
+# nothing about whether it can be found. MP21 has 2 of them and fires 23 times on Route B;
+# MP2 has 28 and fires 6. `MIN_SIGNATURE_GENES` is a floor on the MAPPED count, never on the
+# HVG one, and the HVG count is reported as a warning for exactly this reason.
+#
+# WHAT DROPPING THE CONTROLS COSTS, WRITTEN DOWN SO THAT IT IS NOT REDISCOVERED. The block
+# above says why the full collection keeps them: forty correlated scores need a floor, or the
+# ones that look large have nothing to be large against. This variant no longer has that
+# floor, and three things follow from it:
+#
+#   * the row that says what a correlation of nothing looks like on this data, at this depth,
+#     is gone. `--all-metaprograms` still has it, and that is the run to do once per latent
+#     space rather than never - it is the same tables under the other slug, so it costs a
+#     command and overwrites nothing.
+#   * the two ambient-RNA readouts go with it, MP36 (IG) and MP33 (RBCs). This is the least
+#     costly of the three on this dataset: the 05 diagnosis put the ambient contribution about
+#     two orders of magnitude below the dimensions it could have explained, and SoupX in phase
+#     06 is a check on the same question that does not go through a metaprogram at all.
+#   * MP41 (Unassigned) was the sink that let a dimension matching no real programme match it
+#     rather than be pushed onto the nearest one. Without it, "this dimension matches nothing"
+#     has to be read off the effect size and the significance columns instead of off a
+#     competing row.
+#
+# `primary=False` and the `lineage_control_claim_bounds_the_rest` flag therefore never fire on
+# this variant. They are not dead code - they fire on `gavish`, which is the same machinery on
+# the same tables.
 #
 # CHANGING THE SET IS THE ONE LINE BELOW. The first candidates to add back are MP30 and MP40:
 # they are pancreatic in name only, their genes are the generic secretory-epithelial ones
 # (TFF, AGR2, mucins, CEACAM), and those are luminal-breast genes - so a dimension carrying
 # epithelial identity rather than EMT has somewhere to land if they are in, and reads as
 # "matches nothing" if they are out. They were left out because this compartment is
-# basal-like, not because the reading would be wrong.
+# basal-like, not because the reading would be wrong. After them, MP16 and MP24: they were
+# out before the review that removed the controls and were not named by it either way.
 #
 # THE TWO VARIANTS NEVER OVERWRITE EACH OTHER. They are two collections with two slugs -
 # `gavish_tnbc` and `gavish` - so tables and figures land in two folders and carry the slug in
@@ -657,11 +710,11 @@ _GAVISH_AXES = ("cell_cycle", "chromatin", "stress", "proteostasis", "emt", "imm
 # deleted or re-run to use the subset, and a table cannot be read as the other set's.
 
 _GAVISH_TNBC_MPS = (
-    # the twenty-two states a TNBC malignant epithelial cell can be in
-    2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 38, 39,
-    # and the five that are there to bound them: dissociation, the two ambient readouts,
-    # one impossible lineage, and the residual sink
-    7, 33, 36, 25, 41,
+    # the twenty-one states a TNBC malignant epithelial cell can be in
+    1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 39,
+    # and the one that is there to bound them: the in-vitro stress programme, which is what
+    # separates a stress dimension from a dissociation one
+    7,
 )
 
 
@@ -677,8 +730,7 @@ def _mp_number(sig: Signature) -> int:
 _GAVISH_BY_NUMBER = {_mp_number(s): s for s in _GAVISH_SIGNATURES}
 
 # A number in the list above with no metaprogram behind it is a typo, and it would otherwise
-# surface as a quietly shorter collection. MP1 is the one that will legitimately fail here,
-# the day it is re-exported and added to `_GAVISH_TNBC_MPS` before the file exists.
+# surface as a quietly shorter collection rather than as an error.
 _unknown = sorted(set(_GAVISH_TNBC_MPS) - set(_GAVISH_BY_NUMBER))
 if _unknown:
     raise ValueError(f"_GAVISH_TNBC_MPS names metaprograms that are not in the registry: "
@@ -732,7 +784,7 @@ def _gavish_collection(name: str, scope: str, signatures: tuple[Signature, ...])
     )
 
 
-GAVISH = _gavish_collection("gavish", "all 40", _GAVISH_SIGNATURES)
+GAVISH = _gavish_collection("gavish", "all 41", _GAVISH_SIGNATURES)
 GAVISH_TNBC = _gavish_collection("gavish_tnbc", "TNBC-relevant", _GAVISH_TNBC_SIGNATURES)
 
 # --------------------------------------------------------------------------- #
@@ -772,7 +824,7 @@ def add_argument(parser) -> None:
     parser.add_argument("--collection", choices=sorted(COLLECTIONS), default=DEFAULT_COLLECTION,
                         help=f"which signature collection to interpret (default {DEFAULT_COLLECTION})")
     parser.add_argument("--all-metaprograms", action="store_true",
-                        help="with --collection gavish, score all 40 metaprograms instead of "
+                        help="with --collection gavish, score all 41 metaprograms instead of "
                              f"the {len(_GAVISH_TNBC_SIGNATURES)} TNBC-relevant ones; outputs "
                              "are written under the 'gavish' slug rather than 'gavish_tnbc'. "
                              "No effect on the other collections")

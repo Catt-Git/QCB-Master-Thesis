@@ -1,0 +1,49 @@
+# quadrant_per_optscib_tum_leiden | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_epicnv_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+optscib_tum_leiden,n_cells,n_target,pct
+0,2624,214,8.15548780487805
+1,7640,263,3.4424083769633507
+10,2169,20,0.9220839096357769
+11,3927,3,0.07639419404125286
+12,27,0,0.0
+13,43,2,4.651162790697675
+14,20,1,5.0
+15,2362,23,0.9737510584250635
+16,1868,85,4.550321199143469
+17,1992,250,12.550200803212851
+18,988,34,3.4412955465587043
+19,1561,98,6.278026905829597
+2,649,4,0.6163328197226502
+20,4982,453,9.09273384183059
+21,1774,111,6.257046223224352
+22,2986,172,5.760214333556598
+23,304,0,0.0
+24,388,102,26.288659793814432
+25,727,20,2.751031636863824
+26,369,110,29.81029810298103
+27,932,75,8.047210300429185
+28,2580,368,14.263565891472869
+29,41,14,34.146341463414636
+3,1085,53,4.88479262672811
+30,2057,130,6.319883325230919
+31,26,0,0.0
+32,1028,26,2.529182879377432
+33,10,0,0.0
+34,1627,372,22.864167178856793
+35,1665,6,0.36036036036036034
+36,15,0,0.0
+37,17,0,0.0
+38,24,0,0.0
+39,25,0,0.0
+4,2989,646,21.612579458012714
+40,19,1,5.2631578947368425
+41,2724,81,2.973568281938326
+42,24,0,0.0
+43,260,4,1.5384615384615385
+5,22,0,0.0
+6,1525,256,16.78688524590164
+7,25,0,0.0
+8,290,0,0.0
+9,3823,84,2.1972273083965472

@@ -1,0 +1,34 @@
+# quadrant_per_cell_type_01_4 | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epicnv_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+cell_type_01_4,n_cells,n_target,pct
+CD4-Th,1,0,0.0
+CD4-Treg,29,0,0.0
+CD4-activated,8,0,0.0
+CD4-naive,2,0,0.0
+CD8-Tem,103,0,0.0
+Fibro-matrix,59,2,3.389830508474576
+GD,1,0,0.0
+LummHR-SCGB,5459,126,2.3081150393845027
+LummHR-active,905,16,1.7679558011049723
+LummHR-major,7647,265,3.465411272394403
+Lumsec-HLA,2,0,0.0
+Lumsec-KIT,1255,44,3.50597609561753
+Lumsec-basal,16429,1265,7.699799135674722
+Lumsec-major,940,15,1.5957446808510638
+Lumsec-myo,1034,27,2.611218568665377
+Lumsec-prol,23623,715,3.0267112559793423
+Lymph-major,2,0,0.0
+Macro-lipo,42,6,14.285714285714286
+Macro-m2,5,1,20.0
+NK,5,0,0.0
+NK-ILCs,10,0,0.0
+Vas-arterial,3,0,0.0
+Vas-capillary,3,0,0.0
+Vas-venous,14,0,0.0
+basal,2425,120,4.948453608247423
+mDC,1,0,0.0
+mye-prol,1,0,0.0
+pericytes,216,12,5.555555555555555
+vsmc,9,0,0.0

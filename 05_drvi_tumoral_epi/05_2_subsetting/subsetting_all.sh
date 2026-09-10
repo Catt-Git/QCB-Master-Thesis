@@ -42,7 +42,7 @@
 #   ./subsetting_all.sh --dry-run       # print what would run, do nothing
 #   ./subsetting_all.sh reduce cluster  # only the named step(s), in file order
 #
-# Step names: norm, cc, reduce, cluster.
+# Step names: norm, cc, reduce, hvgnomt, cluster.
 # Logs go to 05_2_subsetting/logs/subsetting_all_<set>_<timestamp>.log and to the terminal.
 
 set -euo pipefail
@@ -58,17 +58,25 @@ case "$CELL_SET" in
   *) echo "CELL_SET must be 'tum' or 'epi', got '$CELL_SET'" >&2; exit 1 ;;
 esac
 
-STEP_NAMES=(norm cc reduce cluster)
+# `hvgnomt` runs AFTER `reduce` because it reads the 2,000-gene panel that step wrote and
+# verifies its own reproduction of the ranking against it gene for gene. It is in the chain
+# rather than a manual extra because the MT-free panel is what HVG_SET defaults to and what
+# 05_3 therefore trains on: leaving it outside the chain made "the default" something you had
+# to remember to produce. It does not rebuild <prefix>.h5ad, so it is independent of
+# `cluster` and the order of the last two does not matter.
+STEP_NAMES=(norm cc reduce hvgnomt cluster)
 STEP_SCRIPTS=(
   scran_norm_tum.py
   cell_cycle_score_tum.py
   reduce_data_tum.py
+  hvg_no_mt.py
   clustering_tum.py
 )
 STEP_SUFFIXES=(
   _norm.h5ad
   _norm_cc.h5ad
   _reduced.h5ad
+  _hvg_2k_nomt.h5ad
   .h5ad
 )
 

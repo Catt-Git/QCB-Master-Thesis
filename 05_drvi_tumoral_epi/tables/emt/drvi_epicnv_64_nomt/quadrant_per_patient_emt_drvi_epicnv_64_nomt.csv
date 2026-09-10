@@ -1,0 +1,30 @@
+# quadrant_per_patient | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_epicnv_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+cohort,list B,list A,list C,n_cells_in_cohort,consensus,pct_consensus
+Patient01,34,28,40,533,31,5.816135084427767
+Patient02,8,4,12,233,6,2.575107296137339
+Patient03,12,11,16,230,10,4.3478260869565215
+Patient05,4,2,4,425,4,0.9411764705882353
+Patient09,23,28,27,471,18,3.821656050955414
+Patient10,63,77,76,1508,66,4.376657824933687
+Patient11,59,52,65,1190,43,3.6134453781512605
+Patient12,8,4,7,234,5,2.1367521367521367
+Patient16,484,481,631,8017,453,5.650492703006112
+Patient17,213,87,239,3021,184,6.090698444223767
+Patient18,59,33,78,1059,48,4.53257790368272
+Patient19,11,6,11,1393,7,0.5025125628140703
+Patient20,7,6,9,218,6,2.7522935779816513
+Patient26,82,85,112,5240,65,1.2404580152671756
+Patient42,30,33,33,618,26,4.207119741100324
+Patient43,284,314,304,5038,250,4.962286621675268
+Patient45,139,184,173,2429,140,5.763688760806916
+Patient46,257,196,262,2975,232,7.798319327731092
+Patient47,128,130,168,3948,103,2.6089159067882473
+Patient48,59,44,73,1184,54,4.5608108108108105
+Patient53,273,257,295,5482,245,4.46917183509668
+Patient56,274,231,323,6752,219,3.243483412322275
+Patient63,484,387,458,7328,375,5.11735807860262
+Patient64,19,14,38,501,11,2.1956087824351296
+Patient66,14,6,18,206,13,6.310679611650485

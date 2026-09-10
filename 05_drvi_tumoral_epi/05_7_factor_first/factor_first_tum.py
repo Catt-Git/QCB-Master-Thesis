@@ -67,7 +67,7 @@ Usage:
     python factor_first_tum.py                       # the scie collection, the default
     python factor_first_tum.py --collection emt      # the same procedure on the EMT lists
     python factor_first_tum.py --collection gavish   # ORA against the TNBC metaprograms
-    python factor_first_tum.py --collection gavish --all-metaprograms  # against all 40
+    python factor_first_tum.py --collection gavish --all-metaprograms  # against all 41
     python factor_first_tum.py --n-top-genes 500     # a deeper list
     python factor_first_tum.py --no-hallmark         # custom signatures only, fully offline
 """

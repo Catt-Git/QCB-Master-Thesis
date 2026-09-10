@@ -17,32 +17,40 @@ and Route B and doubles as the Appendix table.
 export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 build_signatures_tum.py                      # scie, the default
 python3 build_signatures_tum.py --collection emt     # the EMT lists
-python3 build_signatures_tum.py --collection gavish  # the 27 TNBC-relevant metaprograms
-python3 build_signatures_tum.py --collection gavish --all-metaprograms  # all 40 instead
+python3 build_signatures_tum.py --collection gavish  # the 22 TNBC-relevant metaprograms
+python3 build_signatures_tum.py --collection gavish --all-metaprograms  # all 41 instead
 python3 build_signatures_tum.py --allow-low-coverage # report, do not stop
 
-N_LATENT=64 python3 build_signatures_tum.py --collection gavish   # the drvi_tum_64 run
-CELL_SET=epi HVG_SET=nomt N_LATENT=64 \
-    python3 build_signatures_tum.py --collection gavish           # drvi_epicnv_64_nomt
+# the two runs this phase reports, both on the default (MT-free) panel:
+N_LATENT=64 python3 build_signatures_tum.py --collection gavish              # drvi_tum_64_nomt
+CELL_SET=epi N_LATENT=64 python3 build_signatures_tum.py --collection gavish # drvi_epicnv_64_nomt
 ```
 
-`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32` by
-default, `N_LATENT=64` for `drvi_tum_64`, `CELL_SET=epi HVG_SET=nomt N_LATENT=64` for
-`drvi_epicnv_64_nomt`. See [the phase README](../README.md#which-run-05_4---05_8-read); the
-run id is in the name of everything written.
+`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32_nomt`
+by default, `N_LATENT=64` for `drvi_tum_64_nomt`, `CELL_SET=epi N_LATENT=64` for
+`drvi_epicnv_64_nomt`. `HVG_SET` no longer has to be spelled out: `nomt` is the default panel
+now (`HVG_SET=withmt` is the explicit opt-out), and the `_nomt` tag stays in the run id because
+the bare `drvi_tum_64` has already meant the with-MT panel. See
+[the phase README](../README.md#which-run-05_4---05_8-read); the run id is in the name of
+everything written.
 
 ## Why this is re-run and not inherited from 04
 
 The lists are the same; **the universes they are mapped onto are not**, and both matter:
 
-- Route A scores on all genes of the object. 05_2's `min_cells = 3` filter ran on 36,192
-  malignant cells and left **24,779 genes**, against 04's 26,371 on 74,441 epithelial ones — a
+- Route A scores on all genes of the object. 05_2's `min_cells = 3` filter ran on 42,096
+  malignant cells and left **25,133 genes**, against 04's 26,371 on 74,441 epithelial ones — a
   gene detected in three epithelial cells need not be detected in three aneuploid ones.
 - Route B can only test the part of a signature that survived HVG selection, and 05_2
   **re-selected the HVGs inside the tumour**. Which part of a list is testable is therefore a
   different set of genes here.
 
 The second is not a rounding difference. Against 04, inside the 2,000-HVG background:
+
+> **These four rows are from the superseded run** — the original 05_1 CNV call and the
+> with-MT gene panel — and are kept because the *direction* is the point, not the digits.
+> `scie` and `emt` have not been re-run on the `newcnv` objects; their v1 tables are in
+> [`../tables_v1/`](../tables_v1/). Re-measure before quoting these in the write-up.
 
 | signature | 04 | 05 | |
 |---|---|---|---|
@@ -74,7 +82,7 @@ Figures in `../figures/05_4_signatures/<collection>/<run_id>/`.
 
 The `.gmt` is the one output named after the **object** and not after the run, because that is
 what it depends on: it holds the signature genes that exist in the object, and `shiao_tum.h5ad`
-(24,779 genes) and `shiao_epicnv.h5ad` (26,379) do not have the same gene axis. `N_LATENT` and
+(25,133 genes) and `shiao_epicnv.h5ad` (26,023) do not have the same gene axis. `N_LATENT` and
 `HVG_SET` are not in the name and must not be — neither changes which genes the object has — so
 `drvi_tum_32` and `drvi_tum_64` correctly share one `.gmt` while `CELL_SET=epi` gets its own.
 04 has a single object and so a single `signatures_<collection>.gmt`; this is one more of the
@@ -95,11 +103,33 @@ Five EMT lists sit under the 10-gene floor inside the HVG background and are eff
 untestable on Route B (`EMT_A_EPITHELIAL` has 2 genes there). They are still scored in full by
 Route A, which reads the all-genes object — the asymmetry is reported, not silently resolved.
 
-All three collections pass the mapping floor on this object; nothing had to be forced. On
-`gavish` (all 40, which is what these numbers were measured on) the lowest is `MP24_CILIA` at 0.796 and nothing else is under 0.83, which is expected:
-the metaprograms were published in 2023 against a modern reference, where the SCIE lists date
-from 2007-2012. What the coverage table shows there instead is a **Route B** limit — nine of the
-40 have fewer than 10 genes inside the 2,000-HVG background and are effectively untestable by
-the ORA of 05_7, `MP4_CHROMATIN`, `MP20_MYC` and `MP21_RESPIRATION` among them. They are still
-scored per cell by Route A; a dimension can only fail to match them on one route, and the
-convergence table has to be read knowing which nine those are.
+`gavish_tnbc` clears the mapping floor on both objects with room to spare; nothing had to be
+forced. The lowest is `MP7_STRESS_IN_VITRO` at 0.880, and it is the only list under 0.90 —
+expected, since the metaprograms were published in 2023 against a modern reference where the
+SCIE lists date from 2007-2012. `MP1_CELL_CYCLE_G2_M` maps **50/50** on both objects, the only
+list in the collection that loses nothing: it keeps the paper's gene symbols and this dataset is
+on the reference those were written against.
+
+What the coverage table shows instead is a **Route B** limit, and it is the same one on both
+cell sets: **five of the 22** have fewer than 10 genes inside the 2,000-HVG background.
+
+| metaprogram | genes in HVG background, `tum` | `epicnv` |
+|---|---|---|
+| `MP4_CHROMATIN` | 3 | 3 |
+| `MP8_PROTEASOMAL_DEGRADATION` | 6 | 5 |
+| `MP9_UNFOLDED_PROTEIN_RESPONSE` | 4 | 2 |
+| `MP20_MYC` | 5 | 7 |
+| `MP21_RESPIRATION` | 4 | 4 |
+
+MP1 is at the other end: 47 of its 50 genes are in the `tum` HVG panel and 45 in `epicnv`, the
+best-covered list here.
+
+**A low count here is not "untestable", and the run proves it.** `MP21_RESPIRATION` has 4 genes
+in the panel and still comes out *convergent* on `DR 4+` (Route A ρ 0.469, Route B FDR 2.0e-03).
+The ORA depends on the overlap with each dimension's top-200 decoder genes, not on the size of
+the set in the background, so this table is a caution about power and never a reason to drop a
+list. They are all scored in full by Route A, which reads the all-genes object; the convergence
+table of 05_8 has to be read knowing which five those are. Note what they have in common — proteostasis, transcription, MYC,
+respiration: these are housekeeping-adjacent programmes whose genes are expressed everywhere
+and therefore *not* highly variable, so their absence from the HVG panel is a property of the
+panel and not evidence that the programme is off.

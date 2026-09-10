@@ -26,8 +26,8 @@
 #
 #   scie     stemness x immunogenicity, the ten lab lists plus CytoTRACE2   (the default)
 #   emt      the EMT axis, nine lists on epithelial / hybrid / mesenchymal
-#   gavish   the pan-cancer metaprograms of Gavish et al. 2023, as a VOCABULARY - the 27
-#            relevant to a TNBC by default, all 40 with --all-metaprograms
+#   gavish   the pan-cancer metaprograms of Gavish et al. 2023, as a VOCABULARY - the 22
+#            relevant to a TNBC by default, all 41 with --all-metaprograms
 #
 # They share no output: every table and figure goes to <tables|figures>/<collection>/ and
 # carries the collection in its filename, and 04_6 corrects its FDR inside one collection, so
@@ -37,7 +37,7 @@
 #   ./signature_interpretation_all.sh --collection emt      # the same chain, EMT lists
 #   ./signature_interpretation_all.sh --collection gavish   # the metaprograms, see below
 #
-# --all-metaprograms widens that last one from the 27 TNBC-relevant metaprograms to all 40.
+# --all-metaprograms widens that last one from the 22 TNBC-relevant metaprograms to all 41.
 # It is a different collection on disk - slug `gavish` instead of `gavish_tnbc` - so the two
 # widths never overwrite each other, and the driver's [have] check follows the slug rather
 # than the flag. It does nothing to scie or emt.
@@ -81,7 +81,7 @@
 #   ./signature_interpretation_all.sh --collection emt   # the same, on the EMT lists
 #   ./signature_interpretation_all.sh --force            # re-run everything
 #   ./signature_interpretation_all.sh --dry-run          # print what would run
-#   ./signature_interpretation_all.sh --collection gavish --all-metaprograms   # all 40
+#   ./signature_interpretation_all.sh --collection gavish --all-metaprograms   # all 41
 #   ./signature_interpretation_all.sh cellfirst convergence   # only the named steps
 #   PYTHON=.../envs/cytotrace2-py/bin/python ./signature_interpretation_all.sh cytotrace
 #

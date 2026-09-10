@@ -39,7 +39,7 @@ Usage:
     python convergence_tum.py                     # the scie collection, the default
     python convergence_tum.py --collection emt    # the same procedure on the EMT lists
     python convergence_tum.py --collection gavish # names the dimensions, no target axis
-    python convergence_tum.py --collection gavish --all-metaprograms  # all 40, not just TNBC
+    python convergence_tum.py --collection gavish --all-metaprograms  # all 41, not just TNBC
     python convergence_tum.py --rho-min 0.30      # a stricter cell-level bar
 """
 

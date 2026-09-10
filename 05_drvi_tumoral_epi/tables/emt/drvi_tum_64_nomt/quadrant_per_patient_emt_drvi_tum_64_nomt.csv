@@ -1,0 +1,24 @@
+# quadrant_per_patient | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+cohort,list B,list A,list C,n_cells_in_cohort,consensus,pct_consensus
+Patient01,37,30,32,369,34,9.214092140921409
+Patient09,28,28,28,471,25,5.307855626326964
+Patient11,70,54,62,1116,47,4.211469534050179
+Patient16,496,424,632,7686,445,5.789747593026282
+Patient17,103,102,138,2387,82,3.4352744030163387
+Patient18,47,37,66,746,42,5.630026809651475
+Patient19,41,37,59,919,35,3.808487486398259
+Patient20,12,5,10,218,7,3.2110091743119265
+Patient26,48,71,82,4849,46,0.9486492060218602
+Patient42,19,18,21,278,15,5.39568345323741
+Patient43,175,149,200,2745,158,5.75591985428051
+Patient45,166,170,181,2106,141,6.695156695156695
+Patient46,192,146,204,2218,175,7.889990982867448
+Patient47,166,165,153,2690,129,4.795539033457249
+Patient48,45,40,46,475,41,8.631578947368421
+Patient53,298,290,345,3900,284,7.282051282051282
+Patient56,286,222,313,6151,228,3.7067143553893676
+Patient63,147,126,156,2317,123,5.308588692274493
+Patient64,16,15,37,455,13,2.857142857142857

@@ -197,35 +197,89 @@ types with no knowledge of this project. Two things they buy:
 
 * **a name from outside.** A dimension on which Route A and Route B independently land on the
   same metaprogram is a dimension named by prior knowledge that was not chosen for this project.
-  On `drvi_tum_32` that is 28 of the 64 dimension-directions, led by `DR 9- = MP5_STRESS`
-  (ρ 0.813, FDR 7e-40), `DR 5- = MP2_CELL_CYCLE_G1_S` and `DR 17+ = MP6_HYPOXIA`.
+  On `drvi_tum_64_nomt`, with the 22-list default, that is **39 of the 128 dimension-directions**,
+  led by `DR 3+ = MP1_CELL_CYCLE_G2_M` (ρ 0.845, FDR 4e-46), `DR 8+ = MP5_STRESS` (ρ 0.811) and
+  `DR 5+ = MP2_CELL_CYCLE_G1_S` (ρ 0.775). On `drvi_epicnv_64_nomt` it is 33 of 128. The earlier
+  figure quoted here, 28 of 64 on `drvi_tum_32`, was the 27-list set on the 32-dimension run and
+  has not been recomputed.
+
+  **MP1 is why the top row changed.** Before it existed, DR 3+ had no metaprogram of its own and
+  read as `MP2_CELL_CYCLE_G1_S` — DRVI had separated G2/M from G1/S into two dimensions and the
+  vocabulary could only name one of them. MP1 now converges on three directions (`DR 3+`,
+  `DR 25-`, `DR 37-`), and `DR 3+` is the single strongest convergent row of the run.
 * **an independent check on `emt`.** MP12–MP16 are four EMT metaprograms plus the glioma
   mesenchymal one, curated by other people from other tumours. An EMT axis visible on the
   collaborator's lists *and* on those is an axis that does not depend on whose EMT list was used.
 
-Eleven of the 40 describe lineages that cannot be in this compartment (neural, skin
-pigmentation, haematopoietic). They are marked `primary=False` and kept on purpose: they are the
-floor the other readings are measured against, and `MP36_IG` doubles as this dataset's
-ambient-immunoglobulin readout. `MP1` (Cell Cycle G2/M) is absent from `datasets/GAVISH.csv` and
-so from the text files — there are 40 lists, not 41.
+Eleven of the 41 describe lineages that cannot be in this compartment (neural, skin
+pigmentation, haematopoietic). In the **full** collection they are marked `primary=False` and
+kept on purpose: they are the floor the other readings are measured against, and `MP36_IG`
+doubles as this dataset's ambient-immunoglobulin readout.
 
-**Only 27 of the 40 are scored by default.** Eighteen name a lineage or a tissue a
+`MP1` (Cell Cycle - G2/M) is **not** in `datasets/GAVISH.csv` — the export has 40 columns and
+not 41, and the MSigDB release it came from has no MP1 either. It is now on disk anyway, taken
+from the authors' own `MP_list.RDS` (github.com/tiroshlab/3ca, `$Cancer[[1]]`, 50 genes in the
+paper's order) and written by `utils/gavish_extraction.py` next to the forty from the CSV. The
+two sources are the same list: that object's MP2 is identical gene-for-gene to
+`MP2_CELL_CYCLE_G1_S.txt` apart from two symbols MSigDB updated (`HIST1H4C`→`H4C3`,
+`KIAA0101`→`PCLAF`). MP1 keeps the paper's spelling, which is why all 50 of its genes map here:
+this dataset is on an older reference and carries `HIST1H4C` but not `H4C3`.
+
+**Only 22 of the 41 are scored by default.** Seventeen name a lineage or a tissue a
 triple-negative breast carcinoma cannot express, and each of them is a column of both heatmaps
 and one more test inside the FDR correction of 05_7. `--collection gavish` therefore scores the
-22 states reported in basal-like / TNBC malignant cells — cycle (MP2, MP3), chromatin (MP4),
-stress and hypoxia (MP5, MP6), proteostasis (MP8–MP11), the four EMT programmes (MP12–MP15),
-interferon / MHC-II (MP17, MP18), epithelial senescence (MP19), MYC (MP20), respiration (MP21),
-the secreted pair (MP22, MP23) and the detoxification pair (MP38, MP39) — plus five kept only to
-bound them: `MP7` (in-vitro stress, the dissociation control on the stress axis), `MP36` (IG) and
-`MP33` (RBCs), the two ambient-RNA readouts that phase 06 removes with SoupX, `MP25`
-(astrocytes) as the impossible lineage that shows what zero looks like, and `MP41` (unassigned)
-as the residual sink. `--all-metaprograms` restores all 40. The set is one editable tuple,
-`_GAVISH_TNBC_MPS` in `utils/sig_collections.py`; `MP30` and `MP40` are the first candidates to
-add back, their genes being the generic secretory-epithelial ones that are luminal in breast.
+21 states reported in basal-like / TNBC malignant cells — the whole cycle (MP1 G2/M, MP2 G1/S,
+MP3 HMG-rich), chromatin (MP4), stress and hypoxia (MP5, MP6), proteostasis (MP8–MP10), the four
+EMT programmes (MP12–MP15), interferon / MHC-II (MP17, MP18), epithelial senescence (MP19), MYC
+(MP20), respiration (MP21), the secreted pair (MP22, MP23) and metal-response (MP39) — plus
+`MP7` (in-vitro stress), the one list kept only to bound them: it is what separates a stress
+dimension from a dissociation one.
+
+**Two lists were measured out rather than argued out: `MP38` and `MP11`.** The null is 200
+random 50-gene lists, matched bin-for-bin to the expression profile of the real metaprograms,
+scored with the Route A settings and correlated against the same 64 dimension-directions of
+`drvi_tum_64_nomt`; its max |ρ| has p50 0.225, p95 0.325, p99 0.372 and never exceeded 0.432 in
+200 draws. `MP38` (Glutathione) reaches **0.165**, the 25th percentile of that null — a random
+list beats it three times in four — and its genes (`ACSM2A/B`, `AGXT2`, `CUBN`, `AMN`, `CLTRN`,
+`FOLR1`, `AQP1`) are proximal-tubule renal, so it belongs with MP30 / MP31 / MP40. `MP11`
+(Translation initiation) reaches **0.216**, the 42nd percentile, while firing 18 significant
+pairs on Route B: `EIF2`/`EIF3` genes land in the top decoder genes of several dimensions
+without the per-cell score tracking any of them, which is what a library-complexity artefact
+looks like from both sides. The null is a Methods number, not a threshold applied anywhere in
+the pipeline, and these two are the only decision taken with it.
+
+What the null does **not** license is removing a list for having few genes inside the 2,000-HVG
+panel: that count predicts nothing about whether a programme can be found. `MP21` has 2 of them
+and fires 23 times on Route B; `MP2` has 28 and fires 6. `MIN_SIGNATURE_GENES` is a floor on the
+MAPPED count, never on the HVG one, and the HVG count is reported as a warning for that reason.
+
+
+**No lineage control is scored by default any more,** and that is a decision taken by reading
+the full 41 rather than the earlier default, which kept five of them. What it costs is worth
+knowing: there is no longer a row saying what a correlation of nothing looks like on this data,
+the two ambient-RNA readouts (`MP36` IG, `MP33` RBCs) are gone with it, and `MP41` (unassigned)
+is no longer there as the sink for a dimension that matches nothing. The first is what
+`--all-metaprograms` is for — the same tables under the other slug, once per latent space. The
+second is the least costly here: 05's own diagnosis put the ambient contribution about two
+orders of magnitude below the dimensions it could have explained, and SoupX in phase 06 checks
+the same thing without going through a metaprogram. `primary=False` and the
+`lineage_control_claim_bounds_the_rest` flag therefore never fire on the default variant; they
+still fire on `gavish`.
+
+The set is one editable tuple, `_GAVISH_TNBC_MPS` in `utils/sig_collections.py`; `MP30` and
+`MP40` are the first candidates to add back, their genes being the generic secretory-epithelial
+ones that are luminal in breast, and `MP16` / `MP24` after them.
 
 The two widths are two collections on disk — slug `gavish_tnbc` and slug `gavish` — so their
-tables and figures never share a folder or a filename, and the numbers quoted above, measured on
-all 40, stay exactly where they were written.
+tables and figures never share a folder or a filename.
+
+**What has been re-run on the 22-list set.** `05_4` → `05_8` on `drvi_tum_64_nomt` and
+`drvi_epicnv_64_nomt`. After that run, `tables/gavish_tnbc/` and `figures/*/gavish_tnbc/` hold
+those two runs and nothing else, so everything currently under `tables/` and `figures/` for this
+collection is the 22-list set. What is superseded is in `tables_v1/` and `figures_v1/`: the
+27-list `gavish_tnbc` on `drvi_tum_32`, `drvi_tum_64` and `drvi_epicnv_64_nomt`, and the whole
+`gavish` slug, which was the 40-list registry from before MP1 existed. Nothing there has been
+recomputed; `--all-metaprograms` on the 41 has not been run since MP1 was added.
 
 ## Status
 

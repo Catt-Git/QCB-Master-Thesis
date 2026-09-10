@@ -81,8 +81,8 @@ a flag, `--collection`, declared in `utils/sig_collections.py`:
 | | `scie` (the default) | `emt` | `gavish` |
 |---|---|---|---|
 | question | is there an epithelial state that is stem-like **and** immune-evasive? | which cells sit in the **hybrid**, partial-EMT state? | which recurrent pan-cancer metaprogram, if any, does each latent dimension carry? |
-| lists | 11, on `immune` / `stemness`, plus CytoTRACE2 | 9, on `epithelial` / `hybrid` / `mesenchymal`, plus a derived E-to-M score per list version | 27 by default — the ones a TNBC can express — or all 40 with `--all-metaprograms`, from `signatures/GAVISH_metaprograms/` |
-| primary | no primary stemness list; `IMMUNOGENIC_CONSENSUS` is the primary immune one | list **B**; A and C are robustness replicates of it | 24 of the 27 (29 of the 40); the lineage metaprograms that cannot be here are **negative controls** |
+| lists | 11, on `immune` / `stemness`, plus CytoTRACE2 | 9, on `epithelial` / `hybrid` / `mesenchymal`, plus a derived E-to-M score per list version | 22 by default — the ones a TNBC can express — or all 41 with `--all-metaprograms`, from `signatures/GAVISH_metaprograms/` |
+| primary | no primary stemness list; `IMMUNOGENIC_CONSENSUS` is the primary immune one | list **B**; A and C are robustness replicates of it | all 22 of the default set (30 of the 41); the lineage metaprograms that cannot be here are **negative controls**, and only `--all-metaprograms` carries them |
 | hybrid lists | - | scored and reported, but they **validate** the call rather than making it - see `sig_collections.py` | - |
 | target region | stem-**high** x immunogenic-**low** | epithelial **high** x mesenchymal **high**, i.e. co-expression | **none** - see below |
 | named risks | cell cycle, sequencing depth | cell cycle, fibroblast ambient RNA / doublets | - (the confounder table carries them per readout) |
@@ -116,30 +116,56 @@ signature collection can be, and each step drops exactly what depends on a regio
 The metaprograms are Gavish et al. 2023 (Nature 618:598-606), derived by NMF over ~1,000
 tumours of 24 cancer types with no knowledge of this project. That is what makes them the
 outside check on the other two collections: an EMT axis visible on the collaborator's lists
-**and** on MP12-MP16 is an axis that does not depend on whose EMT list was used. `MP1`
-(Cell Cycle G2/M) is missing — it is absent from `datasets/GAVISH.csv`, the export the text
-files were written from, so there are 40 lists and not 41.
+**and** on MP12-MP16 is an axis that does not depend on whose EMT list was used.
 
-**Only 27 of them are scored by default, and the flag that widens it is `--all-metaprograms`.**
-Eighteen of the forty name a lineage or a tissue a triple-negative breast carcinoma cannot
+`MP1` (Cell Cycle - G2/M) is **not** in `datasets/GAVISH.csv`, the export the text files were
+written from — it has 40 columns and not 41, and neither does the MSigDB release behind it. It
+is on disk anyway, taken from the authors' own `MP_list.RDS` (github.com/tiroshlab/3ca,
+`$Cancer[[1]]`, 50 genes in the paper's order) and written by
+`05_drvi_tumoral_epi/utils/gavish_extraction.py` next to the forty from the CSV. The two
+sources are the same list: that object's MP2 is identical gene-for-gene to
+`MP2_CELL_CYCLE_G1_S.txt` apart from two symbols MSigDB updated (`HIST1H4C`→`H4C3`,
+`KIAA0101`→`PCLAF`). MP1 keeps the paper's spelling, which is why all 50 of its genes map onto
+this dataset, whose reference has `HIST1H4C` and not `H4C3`.
+
+**Only 22 of them are scored by default, and the flag that widens it is `--all-metaprograms`.**
+Seventeen of the forty-one name a lineage or a tissue a triple-negative breast carcinoma cannot
 express, and each one costs a column of both heatmaps and one more test inside the FDR
-correction of 04_6. The default is therefore the 22 states that have been reported in
-basal-like / triple-negative malignant cells — the cycle (MP2, MP3), chromatin (MP4), stress
-and hypoxia (MP5, MP6), proteostasis (MP8–MP11), the four EMT programmes (MP12–MP15),
-interferon / MHC-II (MP17, MP18), epithelial senescence (MP19), MYC (MP20), respiration
-(MP21), the two secreted programmes (MP22, MP23) and the two detoxification ones (MP38, MP39)
-— plus **five that are there only to bound them**: `MP7` (in-vitro stress: the dissociation
-control on the stress axis), `MP36` (IG) and `MP33` (RBCs), the two ambient-RNA readouts,
-`MP25` (astrocytes) as the one impossible lineage that says what a correlation of zero looks
-like on this data, and `MP41` (unassigned), the residual a dimension can land on instead of
-being forced onto the nearest real programme. The set is one editable tuple,
-`_GAVISH_TNBC_MPS` in `sig_collections.py`; `MP30` and `MP40` are the first candidates to add
-back, since their genes are the generic secretory-epithelial ones that are luminal in breast.
+correction of 04_6. The default is therefore the 21 states that have been reported in
+basal-like / triple-negative malignant cells — the whole cycle (MP1 G2/M, MP2 G1/S, MP3
+HMG-rich), chromatin (MP4), stress and hypoxia (MP5, MP6), proteostasis (MP8–MP10), the four
+EMT programmes (MP12–MP15), interferon / MHC-II (MP17, MP18), epithelial senescence (MP19), MYC
+(MP20), respiration (MP21), the two secreted programmes (MP22, MP23) and metal-response (MP39)
+— plus **one that is there only to bound them**: `MP7` (in-vitro stress), which is what
+separates a stress dimension from a dissociation one.
+
+**`MP38` and `MP11` were measured out rather than argued out.** Against a null of 200 random
+50-gene lists matched to the expression profile of the real metaprograms and put through the
+same Route A (max |ρ| p50 0.225, p95 0.325, p99 0.372, never above 0.432 in 200 draws), `MP38`
+reaches 0.165 — the 25th percentile — and its genes are proximal-tubule renal; `MP11` reaches
+0.216, the 42nd percentile, while firing 18 significant pairs on Route B, which is what a
+library-complexity artefact looks like from both sides. The null is a Methods number and not a
+threshold applied anywhere in the pipeline. It does **not** license removing a list for having
+few genes in the HVG panel: `MP21` has 2 and fires 23 times on Route B, `MP2` has 28 and fires
+6.
+
+**No lineage control is scored by default any more.** That is a decision taken by reading the
+full 41, not the earlier default, which kept `MP25`, `MP33`, `MP36` and `MP41`. The cost is
+real and worth stating: no row saying what a correlation of nothing looks like on this data, no
+ambient-RNA readout (`MP36` IG, `MP33` RBCs), and no residual sink (`MP41`) for a dimension that
+matches nothing. `--all-metaprograms` is where all four still are, and it is a run worth doing
+once per latent space. `primary=False` and the `lineage_control_claim_bounds_the_rest` flag
+therefore never fire on the default variant; they still fire on `gavish`.
+
+The set is one editable tuple, `_GAVISH_TNBC_MPS` in `sig_collections.py`; `MP30` and `MP40`
+are the first candidates to add back, since their genes are the generic secretory-epithelial
+ones that are luminal in breast, and `MP16` / `MP24` after them.
 
 The two widths are **two collections on disk** — slug `gavish_tnbc` for the subset, `gavish`
-for all 40 — so their tables and figures sit in separate folders, carry the slug in their
-filenames, and neither can overwrite or be mistaken for the other. Everything already
-produced with all 40 stays valid and stays where it is.
+for all 41 — so their tables and figures sit in separate folders, carry the slug in their
+filenames, and neither can overwrite or be mistaken for the other. Everything already produced
+under either slug stays valid and stays where it is; it was measured on the 40 lists that
+existed before MP1 and before the controls came out of the default, so a re-run will move it.
 
 Adding a collection means appending a `Collection` to `sig_collections.py` and nothing else.
 The one exception is on the record: a collection **without** a target region needed the steps
@@ -355,8 +381,8 @@ cd 04_drvi_epithelial
 
 ./signature_interpretation_all.sh                     # steps 1, 3, 4, 5, 6, 7 on scie - resuming
 ./signature_interpretation_all.sh --collection emt    # the same six steps on the EMT lists
-./signature_interpretation_all.sh --collection gavish # the 27 TNBC metaprograms; the cycle step is skipped
-./signature_interpretation_all.sh --collection gavish --all-metaprograms   # all 40 instead
+./signature_interpretation_all.sh --collection gavish # the 22 TNBC metaprograms; the cycle step is skipped
+./signature_interpretation_all.sh --collection gavish --all-metaprograms   # all 41 instead
 ./signature_interpretation_all.sh --force          # re-run everything
 ./signature_interpretation_all.sh --dry-run        # print what would run
 ./signature_interpretation_all.sh cellfirst convergence   # only the named steps

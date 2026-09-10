@@ -1,18 +1,18 @@
 ,malignant subset
 cell set,tum
-cells,36192
-genes,24779
+cells,42096
+genes,25133
 cohorts,19
 post-CNV labels (cell_type),1
-pre-CNV labels (cell_type_01_4),9
+pre-CNV labels (cell_type_01_4),10
 HVGs,2000
 PCs,50
 leiden NMI target,cell_type_01_4
-leiden resolution (selected),0.1
-leiden NMI (selected),0.338
-leiden clusters (selected),15
-cycling cells (S + G2M),56.3%
-median genes per cell,1410
-median counts per cell,3277
-median pct_counts_mt,3.38
-median cnv_score,0.003
+leiden resolution (selected),0.8
+leiden NMI (selected),0.3135
+leiden clusters (selected),35
+cycling cells (S + G2M),55.3%
+median genes per cell,1383
+median counts per cell,3256
+median pct_counts_mt,3.33
+median cnv_score,0.0028

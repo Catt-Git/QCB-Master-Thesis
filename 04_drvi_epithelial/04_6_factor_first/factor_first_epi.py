@@ -56,7 +56,7 @@ Usage:
     python factor_first_epi.py                       # the scie collection, the default
     python factor_first_epi.py --collection emt      # the same procedure on the EMT lists
     python factor_first_epi.py --collection gavish   # ORA against the TNBC metaprograms
-    python factor_first_epi.py --collection gavish --all-metaprograms  # against all 40
+    python factor_first_epi.py --collection gavish --all-metaprograms  # against all 41
     python factor_first_epi.py --n-top-genes 500     # a deeper list
     python factor_first_epi.py --no-hallmark         # custom signatures only, fully offline
 """

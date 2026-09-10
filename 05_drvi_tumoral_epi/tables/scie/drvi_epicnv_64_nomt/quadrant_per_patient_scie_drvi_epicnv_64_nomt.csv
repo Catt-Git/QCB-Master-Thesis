@@ -1,0 +1,30 @@
+# quadrant_per_patient | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_epicnv_64_nomt | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+cohort,BENPORATH_ES1,ESC_ASSOU,ESC_WONG,LIM_STEM,FMASC,CytoTRACE2,n_cells_in_cohort,consensus,pct_consensus
+Patient01,40,44,45,8,39,33,533,30,5.628517823639775
+Patient02,4,14,20,17,22,17,233,18,7.725321888412017
+Patient03,20,19,18,14,11,17,230,19,8.26086956521739
+Patient05,42,42,58,19,12,18,425,41,9.647058823529411
+Patient09,31,35,41,33,32,34,471,34,7.218683651804671
+Patient10,136,141,159,47,38,38,1508,138,9.151193633952255
+Patient11,91,80,92,72,78,64,1190,76,6.38655462184874
+Patient12,9,9,11,14,13,16,234,11,4.700854700854701
+Patient16,273,243,263,397,536,415,8017,298,3.7171011600349257
+Patient17,166,188,110,201,368,161,3021,202,6.6865276398543525
+Patient18,60,68,46,135,117,98,1059,76,7.176581680830973
+Patient19,90,87,125,4,71,40,1393,66,4.737975592246949
+Patient20,13,13,11,8,11,21,218,12,5.504587155963303
+Patient26,425,495,529,418,442,578,5240,529,10.095419847328245
+Patient42,45,48,65,26,24,54,618,47,7.605177993527508
+Patient43,429,320,331,273,457,297,5038,330,6.550218340611353
+Patient45,126,116,144,69,183,140,2429,120,4.940304652120214
+Patient46,161,155,158,248,200,115,2975,139,4.6722689075630255
+Patient47,374,403,469,137,277,407,3948,383,9.70111448834853
+Patient48,112,114,130,85,87,106,1184,119,10.050675675675675
+Patient53,170,209,341,200,209,296,5482,211,3.8489602334914266
+Patient56,462,496,554,321,388,560,6752,472,6.990521327014218
+Patient63,695,656,668,640,682,618,7328,685,9.347707423580786
+Patient64,22,18,28,49,19,45,501,20,3.992015968063872
+Patient66,5,5,5,4,19,6,206,5,2.4271844660194173

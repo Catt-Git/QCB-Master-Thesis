@@ -1,9 +1,11 @@
 """
 05_2 (variant): the same 2,000-gene panel with the mitochondrial genes taken out.
 
-`reduce_data_tum.py` selects 2,000 batch-aware HVGs and 11 of them, on the CELL_SET=epi
-object, are transcripts of the mitochondrial genome (`MT-ND1`, `MT-ND2`, `MT-CO1`, `MT-CO2`,
-`MT-ATP8`, `MT-CO3`, `MT-ND3`, `MT-ND4L`, `MT-ND4`, `MT-ND6`, `MT-CYB`). What those genes
+`reduce_data_tum.py` selects 2,000 batch-aware HVGs and some of them are transcripts of the
+mitochondrial genome. HOW MANY IS A PROPERTY OF THE OBJECT, not a constant: the malignant
+subset of the `newcnv` call has 13 (the whole protein-coding mitochondrial genome), the
+earlier all-epithelium object had 11. Nothing below is written in terms of that count - it
+is measured on the panel at hand and everything follows from it. What those genes
 vary with is the fraction of a cell's RNA that came from mitochondria - dissociation stress,
 membrane damage, ambient lysate - and not a state of the epithelium. They are already what
 the `pct_counts_mt <= MAX_PCT_MT` filter is computed on, so the cells that survive QC are the
@@ -15,20 +17,27 @@ nothing else: they are nuclear genes, they are real epithelial biology (zinc/cop
 a well-known stress-response programme), and they STAY. The rule here is the exact prefix
 `MT-`, which on GENCODE is the mitochondrial genome and only it.
 
-## How the eleven replacements are chosen
+## How the replacements are chosen
 
-The list has to stay 2,000 genes, so the eleven are refilled from the same ranking that
-produced the panel in the first place - the next eleven, nothing hand-picked.
+The list has to stay 2,000 genes, so however many are removed get refilled from the same
+ranking that produced the panel in the first place - the next ones down, nothing hand-picked.
 
 Doing that by calling `scib.preprocessing.hvg_batch(target_genes=2011)` would NOT be it.
 `hvg_batch` passes `target_genes` straight into `sc.pp.highly_variable_genes(n_top_genes=...)`,
 so a larger target changes which genes are flagged *within each batch*, hence
 `highly_variable_nbatches` for every gene, hence the ranking itself: the 2,011-gene answer is
-not the 2,000-gene answer plus eleven. So `hvg_batch`'s selection loop is reproduced here
+not the 2,000-gene answer plus a few. So `hvg_batch`'s selection loop is reproduced here
 (and checked against the panel on disk, gene for gene) over the *unchanged*
 `sc.pp.highly_variable_genes(n_top_genes=2000, batch_key='cohort')` call, then continued past
-2,000 until eleven non-`MT-` genes have been added. The 1,989 survivors are therefore
-bit-for-bit the ones already in `<prefix>_hvg_2k_list.csv`.
+2,000 until enough non-`MT-` genes have been added. The survivors are therefore bit-for-bit
+the ones already in `<prefix>_hvg_2k_list.csv`.
+
+How far down to read is itself not `2,000 + n_removed`: a gene just below the cut can be
+mitochondrial too, in which case it is skipped and the panel is still short. The target
+therefore GROWS until enough non-`MT-` genes have actually been collected, instead of being
+computed once from a count that assumes the tail is clean. On the objects seen so far the
+tail is clean and one pass suffices, which is exactly why the loop has to be there: the
+failure it prevents would only appear on some future object.
 
 Input : $DATA_DIR/05_tum/<prefix>_norm_cc.h5ad    (what reduce_data_tum.py selected on)
         $DATA_DIR/05_tum/<prefix>_reduced.h5ad    (for obs/uns; the cells and their
@@ -158,8 +167,8 @@ def main() -> None:
 
     # The panel on disk was written in .var order, this one comes out in selection order, so
     # they are compared as sets. A mismatch means the ranking here is not the one that
-    # produced the file - in which case the eleven replacements would not be "the next
-    # eleven" of anything and there is no point continuing.
+    # produced the file - in which case the replacements would not be "the next ones down"
+    # of anything and there is no point continuing.
     on_disk = set(pd.read_csv(base_csv, header=None)[0].astype(str))
     assert len(on_disk) == C.N_HVGS, f"{base_csv} has {len(on_disk)} genes, expected {C.N_HVGS}"
     missing = on_disk - set(base)
@@ -173,34 +182,37 @@ def main() -> None:
 
     # ---------------------------------------------------------------- the swap
     mito = [g for g in base if g.startswith(MT_PREFIX)]
-    print(f"\nMitochondrial genes in the panel: {len(mito)}", flush=True)
+    print(f"\nMitochondrial genes in the panel: {len(mito)} "
+          f"(measured, not assumed - it differs between objects)", flush=True)
     print("  " + ", ".join(mito), flush=True)
     if not mito:
         raise SystemExit("no MT- genes in the panel: nothing to repair, and no file written.")
 
     kept = [g for g in base if not g.startswith(MT_PREFIX)]
-    target = C.N_HVGS + len(mito)
-    extended = ranked_hvgs(adata, target) if target > C.N_HVGS else base
-    # ranked_hvgs is deterministic and its first C.N_HVGS entries are `base`, so the extras
-    # are literally the next ones down the same list.
-    assert extended[: C.N_HVGS] == base, "the extended ranking is not an extension of the panel"
 
-    added: list[str] = []
-    for gene in extended[C.N_HVGS:]:
-        if gene.startswith(MT_PREFIX):
-            continue          # a mitochondrial gene just below the cut, dropped for the same reason
-        added.append(gene)
+    # Read further down the SAME ranking until as many non-MT- genes have been collected as
+    # were removed. The target grows rather than being fixed at C.N_HVGS + len(mito), because
+    # a gene just below the cut can itself be mitochondrial: it is skipped for the same reason
+    # as the others, and the panel would come up short. ranked_hvgs() raises if the ranking
+    # runs out, so this terminates.
+    target = C.N_HVGS + len(mito)
+    while True:
+        extended = ranked_hvgs(adata, target)
+        # ranked_hvgs is deterministic and its first C.N_HVGS entries are `base`, so the
+        # extras are literally the next ones down the same list.
+        assert extended[: C.N_HVGS] == base, "the extended ranking is not an extension of the panel"
+        added = [g for g in extended[C.N_HVGS:] if not g.startswith(MT_PREFIX)][: len(mito)]
         if len(added) == len(mito):
             break
-    if len(added) < len(mito):
-        raise SystemExit(
-            f"only {len(added)} non-mitochondrial genes available below rank {target}"
-        )
+        print(f"  {len(mito) - len(added)} of the replacements below rank {target} are "
+              f"themselves MT-; reading further down", flush=True)
+        target += len(mito) - len(added)
 
-    print(f"\nReplacements, ranks {C.N_HVGS + 1}-{target} of the same ranking:", flush=True)
-    for rank, gene in enumerate(added, start=C.N_HVGS + 1):
+    print(f"\nReplacements, taken from ranks {C.N_HVGS + 1}-{target} of the same ranking:",
+          flush=True)
+    for gene in added:
         nb = int(adata.var.loc[gene, "highly_variable_nbatches"])
-        print(f"  {gene:<12} highly variable in {nb} cohorts, "
+        print(f"  {gene:<12} rank {extended.index(gene) + 1}, highly variable in {nb} cohorts, "
               f"dispersion_norm {adata.var.loc[gene, 'dispersions_norm']:.3f}", flush=True)
 
     panel = kept + added

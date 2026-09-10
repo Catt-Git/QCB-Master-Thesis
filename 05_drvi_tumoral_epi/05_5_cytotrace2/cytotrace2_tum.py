@@ -22,7 +22,7 @@ What changes against 04, beyond the numbers: potency is being read on cells that
 aneuploid. In 04 a high CytoTRACE2 score could be a normal progenitor sitting in the
 compartment, and there was no way to tell; here it cannot be, which is the whole reason
 the phase exists. What it still can be is a cycling cell - the check below is the same one,
-and it matters more, not less, because `Lumsec-prol` is 51% of this subset against 25% of
+and it matters more, not less, because `Lumsec-prol` is 53% of this subset against 25% of
 04's epithelium.
 
 API, read from the package documentation rather than assumed

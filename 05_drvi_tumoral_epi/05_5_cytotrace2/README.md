@@ -15,7 +15,18 @@ export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 cytotrace2_tum.py --dry-run   # export the per-patient matrices, do not score
 python3 cytotrace2_tum.py             # export + score + concatenate
 python3 cytotrace2_tum.py --cores 4   # cap the cores
+
+# the two runs this phase reports:
+N_LATENT=64 python3 cytotrace2_tum.py --cores 16                # -> cytotrace2_drvi_tum_64_nomt.csv
+CELL_SET=epi N_LATENT=64 python3 cytotrace2_tum.py --cores 16   # -> cytotrace2_drvi_epicnv_64_nomt.csv
 ```
+
+> **`N_LATENT` has to match the 05_6 you intend to feed, even though nothing here depends on
+> it.** The score is a measurement on raw counts and has never seen a latent dimension — but the
+> output is *named* `cytotrace2_<run_id>.csv`, and 05_6 finds it by reconstructing that name. Run
+> this at the default and 05_6 at `N_LATENT=64` and the file is simply not found: `cell_first_tum.py`
+> drops the CytoTRACE2 quadrant definition, says so in one line, and carries on with the stemness
+> axis resting entirely on the lists. That is a silent-enough failure to be worth the warning.
 
 ## Its own environment, and that is not a preference
 
@@ -48,7 +59,7 @@ epithelial compartment, and nothing in that phase could tell. Here every cell is
 that reading is gone.
 
 **What it does not buy.** A high score can still be a *cycling* cell, and that risk is larger
-here, not smaller: `Lumsec-prol` is **51%** of this subset against 25% of 04's epithelium.
+here, not smaller: `Lumsec-prol` is **53%** of this subset against 25% of 04's epithelium.
 
 **The summary tables therefore changed shape.** 04 prints mean potency per `cell_type`; that
 column is the constant `malignant` here, so the script summarises per grouping instead — the

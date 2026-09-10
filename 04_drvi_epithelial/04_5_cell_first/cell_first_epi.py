@@ -18,7 +18,7 @@ Which readouts, and what shape the target region has on the plane, come from the
     hybrid gene lists are scored and reported but do not define the region - see
     `sig_collections.py` for the robustness argument behind that;
   * `--collection gavish` defines NO region at all. It is a vocabulary - the pan-cancer
-    metaprograms of Gavish et al. 2023 (the 27 TNBC-relevant ones, or all 40 with
+    metaprograms of Gavish et al. 2023 (the 22 TNBC-relevant ones, or all 41 with
     `--all-metaprograms`), used to name the dimensions rather than to call cells
     - so A5, the consensus quadrant, everything computed on it and the two figures that draw
     it are skipped, and the run produces the per-cell scores, the confounder table and the
@@ -77,7 +77,7 @@ Usage:
     python cell_first_epi.py                              # the scie collection, the default
     python cell_first_epi.py --collection emt             # the same procedure on the EMT lists
     python cell_first_epi.py --collection gavish          # scores only: no target region
-    python cell_first_epi.py --collection gavish --all-metaprograms  # all 40, not the TNBC 27
+    python cell_first_epi.py --collection gavish --all-metaprograms  # all 41, not the TNBC 22
     python cell_first_epi.py --high-q 0.80 --low-q 0.20   # a stricter target region
     python cell_first_epi.py --overwrite                  # re-score instead of reusing the csv
     python cell_first_epi.py --embedding harmony          # the same Route A on Harmony's axes

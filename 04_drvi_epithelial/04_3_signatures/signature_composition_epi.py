@@ -43,8 +43,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python signature_composition_epi.py                      # the scie collection, the default
     python signature_composition_epi.py --collection emt     # the same, on the EMT lists
-    python signature_composition_epi.py --collection gavish  # the 27 TNBC-relevant metaprograms
-    python signature_composition_epi.py --collection gavish --all-metaprograms  # all 40
+    python signature_composition_epi.py --collection gavish  # the 22 TNBC-relevant metaprograms
+    python signature_composition_epi.py --collection gavish --all-metaprograms  # all 41
 """
 
 from __future__ import annotations

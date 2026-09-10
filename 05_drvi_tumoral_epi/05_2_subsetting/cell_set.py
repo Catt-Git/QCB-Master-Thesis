@@ -151,10 +151,56 @@ _SETS = {
 # than a cell state, and DRVI has no reason to spend a latent dimension on it. `pct_counts_mt`
 # already filters on them upstream (MAX_PCT_MT), and the metallothioneins (MT1*, MT2A) and
 # MTRNR2L12 are nuclear genes that only share the prefix - they are NOT dropped.
+# 'nomt' is the DEFAULT: the mitochondrial transcripts are a dissociation-stress readout and
+# DRVI has no reason to spend a latent dimension on one, so the panel without them is what the
+# pipeline produces when nobody asks for anything. 'withmt' is the explicit opt-out and needs a
+# name of its own now that the empty string means "use the default" rather than "the original
+# panel". The empty key is kept so files and run ids already on disk still resolve.
+#
+# The `_nomt` tag stays on the filenames even though this is the default, and that is
+# deliberate: `drvi_tum_32` has already meant the WITH-MT panel (those objects are under
+# datasets/05_tum/objects_v1/), so dropping the tag would make one run id denote two different
+# gene panels depending on when it was produced - the exact silent failure this module exists
+# to prevent.
 _HVG_SETS = {
-    "": "",
     "nomt": "_nomt",
+    "withmt": "",
+    "": "",
 }
+DEFAULT_HVG_SET = "nomt"
+
+
+# Which 05_1 call this phase is built on. Empty is the original per-cell call
+# (cnv_status.csv / cell_annotation_cnv.csv); 'newcnv' is the per-subcluster call with the
+# cohort gate, the stratified stromal null and the held-out immune control.
+#
+# It is here, and not hardcoded in subset_and_qc.ipynb, for the reason the whole module
+# exists: the two file names are read in one notebook and referenced in three READMEs, and a
+# phase silently built on last month's call is the failure this indirection is for.
+_CNV_TAGS = {
+    "": ("cnv_status.csv", "cell_annotation_cnv.csv"),
+    "newcnv": ("cnv_status_newcnv.csv", "cell_annotation_newcnv.csv"),
+}
+
+
+def cnv_tag() -> str:
+    """The active 05_1 call, from $CNV_TAG. Defaults to 'newcnv'."""
+    value = os.environ.get("CNV_TAG", "newcnv").strip().lower()
+    if value not in _CNV_TAGS:
+        raise SystemExit(
+            f"CNV_TAG={value!r} is not one of {sorted(k or '<empty>' for k in _CNV_TAGS)}"
+        )
+    return value
+
+
+def status_csv() -> Path:
+    """$DATA_DIR/05_tum/cnv_status[_<tag>].csv - what 05_1's decision step wrote."""
+    return tum_dir() / _CNV_TAGS[cnv_tag()][0]
+
+
+def annot_csv() -> Path:
+    """$DATA_DIR/05_tum/cell_annotation[_<tag>].csv - the CellTypist re-run."""
+    return tum_dir() / _CNV_TAGS[cnv_tag()][1]
 
 
 def cell_set() -> str:
@@ -200,12 +246,13 @@ def path(suffix: str, value: str | None = None) -> Path:
 
 
 def hvg_set() -> str:
-    """The active HVG panel variant, from $HVG_SET. Defaults to '' (the original panel)."""
-    value = os.environ.get("HVG_SET", "").strip().lower()
+    """The active HVG panel variant, from $HVG_SET. Defaults to 'nomt'."""
+    value = os.environ.get("HVG_SET", "").strip().lower() or DEFAULT_HVG_SET
     if value not in _HVG_SETS:
         raise SystemExit(
             f"HVG_SET={value!r} is not one of {sorted(k for k in _HVG_SETS if k)}; "
-            "unset it for the panel reduce_data_tum.py selected"
+            "unset it for the default (the panel without the mitochondrial genes) or set "
+            "HVG_SET=withmt for the one reduce_data_tum.py selects"
         )
     return value
 
@@ -262,6 +309,7 @@ def banner(step: str) -> None:
     print(f"{step}  |  CELL_SET={s} ({describe(s)})", flush=True)
     print(f"DATA_DIR : {data_dir()}", flush=True)
     print(f"prefix   : {prefix(s)}", flush=True)
+    print(f"CNV_TAG  : {cnv_tag() or '<original call>'}  ({status_csv().name})", flush=True)
     if hvg_set():
         print(f"HVG_SET  : {hvg_set()} (panel tag {hvg_tag()!r})", flush=True)
     if os.environ.get("N_LATENT", "").strip():

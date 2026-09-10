@@ -18,7 +18,7 @@ Which readouts, and what shape the target region has on the plane, come from the
     hybrid gene lists are scored and reported but do not define the region - see
     `sig_collections.py` for the robustness argument behind that;
   * `--collection gavish` defines NO region at all. It is a vocabulary - the pan-cancer
-    metaprograms of Gavish et al. 2023 (the 27 TNBC-relevant ones, or all 40 with
+    metaprograms of Gavish et al. 2023 (the 22 TNBC-relevant ones, or all 41 with
     `--all-metaprograms`), used to name the dimensions rather than to call cells
     - so A5, the consensus quadrant, everything computed on it and the two figures that draw
     it are skipped, and the run produces the per-cell scores, the confounder table and the
@@ -29,8 +29,8 @@ How it fails, and what this script does about it:
 
   * per-cell scores are noisy and correlate with depth, with the cycle, and with each
     other -> the confounder table, and the named checks below;
-  * the stemness lists are embryonic and proliferation-heavy, and this subset is 51%
-    `Lumsec-prol` (18,617 of 36,192, against 25% of 04's epithelium), so "stem-high" can just
+  * the stemness lists are embryonic and proliferation-heavy, and this subset is 53%
+    `Lumsec-prol` (22,395 of 42,096, against 25% of 04's epithelium), so "stem-high" can just
     mean "cycling" -> the target set is recomputed inside G1 alone and the two cell sets
     compared. This check runs for every collection: an EMT score is as capable of tracking the
     cycle as a stemness one, and on this subset it is the check to read first;
@@ -59,7 +59,7 @@ here). The mechanism is kept because it is what states, in code, that the latent
 part of the question. Route B and Route C are DRVI-only and are not parameterised.
 
 Scoring is on the UNINTEGRATED, ALL-GENES object. A 150-gene signature reduced to whatever
-survived HVG selection is no longer that signature, so `shiao_tum.h5ad` (36,192 x 24,779) is
+survived HVG selection is no longer that signature, so `shiao_tum.h5ad` (42,096 x 25,133) is
 read here and never `shiao_tum_hvg_2k.h5ad`.
 
 Every latent dimension is correlated, vanished ones included (`PRUNE_VANISHED = False` in
@@ -78,7 +78,7 @@ Usage:
     python cell_first_tum.py                              # the scie collection, the default
     python cell_first_tum.py --collection emt             # the same procedure on the EMT lists
     python cell_first_tum.py --collection gavish          # scores only: no target region
-    python cell_first_tum.py --collection gavish --all-metaprograms  # all 40, not the TNBC 27
+    python cell_first_tum.py --collection gavish --all-metaprograms  # all 41, not the TNBC 22
     python cell_first_tum.py --high-q 0.80 --low-q 0.20   # a stricter target region
     python cell_first_tum.py --overwrite                  # re-score instead of reusing the csv
 """
@@ -124,7 +124,7 @@ N_BINS = 25                 # sc.tl.score_genes default is 25; stated because it
 # state removes the contrast being looked for, by construction.
 #
 # The concrete danger, spelled out because it is not hypothetical: `Lumsec-prol` means
-# PROLIFERATING and is 51% of this subset, and the cell cycle is a named risk of the `scie`
+# PROLIFERATING and is 53% of this subset, and the cell cycle is a named risk of the `scie`
 # collection. Standardising within that label would subtract the proliferation axis before
 # anything is measured - which would not remove the confounder, it would HIDE it, and it is
 # exactly what the G1 recomputation below exists to measure instead.

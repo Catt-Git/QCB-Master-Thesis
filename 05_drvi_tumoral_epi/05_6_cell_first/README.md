@@ -14,21 +14,25 @@ export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
 python3 cell_first_tum.py                            # scie, the default
 python3 cell_first_tum.py --collection emt           # the EMT lists
 python3 cell_first_tum.py --collection gavish        # the metaprograms: scores only, no target
-python3 cell_first_tum.py --collection gavish --all-metaprograms   # all 40, not just the TNBC 27
-N_LATENT=64 python3 cell_first_tum.py                # read the drvi_tum_64 run instead
+python3 cell_first_tum.py --collection gavish --all-metaprograms   # all 41, not just the TNBC 22
 python3 cell_first_tum.py --high-q 0.80 --low-q 0.20 # a stricter target region
 python3 cell_first_tum.py --overwrite                # re-score instead of reusing the csv
+
+# the two runs this phase reports, each on all three collections:
+N_LATENT=64 python3 cell_first_tum.py [--collection emt|gavish]                # drvi_tum_64_nomt
+CELL_SET=epi N_LATENT=64 python3 cell_first_tum.py [--collection emt|gavish]   # drvi_epicnv_64_nomt
 ```
 
-`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32` by
-default, `N_LATENT=64` for `drvi_tum_64`, `CELL_SET=epi HVG_SET=nomt N_LATENT=64` for
-`drvi_epicnv_64_nomt`. See [the phase README](../README.md#which-run-05_4---05_8-read); the
+`CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32_nomt`
+by default, `N_LATENT=64` for `drvi_tum_64_nomt`, `CELL_SET=epi N_LATENT=64` for
+`drvi_epicnv_64_nomt`. `HVG_SET` no longer has to be spelled out: `nomt` is the default panel
+(`HVG_SET=withmt` is the explicit opt-out). See [the phase README](../README.md#which-run-05_4---05_8-read); the
 run id is in the name of everything written.
 
 Needs `05_4` (the `.gmt`) and `05_3` (the embedding). `05_5` is optional and its absence is
 reported rather than fatal.
 
-Scoring is on the **unintegrated, all-genes** object (`shiao_tum.h5ad`, 36,192 × 24,779): a
+Scoring is on the **unintegrated, all-genes** object (`shiao_tum.h5ad`, 42,096 × 25,133): a
 150-gene signature reduced to whatever survived HVG selection is no longer that signature.
 
 ## The one deliberate departure from 04: the standardisation strata
@@ -49,7 +53,7 @@ tumour**, and state is the quantity this phase measures. Standardising within a 
 the contrast being looked for, by construction.
 
 The concrete danger, spelled out because it is not hypothetical: **`Lumsec-prol` means
-proliferating and is 51% of this subset**, and the cell cycle is a named risk of the `scie`
+proliferating and is 53% of this subset**, and the cell cycle is a named risk of the `scie`
 collection. Standardising within that label would subtract the proliferation axis before
 anything is measured — which would not remove the confounder, it would *hide* it, and measuring
 it is exactly what the G1 recomputation below is for.

@@ -41,3 +41,10 @@ logs/
 # Modelli DRVI addestrati (cartella temporanea, ~1.3 GB di embedding e pesi)
 # ---------------------------------------------------------------------------
 /drvi/
+
+# ---------------------------------------------------------------------------
+# Figure e tabelle della v1 di 05: superate dai nuovi run (InferCNV, figure
+# verdi). Tenute in locale come riferimento ma fuori da git.
+# ---------------------------------------------------------------------------
+/05_drvi_tumoral_epi/figures_v1/
+/05_drvi_tumoral_epi/tables_v1/

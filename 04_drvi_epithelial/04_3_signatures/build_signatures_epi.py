@@ -8,8 +8,8 @@ string, so the identical collection feeds both routes and doubles as the Appendi
 Which files, on which axes, is declared in `utils/sig_collections.py`: `--collection scie`
 is the ten stemness/immunogenicity lists, `--collection emt` the nine EMT lists, and
 `--collection gavish` the pan-cancer metaprograms of Gavish et al. 2023, which live in
-the `GAVISH_metaprograms/` subdirectory - the 27 relevant to a triple-negative breast
-carcinoma by default, all 40 with `--all-metaprograms`. The step is the same for all three,
+the `GAVISH_metaprograms/` subdirectory - the 22 relevant to a triple-negative breast
+carcinoma by default, all 41 with `--all-metaprograms`. The step is the same for all three,
 and so is every check below - the coverage floor and the Jaccard matrix matter MORE on the
 metaprograms, not less: they are the widest collection, several of them are negative controls
 whose coverage is the only thing that says they were measured at all, and the four EMT
@@ -37,8 +37,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python build_signatures_epi.py                        # the scie collection, the default
     python build_signatures_epi.py --collection emt       # the same, on the EMT lists
-    python build_signatures_epi.py --collection gavish    # the 27 TNBC-relevant metaprograms
-    python build_signatures_epi.py --collection gavish --all-metaprograms   # all 40 instead
+    python build_signatures_epi.py --collection gavish    # the 22 TNBC-relevant metaprograms
+    python build_signatures_epi.py --collection gavish --all-metaprograms   # all 41 instead
     python build_signatures_epi.py --allow-low-coverage   # report, do not stop
 """
 

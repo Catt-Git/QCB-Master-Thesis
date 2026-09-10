@@ -8,8 +8,8 @@ string, so the identical collection feeds both routes and doubles as the Appendi
 Which files, on which axes, is declared in `utils/sig_collections.py`: `--collection scie`
 is the ten stemness/immunogenicity lists, `--collection emt` the nine EMT lists, and
 `--collection gavish` the pan-cancer metaprograms of Gavish et al. 2023, which live in
-the `GAVISH_metaprograms/` subdirectory - the 27 relevant to a triple-negative breast
-carcinoma by default, all 40 with `--all-metaprograms`. The step is the same for all three,
+the `GAVISH_metaprograms/` subdirectory - the 22 relevant to a triple-negative breast
+carcinoma by default, all 41 with `--all-metaprograms`. The step is the same for all three,
 and so is every check below - the coverage floor and the Jaccard matrix matter MORE on the
 metaprograms, not less: they are the widest collection, several of them are negative controls
 whose coverage is the only thing that says they were measured at all, and the four EMT
@@ -29,12 +29,12 @@ is believed:
                 the reader sees how much of the apparent agreement between two readouts is
                 just shared genes.
 
-The mapping is reported against two universes: all 24,779 genes of the malignant object,
+The mapping is reported against two universes: all 25,133 genes of the malignant object,
 which is what Route A scores on, and the 2,000 HVGs DRVI was trained on, which is the
 Route B background. The second column is a warning, not a filter - see the README.
 
 The coverage numbers are NOT inherited from 04. The gene axis of this object is the one
-05_2's `min_cells=3` filter left on 36,192 malignant cells (24,779 genes against 04's
+05_2's `min_cells=3` filter left on 42,096 malignant cells (25,133 genes against 04's
 26,371), so a signature can map at a different rate here - a gene detected in three
 epithelial cells overall need not be detected in three of the aneuploid ones. That is why
 this step is re-run rather than its 04 table reused, and why the floor below is enforced
@@ -44,8 +44,8 @@ Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     python build_signatures_tum.py                        # the scie collection, the default
     python build_signatures_tum.py --collection emt       # the same, on the EMT lists
-    python build_signatures_tum.py --collection gavish    # the 27 TNBC-relevant metaprograms
-    python build_signatures_tum.py --collection gavish --all-metaprograms   # all 40 instead
+    python build_signatures_tum.py --collection gavish    # the 22 TNBC-relevant metaprograms
+    python build_signatures_tum.py --collection gavish --all-metaprograms   # all 41 instead
     python build_signatures_tum.py --allow-low-coverage   # report, do not stop
 """
 
