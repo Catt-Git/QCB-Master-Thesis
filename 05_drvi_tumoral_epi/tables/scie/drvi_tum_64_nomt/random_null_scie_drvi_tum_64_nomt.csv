@@ -1,0 +1,55 @@
+# random_null | collection scie (stemness x immunogenicity (SCIE)) | run drvi_tum_64_nomt | three coordinate systems on ONE set of cells and ONE set of per-cell scores; the `space` column says which. The run id names the cells and the scores (05_6), not the space | 05_9 embedding control
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+column,matched_to,draw
+HALLMARK_IFNA__rnd0,HALLMARK_IFNA,0
+HALLMARK_IFNA__rnd1,HALLMARK_IFNA,1
+HALLMARK_IFNA__rnd2,HALLMARK_IFNA,2
+HALLMARK_IFNA__rnd3,HALLMARK_IFNA,3
+HALLMARK_IFNA__rnd4,HALLMARK_IFNA,4
+HALLMARK_IFNG__rnd0,HALLMARK_IFNG,0
+HALLMARK_IFNG__rnd1,HALLMARK_IFNG,1
+HALLMARK_IFNG__rnd2,HALLMARK_IFNG,2
+HALLMARK_IFNG__rnd3,HALLMARK_IFNG,3
+HALLMARK_IFNG__rnd4,HALLMARK_IFNG,4
+ISDS__rnd0,ISDS,0
+ISDS__rnd1,ISDS,1
+ISDS__rnd2,ISDS,2
+ISDS__rnd3,ISDS,3
+ISDS__rnd4,ISDS,4
+KEGG_APM__rnd0,KEGG_APM,0
+KEGG_APM__rnd1,KEGG_APM,1
+KEGG_APM__rnd2,KEGG_APM,2
+KEGG_APM__rnd3,KEGG_APM,3
+KEGG_APM__rnd4,KEGG_APM,4
+IMMUNOGENIC_CONSENSUS__rnd0,IMMUNOGENIC_CONSENSUS,0
+IMMUNOGENIC_CONSENSUS__rnd1,IMMUNOGENIC_CONSENSUS,1
+IMMUNOGENIC_CONSENSUS__rnd2,IMMUNOGENIC_CONSENSUS,2
+IMMUNOGENIC_CONSENSUS__rnd3,IMMUNOGENIC_CONSENSUS,3
+IMMUNOGENIC_CONSENSUS__rnd4,IMMUNOGENIC_CONSENSUS,4
+BENPORATH_ES1__rnd0,BENPORATH_ES1,0
+BENPORATH_ES1__rnd1,BENPORATH_ES1,1
+BENPORATH_ES1__rnd2,BENPORATH_ES1,2
+BENPORATH_ES1__rnd3,BENPORATH_ES1,3
+BENPORATH_ES1__rnd4,BENPORATH_ES1,4
+ESC_ASSOU__rnd0,ESC_ASSOU,0
+ESC_ASSOU__rnd1,ESC_ASSOU,1
+ESC_ASSOU__rnd2,ESC_ASSOU,2
+ESC_ASSOU__rnd3,ESC_ASSOU,3
+ESC_ASSOU__rnd4,ESC_ASSOU,4
+ESC_WONG__rnd0,ESC_WONG,0
+ESC_WONG__rnd1,ESC_WONG,1
+ESC_WONG__rnd2,ESC_WONG,2
+ESC_WONG__rnd3,ESC_WONG,3
+ESC_WONG__rnd4,ESC_WONG,4
+LIM_STEM__rnd0,LIM_STEM,0
+LIM_STEM__rnd1,LIM_STEM,1
+LIM_STEM__rnd2,LIM_STEM,2
+LIM_STEM__rnd3,LIM_STEM,3
+LIM_STEM__rnd4,LIM_STEM,4
+FMASC__rnd0,FMASC,0
+FMASC__rnd1,FMASC,1
+FMASC__rnd2,FMASC,2
+FMASC__rnd3,FMASC,3
+FMASC__rnd4,FMASC,4

@@ -54,7 +54,10 @@ negatively about `DR 7-`. Route B is already per direction. That is what makes t
 
 One row per dimension **and** direction, for every dimension of the run: nothing is pruned
 anywhere in this stage, so the table is 2 × 32 = **64 rows** and a dimension DRVI wrote off can
-still be read.
+still be read. This step never decides that itself — it takes the dimension list from the
+`dimension_row_order` table 05_6 writes, so under `PRUNE_VANISHED=1` it is 2 × 56 = 112 rows
+without a line of this script knowing why. See
+[the phase README](../README.md#the-vanished-dimension-control) for what the control found.
 
 A readout is flagged as confounded when its raw score correlates with a technical or cycle
 covariate above 0.30 (`DEPTH_FLAG`, `CYCLE_FLAG`). Both are conventions, not derived: chosen so

@@ -160,6 +160,16 @@ class Collection:
     ambient_risk_axis: str | None = None       # the axis whose HIGH group could just be ambient
     extra_flags: Callable[["Collection", str, float], list[str]] = lambda c, n, r: []
 
+    # Inside an axis block, `order()` follows REGISTRY order, which is the right order for a
+    # table: it is the order the collection is declared in, primary lists first. It is not
+    # always the right order for a figure. `emt` is the case - B is registered first because
+    # it is the primary triad, so every block of the Jaccard matrix comes out B, A, C, and a
+    # reader who is there to compare the three list VERSIONS reads that as a mistake.
+    # `figure_key` sorts the names inside a block for a FIGURE and for nothing else: the
+    # registry, `primary_names()`, the .gmt and every table keep the order they had, and the
+    # blocks - and therefore `block_edges` - are identical either way.
+    figure_key: Callable[[str], object] | None = None
+
     # ---------------------------------------------------------------- accessors
 
     @property
@@ -199,13 +209,20 @@ class Collection:
     def primary_names(self) -> list[str]:
         return [s.name for s in self.signatures if s.primary]
 
-    def order(self, present: list[str]) -> list[str]:
-        """Reorder readouts by axis, then by registry order. The column order of every heatmap."""
+    def order(self, present: list[str], for_figure: bool = False) -> list[str]:
+        """Reorder readouts by axis, then by registry order. The column order of every heatmap.
+
+        With `for_figure`, the collection's `figure_key` (see the field) sorts the names inside
+        each axis block first. The blocks themselves are unchanged, so `block_edges` reads the
+        same list either way.
+        """
         rank = {n: i for i, n in enumerate(self.names + [d.name for d in self.derived]
                                           + list(self.extra_readouts))}
         axis_rank = {a: i for i, a in enumerate(self.axes)}
+        key = self.figure_key if (for_figure and self.figure_key is not None) else None
         return sorted([n for n in present if n in self.axis_of],
                       key=lambda n: (axis_rank.get(self.axis_of[n], len(self.axes)),
+                                     key(n) if key is not None else 0,
                                      rank.get(n, len(rank))))
 
     def block_edges(self, ordered: list[str]) -> list[int]:
@@ -411,6 +428,21 @@ def _emt_planes(coll: "Collection", available: list[str]) -> list[Plane]:
     return out
 
 
+def _emt_version(name: str) -> str:
+    """'A' / 'B' / 'C' - which of the three collaborator lists a readout comes from.
+
+    The figure order of this collection (see `Collection.figure_key`). Registry order puts B
+    first because B is the primary triad, which is what the tables should say; a figure that
+    shows the three versions next to each other has to read A, B, C or it reads as a mistake.
+    `EMT_B_HYBRID` -> 'B', and the derived `EMT_SCORE_B` -> 'B' as well, since it carries the
+    version at the other end of the name. Anything else sorts first and keeps registry order.
+    """
+    if name.startswith("EMT_SCORE_"):
+        return name[len("EMT_SCORE_"):]
+    parts = name.split("_")
+    return parts[1] if len(parts) == 3 and parts[0] == "EMT" else ""
+
+
 def _emt_flags(coll: "Collection", claimed: str, a_rho: float) -> list[str]:
     # High VIM / FN1 / SPARC / ACTA2 is as easily fibroblast ambient RNA or an
     # epithelial-fibroblast doublet as it is a transition. The malignant subset NARROWS this
@@ -442,6 +474,7 @@ EMT = Collection(
     derived=_EMT_DERIVED,
     ambient_risk_axis="mesenchymal",
     extra_flags=_emt_flags,
+    figure_key=_emt_version,
 )
 
 

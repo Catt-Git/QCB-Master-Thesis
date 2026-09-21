@@ -144,14 +144,20 @@ def main():
         "the embedding and the DRVI input disagree on the gene axis"
 
     n_van = C.n_vanished(embed)
-    print(f"{embed.n_obs:,} cells x {embed.n_vars} latent dimensions, all of them used "
-          f"({n_van} flagged vanished in var['vanished'] and NOT pruned)")
+    print(f"{embed.n_obs:,} cells x {embed.n_vars} latent dimensions "
+          + (f"({n_van} flagged vanished in var['vanished'], PRUNED per direction below)"
+             if C.PRUNE_VANISHED else
+             f"all of them used ({n_van} flagged vanished in var['vanished'] and NOT pruned)"))
     print(f"{len(gene_names):,} HVGs, the DRVI training feature set and the ORA background")
 
     # -------------------------------------------- per-direction top gene lists
     scores_df = C.interpretability_scores(embed, gene_names, key=C.SCORE_KEY)
-    print(f"\n{scores_df.shape[0]:,} genes x {scores_df.shape[1]} dimension-directions "
-          f"(2 x {embed.n_vars}, every one of them tested)")
+    n_dir = scores_df.shape[1]
+    print(f"\n{scores_df.shape[0]:,} genes x {n_dir} dimension-directions "
+          + (f"({2 * embed.n_vars - n_dir} of 2 x {embed.n_vars} dropped as vanished IN THAT "
+             f"DIRECTION; the BH denominator below follows)"
+             if C.PRUNE_VANISHED else
+             f"(2 x {embed.n_vars}, every one of them tested)"))
     print("Both directions of each dimension are tested separately: DRVI can encode two\n"
           "distinct concepts on the two sides of one axis, and pooling them cancels the\n"
           "two programs against each other.")
@@ -290,7 +296,8 @@ def main():
     for pos in coll.block_edges(sig_cols):
         ax.axvline(pos, color="k", lw=1.5)
     ax.set_title(f"Route B, {coll.title}: latent dimensions x gene sets, signed significance\n"
-                 f"all {len(row_order)} dimensions of {C.RUN_ID}, nothing pruned; "
+                 f"{len(row_order)} dimensions of {C.RUN_ID}, "
+                 f"{'vanished PRUNED' if C.PRUNE_VANISHED else 'nothing pruned'}; "
                  f"top {N_TOP} genes per direction; ORA background = {len(background):,} HVGs\n"
                  f"sign = the direction of the axis carrying the enrichment; "
                  f"|value| >= {thr:.2f} is FDR < {FDR}", fontsize=9)

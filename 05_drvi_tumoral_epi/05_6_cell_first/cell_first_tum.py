@@ -387,13 +387,17 @@ def main():
           f"(|rho| = {conf['rho_n_genes_by_counts'].abs().max():.3f})")
 
     out = pd.concat([raw.add_prefix("score_"), z], axis=1)
-    if emb.is_reference or not scores_csv.exists():
+    if not scores_csv.exists() or (emb.is_reference and C.OWNS_SHARED_OUTPUTS):
         out.to_csv(scores_csv)
         print(f"\n[write] {scores_csv}")
     else:
         # Named for the object and not for the run (see signature_common), so a control run
-        # would be rewriting the reference run's file with identical content.
-        print(f"\n[skip] {scores_csv} is embedding-independent and already there")
+        # would be rewriting the reference run's file with identical content. `OWNS_SHARED_
+        # OUTPUTS` is what makes a $PRUNE_VANISHED run a control here too: pruning happens
+        # downstream of scoring, so this file is the same one either way and the pruned run
+        # borrows it rather than rewriting 42,096 rows on top of the reported run's copy.
+        owner = "embedding" if emb.is_reference else "embedding and pruning"
+        print(f"\n[skip] {scores_csv} is {owner}-independent and already there")
 
     # A5 and the named risks characterise a target region and nothing else, so a collection
     # without one skips both. The confounder table above already carries the cycle and depth
@@ -571,8 +575,15 @@ def main():
         "the embedding and the all-genes object do not hold the same cells in the same order"
     dims = C.analysis_dimensions(embed)
     n_van = C.n_vanished(embed)
-    print(f"{embed.n_vars} dimensions, all {len(dims)} used")
-    if emb.is_reference:
+    print(f"{embed.n_vars} dimensions, {len(dims)} used")
+    if emb.is_reference and C.PRUNE_VANISHED:
+        # The control run. Everything downstream follows this list - 05_7 reads the row
+        # order off the table written below - so the dropped axes are named here once,
+        # rather than left to be inferred from a table that is simply shorter.
+        dropped = [d for d in embed.var["title"] if d not in set(dims)]
+        print(f"PRUNE_VANISHED is on: {n_van} flagged vanished in var['vanished'] and "
+              f"{len(dropped)} DROPPED -> {', '.join(dropped)}")
+    elif emb.is_reference:
         print(f"({n_van} flagged vanished in var['vanished'] and NOT pruned)")
     else:
         # `vanished` is a DRVI notion. The column is there and all False; saying so is
@@ -693,25 +704,191 @@ def main():
     # a statement about `DR 7+`, rho < 0 about `DR 7-`. Route B's heatmap says so on its
     # colorbar and in its title, and without the same wording here the reader has a signed
     # colour scale with nothing telling them what the sign means. Hence both lines below.
-    col_order = coll.order(list(rho.columns))
+    # THE DERIVED READOUTS ARE NOT IN THIS FIGURE. They were, as a fourth block, and that was
+    # the mistake: `EMT_SCORE_v` is `z(EMT_v_MESENCHYMAL) - z(EMT_v_EPITHELIAL)`, a contrast of
+    # two columns that are already drawn here, so a block of it standing beside them reads as a
+    # fourth PROGRAMME next to three programmes when it is a COORDINATE along two of them. It
+    # gets its own figure below instead, where the colour scale can say what it is. Collections
+    # with no derived readouts - `scie`, `gavish` - are unaffected: the set below is empty and
+    # this line is the one it always was.
+    derived_names = {d.name for d in coll.derived}
+    col_order = coll.order([c for c in rho.columns if c not in derived_names])
     fig, ax = plt.subplots(figsize=(C.fig_span(len(col_order), 1.0, 4.0),
                                     C.fig_span(len(dims), 0.24, 3.0)))
     sns.heatmap(rho[col_order].astype(float), cmap="vlag", center=0, vmin=-0.6, vmax=0.6,
                 cbar_kws={"label": "Spearman rho (dimension vs within-stratum z-score)\n"
                                    "sign = direction: rho > 0 is DR n+, rho < 0 is DR n-",
                           "shrink": 0.4}, ax=ax)
-    pruning = (f"nothing pruned ({n_van} of them flagged vanished in var['vanished'])"
+    pruning = ((f"vanished PRUNED: {n_van} dropped" if C.PRUNE_VANISHED else
+                f"nothing pruned ({n_van} of them flagged vanished in var['vanished'])")
                if emb.is_reference else "nothing pruned")
+    derived_note = (f"\nthe {len(derived_names)} derived readouts ("
+                    + ", ".join(sorted(derived_names)) + ") have their own figure: "
+                    "they are contrasts of the columns drawn here, not further programmes"
+                    if derived_names else "")
     ax.set_title(f"Route A, {coll.title}: {emb.title} dimensions x signatures\n"
-                 f"all {len(dims)} dimensions of {emb.run_id}, {pruning}\n"
+                 f"{len(dims)} dimensions of {emb.run_id}, {pruning}\n"
                  "rows are dimensions, not dimension-directions: the sign of rho IS the "
-                 "direction, as 05_8 joins them", fontsize=10)
+                 f"direction, as 05_8 joins them{derived_note}", fontsize=10)
     for pos in coll.block_edges(col_order):
         ax.axvline(pos, color="k", lw=1.5)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(ax.get_yticklabels(), fontsize=6)
     C.savefig("dim_signature_heatmap", fig_step, coll, fig)
     plt.close(fig)
+
+    # ------------------------------------------- the derived axis, on its own
+    # One figure per DERIVED AXIS, because a derived readout is a different kind of object
+    # from the lists around it and putting it in their heatmap said otherwise.
+    # `EMT_SCORE_v = z(EMT_v_MESENCHYMAL) - z(EMT_v_EPITHELIAL)` is not a programme a cell
+    # expresses: it is a signed COORDINATE, where the cell sits between the two poles. That is
+    # the form Route A needs to ask a latent dimension "are you the E-to-M axis?" - a dimension
+    # is one number per cell, so the thing it is correlated against has to be one number per
+    # cell too, and two separate programme scores are two.
+    #
+    # COLOUR, AND WHY IT IS NOT RED AND BLUE. Red-blue (`vlag`) means ONE thing across this
+    # phase: the sign of a correlation, i.e. which DIMENSION-DIRECTION is being talked about -
+    # `rho > 0` is `DR n+`, `rho < 0` is `DR n-`, which is how 05_8 joins the two routes. The
+    # poles of the E-to-M axis are a property of the CELL and have nothing to do with the sign
+    # DRVI happened to give a dimension, so reusing red and blue for them would put two
+    # unrelated meanings on one pair of hues in figures that sit side by side. Purple and green
+    # are used here instead, and nothing in this figure is red or blue on purpose. Purple is
+    # the epithelial pole, green the mesenchymal one; both panels that carry a value use the
+    # same two, so the reader learns the pair once.
+    if coll.derived:
+        der_order = [d.name for d in coll.derived if d.name in rho.columns]
+        der_axis = coll.derived[0].axis
+        POLES = plt.get_cmap("PRGn")          # purple (-) -> white (0) -> green (+)
+        lo_col, hi_col = POLES(0.12), POLES(0.88)
+        # The two ends, named. `plus` is the signature the contrast ADDS, so it is the pole a
+        # positive score points at; reading them off the Derived declaration rather than
+        # hard-coding "epithelial"/"mesenchymal" keeps the labels true if the contrast changes.
+        lo_label = coll.derived[0].minus
+        hi_label = coll.derived[0].plus
+
+        has_cells = coll.has_target and der_order
+        fig = plt.figure(figsize=(12.6, C.fig_span(len(dims), 0.185, 3.6)))
+        gs = fig.add_gridspec(2, 2, width_ratios=[0.42, 1.0],
+                              height_ratios=[1.0, 1.0], wspace=0.22, hspace=0.32)
+        axh = fig.add_subplot(gs[:, 0])
+        axl = fig.add_subplot(gs[0, 1])
+        axd = fig.add_subplot(gs[1, 1]) if has_cells else None
+
+        # ---- panel A: every dimension against the axis, one column per list version
+        # Same row order and the same +/-0.6 limits as the heatmap above, so the two can be
+        # read side by side; only the hues differ, and they differ deliberately.
+        # The colourbar goes UNDERNEATH and horizontal. Three columns against sixty-four rows
+        # is a tall thin panel, and a bar down its right-hand side both eats the little width
+        # the cells have and turns its own label on its side, where a three-line legend is
+        # unreadable.
+        sns.heatmap(rho[der_order].astype(float), cmap="PRGn", center=0, vmin=-0.6, vmax=0.6,
+                    cbar_kws={"label": f"Spearman rho, dimension vs the {der_axis} coordinate\n"
+                                       f"green: the dimension rises with {hi_label}   |   "
+                                       f"purple: with {lo_label}",
+                              "orientation": "horizontal", "shrink": 0.9, "pad": 0.10,
+                              "aspect": 30}, ax=axh)
+        axh.figure.axes[-1].xaxis.label.set_size(8)
+        axh.figure.axes[-1].tick_params(labelsize=7)
+        axh.set_title(f"A. {coll.title}: {emb.title} dimensions x the {der_axis} coordinate\n"
+                      f"{len(dims)} dimensions of {emb.run_id}; one column per list version,\n"
+                      "so a real axis is a row that agrees across all three", fontsize=9.5)
+        plt.setp(axh.get_xticklabels(), rotation=45, ha="right", fontsize=8)
+        # Every dimension is named. Seaborn thins its own tick labels to what it thinks fits,
+        # and the horizontal colourbar below costs exactly enough height to put it over that
+        # line - which drops every second row and leaves the reader counting to find DR 28.
+        axh.set_yticks(np.arange(len(rho)) + 0.5)
+        axh.set_yticklabels(rho.index, rotation=0, fontsize=6)
+
+        # ---- panel B: the strongest dimensions, and whether the versions agree
+        # Ranked on |rho| and not on rho, because 05_8's criterion for this axis is
+        # `sign=0` - an axis is an E-to-M axis whichever way round the model oriented it.
+        # The sign is still drawn, on the x position: it says which END is which.
+        k = min(14, len(dims))
+        best = rho[der_order].abs().max(axis=1).sort_values(ascending=False).head(k).index[::-1]
+        lim = float(rho.loc[best, der_order].abs().max().max()) * 1.30
+        axl.axvspan(-lim, 0, color=lo_col, alpha=0.13, lw=0, zorder=0)
+        axl.axvspan(0, lim, color=hi_col, alpha=0.13, lw=0, zorder=0)
+        axl.axvline(0, color="0.35", lw=1.0, zorder=1)
+        markers = ["o", "s", "^", "D", "v"]
+        for i, d in enumerate(best):
+            v = rho.loc[d, der_order].astype(float)
+            axl.plot([v.min(), v.max()], [i, i], color="0.55", lw=1.2, zorder=2)
+            for j, nme in enumerate(der_order):
+                axl.scatter(v[nme], i, marker=markers[j % len(markers)], s=42,
+                            color="0.22", edgecolor="white", linewidth=0.7, zorder=3,
+                            label=nme if i == len(best) - 1 else None)
+        # `rho_min` of 05_8 is the bar these rows are eventually judged against, so it is drawn
+        # rather than left to the reader to remember.
+        for x in (-C.ROUTE_A_RHO_MIN, C.ROUTE_A_RHO_MIN):
+            axl.axvline(x, color="0.35", ls="--", lw=0.9, zorder=1)
+        axl.set_yticks(range(len(best)))
+        axl.set_yticklabels(best, fontsize=8)
+        axl.set_ylim(-0.7, len(best) - 0.3)
+        axl.set_xlim(-lim, lim)
+        axl.set_xlabel(f"Spearman rho against the {der_axis} coordinate", fontsize=9)
+        axl.text(0.015, 1.008, f"<- {lo_label}", transform=axl.transAxes, fontsize=7.5,
+                 color=POLES(0.02), weight="bold", ha="left", va="bottom")
+        axl.text(0.985, 1.008, f"{hi_label} ->", transform=axl.transAxes, fontsize=7.5,
+                 color=POLES(0.98), weight="bold", ha="right", va="bottom")
+        axl.set_title(f"B. The {k} dimensions most coupled to the axis, ranked on |rho|\n"
+                      "(one marker per list version; a short bar is three curations\n"
+                      f"agreeing. Dashed: the |rho| >= {C.ROUTE_A_RHO_MIN:.2f} bar of 05_8)",
+                      fontsize=9.5, pad=16)
+        axl.legend(fontsize=7, loc="lower right", frameon=True, framealpha=0.9)
+        axl.grid(axis="x", color="0.9", lw=0.7)
+        axl.set_axisbelow(True)
+        sns.despine(ax=axl, left=True)
+        axl.tick_params(axis="y", length=0)
+
+        # ---- panel C: where the target cells actually sit on the axis
+        # THIS IS THE PANEL THAT SAYS WHY THE COORDINATE IS NOT THE TARGET DEFINITION. The
+        # target is co-expression - both programmes high at once - and a cell like that is
+        # near ZERO on a contrast of the two by construction. So the target set landing in
+        # the middle of this distribution is not a tautology and was never imposed: it is the
+        # middle band RECOVERED, and it is the check the co-expression definition is owed.
+        if has_cells:
+            primary = der_order[0]
+            v = z[f"z_{primary}"].values
+            tgt = consensus.values.astype(bool)
+            edges = np.histogram_bin_edges(v, bins=70)
+            centres = (edges[:-1] + edges[1:]) / 2
+            counts, _ = np.histogram(v, bins=edges, density=True)
+            span = max(abs(centres[0]), abs(centres[-1])) or 1.0
+            # Each bar wears the colour of its own position on the axis: the purple-green pair
+            # of panels A and B, made concrete on the quantity itself.
+            axd.bar(centres, counts, width=np.diff(edges), color=POLES(0.5 + 0.5 * centres / span),
+                    linewidth=0, zorder=2)
+            t_counts, _ = np.histogram(v[tgt], bins=edges, density=True)
+            axd.step(centres, t_counts, where="mid", color="0.15", lw=1.6, zorder=4,
+                     label=f"target region ({int(tgt.sum()):,} cells), same area")
+            med = float(np.median(v[tgt]))
+            pct = 100.0 * float((v < med).mean())
+            axd.axvline(med, color="0.15", ls="--", lw=1.2, zorder=5)
+            axd.annotate(f"target median\nat percentile {pct:.0f}", xy=(med, axd.get_ylim()[1] * 0.92),
+                         xytext=(8, 0), textcoords="offset points", fontsize=7.5, color="0.15",
+                         va="top", ha="left")
+            others = [f"{n.split('_')[-1]}: p{100.0 * float((z[f'z_{n}'].values < np.median(z[f'z_{n}'].values[tgt])).mean()):.0f}"
+                      for n in der_order]
+            axd.set_xlabel(f"z {primary}   (within {' x '.join(GROUPBY)})", fontsize=9)
+            axd.set_ylabel("density", fontsize=9)
+            axd.set_title("C. Where the target region sits on the axis, per cell.\n"
+                          "The target is CO-EXPRESSION, so it must land near the middle of a\n"
+                          "contrast of the two programmes - recovered, never imposed.\n"
+                          "Target median percentile per version - " + ", ".join(others),
+                          fontsize=9.5, pad=16)
+            axd.legend(fontsize=7.5, loc="upper right", frameon=False)
+            sns.despine(ax=axd)
+            axd.grid(axis="y", color="0.92", lw=0.7)
+            axd.set_axisbelow(True)
+
+        fig.suptitle(f"Route A, {coll.title}: the {der_axis} coordinate, on its own\n"
+                     f"{', '.join(f'{d.name} = {d.description.split(chr(44))[0]}' for d in coll.derived[:1])}"
+                     "  -  purple and green are the POLES OF THE AXIS, not "
+                     "dimension-directions; red and blue are reserved for those",
+                     fontsize=10.5, y=0.997)
+        fig.tight_layout(rect=[0, 0, 1, 0.965])
+        C.savefig(f"{der_axis}_axis", fig_step, coll, fig)
+        plt.close(fig)
 
     if skipped:
         print(f"\n[warn] signatures skipped for having under {C.MIN_SIGNATURE_GENES} "

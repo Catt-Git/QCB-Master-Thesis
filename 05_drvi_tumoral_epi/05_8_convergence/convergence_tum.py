@@ -74,8 +74,9 @@ CYCLE_FLAG = 0.30
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     SC.add_argument(p)
-    p.add_argument("--rho-min", type=float, default=0.20,
-                   help="|Spearman rho| above which Route A counts as an association (default 0.20)")
+    p.add_argument("--rho-min", type=float, default=C.ROUTE_A_RHO_MIN,
+                   help="|Spearman rho| above which Route A counts as an association "
+                        f"(default {C.ROUTE_A_RHO_MIN})")
     return p.parse_args()
 
 
@@ -103,7 +104,11 @@ def main():
     vanished = (order["vanished"].astype(bool) if "vanished" in order.columns
                 else pd.Series(False, index=order.index))
     thr = -np.log10(FDR)
-    print(f"{len(dims)} dimensions (nothing pruned) x 2 directions = {2 * len(dims)} rows")
+    # The dimension set is inherited from Route A's `dimension_row_order`, never recomputed,
+    # so a pruned run is announced here by the table it read rather than by a flag of its own.
+    print(f"{len(dims)} dimensions "
+          f"({'vanished PRUNED upstream' if C.PRUNE_VANISHED else 'nothing pruned'})"
+          f" x 2 directions = {2 * len(dims)} rows")
     print(f"Route A bar: |rho| >= {args.rho_min};  Route B bar: global FDR < {FDR}")
 
     # Only the signatures both routes actually carry.
@@ -302,7 +307,8 @@ def main():
         plt.setp(a.get_xticklabels(), rotation=45, ha="right", fontsize=8)
     plt.setp(axes[0].get_yticklabels(), fontsize=6)
     fig.suptitle(f"The two routes side by side, {coll.title}, same row order "
-                 f"(all {len(dims)} dimensions of {C.RUN_ID}, nothing pruned)\n"
+                 f"({len(dims)} dimensions of {C.RUN_ID}, "
+                 f"{'vanished PRUNED' if C.PRUNE_VANISHED else 'nothing pruned'})\n"
                  "convergence, not either panel alone, is the criterion for a cell state",
                  fontsize=11)
     fig.tight_layout(rect=[0, 0, 1, 0.95])

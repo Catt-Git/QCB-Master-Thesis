@@ -181,6 +181,65 @@ the malignant set's mapping in place and 05_7 would then have done its ORA again
 gene universe without complaining. `N_LATENT` and `HVG_SET` are **not** in that name, and must
 not be: neither changes which genes the object has.
 
+## The vanished-dimension control
+
+05_4 - 05_8 keep **every** dimension and **every** direction. The reasoning is in
+`utils/signature_common.py` next to `PRUNE_VANISHED` and it is a choice, not an oversight:
+dropping dimensions before the correlations and the ORA decides, ahead of the analysis, which
+axes are allowed to mean something. `var['vanished']` is read and reported throughout, so any
+dimension that does come out significant can be checked against its flag.
+
+`PRUNE_VANISHED=1` is the control that measures what that choice costs. It restores DRVI's own
+behaviour everywhere at once and **writes nowhere near the reported run**: `OUT_TAG` moves the
+tables to `tables_pruned/`, the figures to `figures_pruned/`, and 05_7's two `.tsv` to a
+`_pruned` name. The per-cell files pruning cannot change — CytoTRACE2 and
+`signature_scores_<coll>_<run>.csv` — are read from their existing paths and left untouched, so
+the control needs no re-scoring and 05_5 never runs twice.
+
+```bash
+PRUNE_VANISHED=1 N_LATENT=64 ./signature_interpretation_all.sh --collection scie
+```
+
+The two routes prune at **different granularities**, and that is the whole finding:
+
+| | kept on `drvi_tum_64_nomt` | dropped |
+|---|---|---|
+| Route A (05_6) | 56 of 64 **dimensions** | DR 57 - DR 64, the 8 flagged `vanished` |
+| Route B (05_7) | 111 of 128 **directions** | those 16, plus **DR 55+** alone |
+| Route C (05_8) | 112 rows | inherits Route A's list |
+
+Route A's numbers do not move on a dimension it keeps — the Spearman correlations are computed
+per dimension and cannot see each other — so every difference below is Route B's, and all of it
+comes from the BH denominator shrinking from 128 to 111 directions: the same p-values, corrected
+over fewer tests, so FDRs fall and a few rows cross the bar. Nothing here is a new measurement.
+
+| collection | rows lost to pruning | of them significant on ≥1 route | verdicts changed among the 112 rows both runs share |
+|---|---|---|---|
+| `scie` | 16 | 13, incl. **7 convergent** | 1 |
+| `emt` | 16 | 1 | 14, all `neither`/`cell_only` → `factor_only`/`convergent` at FDR 0.0538 → 0.0482 |
+| `gavish_tnbc` | 16 | 15, incl. 11 `both_routes_different_family` | 1 |
+
+Two things to take from it.
+
+**The vanished tail is not empty.** On `scie`, seven of the 37 convergent rows live on dimensions
+DRVI flagged vanished — DR 59+ at Route B FDR 7e-5, DR 62+ at 1e-3 — and on `gavish_tnbc`
+fifteen of the sixteen dropped rows were significant on at least one route, DR 63+ at FDR 4e-9.
+These carry ~1e-05 of the latent variance and are exactly the axes DRVI considers unused; that
+they still land on interferon and EMT metaprograms is a statement about the ORA on 200-gene
+lists, not evidence of a state. But it is the reason not to prune silently: pruning removes them
+without ever putting them in a table where they could be dismissed on their merits.
+
+**The `emt` flips are a threshold artefact, not a result.** All fourteen sit at FDR 0.0538 →
+0.0482 across a 0.05 bar. A verdict that moves because seventeen untested directions left the
+denominator is a verdict that was never resolved; read the FDR, not the label.
+
+**The one real loss is `DR 55+`.** DRVI flagged that *direction* vanished while keeping the
+dimension, so Route A keeps DR 55 and Route B stops testing its positive side. 05_8 still writes
+a `DR 55+` row, reads no Route B value for it, and reports FDR 1.0 — where the unpruned run has
+**7e-4**, the collection's strongest hit on that axis. This is the asymmetry `interpretability_
+scores` documents, and on this object it costs a real result. It is the single strongest
+argument for the default.
+
 ## The third collection: naming the dimensions from outside
 
 `scie` and `emt` each ask whether a **named state exists**, and each defines a region of the
@@ -300,13 +359,25 @@ cd ../05_2_subsetting                                  # then subset_and_qc.ipyn
 cd ../05_3_drvi_run                                    # drvi_tum.ipynb, or headless:
 python3 run_drvi_tum.py                                # n_latent 32, see that README
 
-cd ../05_4_signatures && python3 build_signatures_tum.py   # + --collection emt|gavish [--all-metaprograms]
-cd ../05_5_cytotrace2                                      # in the cytotrace2-py env
+# 05_4 - 05_8 in one command, resuming; see ./signature_interpretation_all.sh --help
+cd .. && ./signature_interpretation_all.sh --collection scie      # or emt | gavish
+PYTHON=~/miniconda3/envs/cytotrace2-py/bin/python \
+    ./signature_interpretation_all.sh cytotrace                   # the one step in its own env
+
+# or by hand, which is what the driver does:
+cd 05_4_signatures       && python3 build_signatures_tum.py   # + --collection emt|gavish [--all-metaprograms]
+cd ../05_5_cytotrace2                                         # in the cytotrace2-py env
 python3 cytotrace2_tum.py
-cd ../05_6_cell_first    && python3 cell_first_tum.py      # Route A   + --collection emt|gavish
-cd ../05_7_factor_first  && python3 factor_first_tum.py    # Route B   + --collection emt|gavish
-cd ../05_8_convergence   && python3 convergence_tum.py     # Route C   + --collection emt|gavish
+cd ../05_6_cell_first    && python3 cell_first_tum.py         # Route A   + --collection emt|gavish
+cd ../05_7_factor_first  && python3 factor_first_tum.py       # Route B   + --collection emt|gavish
+cd ../05_8_convergence   && python3 convergence_tum.py        # Route C   + --collection emt|gavish
 ```
+
+`signature_interpretation_all.sh` is the phase-level driver, the counterpart of 04's. It walks
+the six steps in the one order they work in — 05_7 reads the row order off the table 05_6
+writes, and 05_8 reads five tables from the two — resumes by output existence, and derives the
+run id and the output tag from `utils/resolve_run.py` rather than re-spelling either rule in
+bash. Everything else it does is pass the environment through.
 
 Steps 05_4 - 05_8 share `utils/signature_common.py` (paths, the caveat, the figure and table
 writers) and `utils/sig_collections.py` (the three collections and everything that differs

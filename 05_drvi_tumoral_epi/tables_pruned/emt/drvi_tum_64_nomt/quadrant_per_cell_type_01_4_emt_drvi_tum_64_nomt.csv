@@ -1,0 +1,15 @@
+# quadrant_per_cell_type_01_4 | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+cell_type_01_4,n_cells,n_target,pct
+LummHR-SCGB,4564,191,4.184925503943909
+LummHR-active,39,2,5.128205128205129
+LummHR-major,416,24,5.769230769230769
+Lumsec-HLA,2,0,0.0
+Lumsec-KIT,1196,21,1.7558528428093645
+Lumsec-basal,13272,1092,8.227848101265822
+Lumsec-major,105,1,0.9523809523809523
+Lumsec-myo,4,0,0.0
+Lumsec-prol,22395,738,3.2953784326858675
+basal,103,1,0.970873786407767

@@ -124,5 +124,33 @@ One row per **dimension**, not per direction: Route A correlates the latent coor
 no direction of its own. The direction is the **sign of rho** — that is what makes the two routes
 joinable in 05_8, and it is written on the colorbar so the heatmap cannot be misread.
 
+### The derived axis has its own figure
+
+`dim_signature_heatmap` draws the signature **programmes** only — for `emt` that is nine columns
+in three blocks, not twelve in four. The derived readouts
+(`EMT_SCORE_v = z(EMT_v_MESENCHYMAL) − z(EMT_v_EPITHELIAL)`) were a fourth block there and are
+now in `emt_score_axis_*.png`, because a contrast of two columns standing beside those two
+columns reads as a fourth *programme* when it is a *coordinate along two of them*. Collections
+with no derived readouts (`scie`, `gavish`) are unaffected and get no extra figure.
+
+The derived figure has three panels: **A** every dimension against the coordinate, one column
+per list version, so a real axis is a row that agrees across all three; **B** the 14 strongest
+dimensions ranked on |rho| — `sign=0` is 05_8's criterion for this axis, an axis being an E-to-M
+axis whichever way DRVI oriented it — with one marker per version, so a short bar means the three
+curations agree; **C** where the target cells sit on the coordinate, per cell.
+
+**Panel C is the check the co-expression definition is owed.** The target is *co-expression* —
+both programmes high at once — and such a cell is near **zero** on a contrast of the two by
+construction. Its median lands at percentile **48 / 49 / 50** (B / A / C) of all malignant cells,
+which was never imposed: it is the middle band *recovered*, and it is why `EMT_SCORE` is a
+readout of the axis and not the definition of the state.
+
+**Colour.** Red–blue (`vlag`) means exactly one thing across this phase — the sign of a
+correlation, i.e. which **dimension-direction** is being talked about. The poles of the E-to-M
+axis are a property of the *cell* and have nothing to do with the sign DRVI happened to give a
+dimension, so reusing red and blue for them would put two unrelated meanings on one pair of hues
+in figures that sit side by side. The derived figure uses **purple (epithelial pole) and green
+(mesenchymal pole)** instead, in all three panels, and contains no red or blue on purpose.
+
 Vanished dimensions are correlated like every other (`PRUNE_VANISHED = False`): dropping
 dimensions first would decide, ahead of the analysis, which axes are allowed to mean something.

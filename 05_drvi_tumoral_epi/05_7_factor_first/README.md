@@ -75,7 +75,12 @@ further. That is a property of the latent size, not evidence, and it is one more
 refuses to promote anything on this route alone.
 
 Nothing is pruned: all 2 × `n_latent` directions are tested and the vanished flag is reported
-rather than acted on.
+rather than acted on. `PRUNE_VANISHED=1` runs the control instead — DRVI's own behaviour, a
+direction dropped when *that direction* vanished, which on `drvi_tum_64_nomt` is 17 of the 128
+and therefore a smaller BH denominator. It writes under `tables_pruned/` and cannot touch the
+reported run; what it costs is measured in [the phase README](../README.md#the-vanished-dimension-control),
+and the short version is that this step is the one that pays for it — Route A keeps `DR 55`
+while this step stops testing `DR 55+`, which the unpruned run calls at FDR 7e-4.
 
 ## What comes out
 

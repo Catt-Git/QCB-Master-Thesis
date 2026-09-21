@@ -1,11 +1,11 @@
-# confounders | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_64_nomt | 05_4 - 05_8 signature interpretation
+# confounders | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_64_nomt | nothing pruned: every dimension and direction kept | 05_4 - 05_8 signature interpretation
 # CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
 # CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
 # CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
 readout,axis,rho_n_genes_by_counts,p_n_genes_by_counts,rho_pct_counts_mt,p_pct_counts_mt,rho_S_score,p_S_score,rho_G2M_score,p_G2M_score
 EMT_B_EPITHELIAL,epithelial,0.3247967532982479,0.0,0.13521890413331306,6.073106063424149e-171,-0.15828387970478755,2.923312999163715e-234,-0.23785697310427073,0.0
 EMT_B_HYBRID,hybrid,0.14931629068131702,2.0714825108153917e-208,0.10708984898625937,1.3395589052938278e-107,0.09919191042037423,1.6304814500236157e-92,0.07487876154499555,2.0877880187400528e-53
-EMT_B_MESENCHYMAL,mesenchymal,0.06192450322889105,4.7535307091204976e-37,0.08809631957845318,2.6732139510820273e-73,0.07539956204390653,3.9559434536115295e-54,0.07539279480371562,4.0426818644273877e-54
+EMT_B_MESENCHYMAL,mesenchymal,0.06192450296773088,4.753533977365659e-37,0.08809631931285329,2.673216612619741e-73,0.07539956225295229,3.955940803022628e-54,0.07539279463223768,4.0426840861503386e-54
 EMT_A_EPITHELIAL,epithelial,0.34087176284432835,0.0,0.10909558972655685,1.2841118287078985e-111,-0.14707872697019012,3.3191646658319747e-202,-0.2241699296068762,0.0
 EMT_A_HYBRID,hybrid,0.010915848714589938,0.02511438760940422,0.06260973240577443,7.74907076482605e-38,-0.0031929325749505215,0.5124123314377147,-0.001993528483062054,0.6825347626728852
 EMT_A_MESENCHYMAL,mesenchymal,-0.05562114393630668,3.3046323116761734e-30,0.02957948016568143,1.2786132009734216e-09,0.05066866639248418,2.42223104980846e-25,0.10541534528943655,2.6516510195165597e-104

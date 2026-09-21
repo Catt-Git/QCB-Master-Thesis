@@ -1,0 +1,11 @@
+# quadrant_stability | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+,BENPORATH_ES1,ESC_ASSOU,ESC_WONG,LIM_STEM,FMASC,CytoTRACE2
+BENPORATH_ES1,1.0,0.6023,0.4717,0.0835,0.2754,0.4185
+ESC_ASSOU,0.6023,1.0,0.607,0.0725,0.2523,0.5154
+ESC_WONG,0.4717,0.607,1.0,0.0587,0.1964,0.4575
+LIM_STEM,0.0835,0.0725,0.0587,1.0,0.2254,0.1068
+FMASC,0.2754,0.2523,0.1964,0.2254,1.0,0.2582
+CytoTRACE2,0.4185,0.5154,0.4575,0.1068,0.2582,1.0

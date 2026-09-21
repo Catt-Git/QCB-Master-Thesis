@@ -1,11 +1,11 @@
-# confounders | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_64_nomt | 05_4 - 05_8 signature interpretation
+# confounders | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_64_nomt | nothing pruned: every dimension and direction kept | 05_4 - 05_8 signature interpretation
 # CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
 # CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
 # CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
 readout,axis,rho_n_genes_by_counts,p_n_genes_by_counts,rho_pct_counts_mt,p_pct_counts_mt,rho_S_score,p_S_score,rho_G2M_score,p_G2M_score
 HALLMARK_IFNA,immune,0.13076445796448674,6.650087039985044e-160,-0.06693398058004585,5.231145485384435e-43,-0.0357631526981357,2.139664768689517e-13,-0.11629531277699857,1.1403126151963247e-126
 HALLMARK_IFNG,immune,0.16473495434404067,7.777393920414778e-254,-0.06060369734996451,1.4829129550103799e-35,-0.042569291749336206,2.3774698904283634e-18,-0.12741769257910995,7.346653017222732e-152
-ISDS,immune,0.07311236223838007,5.402307620510533e-51,-0.0772932039542649,8.47430849993946e-57,-0.0639739943187364,1.9729959984383248e-39,-0.1253923432721689,4.2586891622617137e-147
+ISDS,immune,0.07311236266535621,5.402300452142525e-51,-0.07729320106464424,8.47438896566748e-57,-0.06397399442338098,1.972995436973189e-39,-0.12539234297529953,4.258695952095488e-147
 KEGG_APM,immune,0.312492207367877,0.0,0.09095285349746748,5.016781707354903e-78,-0.008091628549927057,0.09688179221271472,-0.11430085505829343,2.1136994719379167e-122
 IMMUNOGENIC_CONSENSUS,immune,0.1766333561124876,4.153128947670981e-292,0.01382834298790543,0.004550320251590054,-0.028295604936710406,6.379721367006018e-09,-0.1079998135280425,2.0574727587249244e-109
 BENPORATH_ES1,stemness,0.4760135392749207,0.0,0.10269897454131603,4.5572239811683724e-99,0.4340848680687341,0.0,0.3743811265370958,0.0

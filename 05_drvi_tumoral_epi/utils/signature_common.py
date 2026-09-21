@@ -107,9 +107,30 @@ SCORE_KEY = "OOD_combined"          # 05_3's interpretability scores, as in 04_3
 # share of them. 05_6 - 05_8 therefore run on all
 # `N_LATENT` dimensions and all 2 x `N_LATENT` directions; `var['vanished']` and
 # `var['vanished_*_direction']` are still read and reported, so any dimension that does
-# come out significant can be checked against its flag. Set this to True to get the
-# pruned behaviour back, unchanged, everywhere at once.
-PRUNE_VANISHED = False
+# come out significant can be checked against its flag.
+#
+# THE DEFAULT IS STILL FALSE and the phase still reports the unpruned run. $PRUNE_VANISHED
+# is the one switch that gets DRVI's own behaviour back, unchanged, everywhere at once - it
+# is a CONTROL, run to show what the choice above costs, not a second result. Setting it
+# also moves every output of the stage (see OUT_TAG), so the control cannot overwrite a
+# single file of the run this phase reports.
+PRUNE_VANISHED = os.environ.get("PRUNE_VANISHED", "").strip().lower() \
+    in ("1", "true", "yes", "on")
+
+# The suffix every output folder and every file this stage OWNS carries, so two runs that
+# differ only in what they pruned cannot land on the same path. Empty for the reported run,
+# which is what keeps `tables/` and `figures/` exactly where they were.
+#
+# It is deliberately NOT part of the run id: the run id names the 05_3 EMBEDDING, which
+# pruning does not change - `embed_drvi_tum_64_nomt.h5ad` is read by both runs, and putting
+# the tag in RUN_ID would send the pruned run looking for a model file nobody trained.
+OUT_TAG = os.environ.get("OUT_TAG", "_pruned" if PRUNE_VANISHED else "")
+
+# The object-level files - CytoTRACE2, the per-cell signature scores - depend on neither the
+# embedding nor the pruning, so a variant run READS them and must not rewrite them: identical
+# content, and two copies free to drift if the variant ever stops being identical. False here
+# means "borrow, do not own".
+OWNS_SHARED_OUTPUTS = not OUT_TAG
 
 # --------------------------------------------------------------------------- #
 # Paths
@@ -131,7 +152,9 @@ PHASE_DIR = PROJECT_DIR / "05_drvi_tumoral_epi"
 # Small result tables, versioned in the repo as appendix material. Phase-level, next to
 # `figures/`, and for the same reason: 05_8 reads what 05_6 and 05_7 wrote, so a per-step
 # `tables/` would mean steps reaching into each other's folders. 05_1 already writes here.
-TABLE_DIR = PHASE_DIR / "tables"
+# `OUT_TAG` makes this `tables_pruned/` for a $PRUNE_VANISHED run, side by side with the
+# reported one rather than on top of it.
+TABLE_DIR = PHASE_DIR / f"tables{OUT_TAG}"
 
 # Inputs, all read-only here. Through `cell_set.path()`, so `CELL_SET=epi` reads the control
 # set's objects and writes under its own prefix without a second copy of this module.
@@ -280,6 +303,9 @@ def add_embedding_argument(parser) -> None:
 # them to the embedding would make a control run re-score 42,096 cells for a byte-identical
 # result, and leave two copies free to drift. The `drvi_tum_32` in their names is a label,
 # not a dependency.
+# They carry no `OUT_TAG` either, and for the same reason: pruning happens downstream of
+# both. A $PRUNE_VANISHED run reads these and leaves them alone (`OWNS_SHARED_OUTPUTS`), so
+# 05_5 never has to be run twice.
 CYTOTRACE_CSV = TUM_DIR / f"cytotrace2_{DEFAULT_RUN_ID}.csv"   # per cell, 05_5: a readout, not a collection
 
 
@@ -295,6 +321,10 @@ def gmt_path(coll) -> Path:
 
     04 has one object and one name, `signatures_<collection>.gmt`; this is one of the things
     that differ, and it differs because this phase has a second cell set.
+
+    A $PRUNE_VANISHED run gets its own copy under `tables_pruned/`, because it is TABLE_DIR
+    that moves. The copy is byte-identical - 05_4 has never seen a dimension - and it is
+    still cheaper to rebuild it than to special-case one path out of the tag.
     """
     return TABLE_DIR / coll.name / f"signatures_{coll.name}_{CS.compartment()}.gmt"
 
@@ -308,8 +338,12 @@ def scores_csv(coll) -> Path:
 
 
 def enrichment_tsv(coll, n_top: int) -> Path:
-    """The full ORA output of 05_7: every pair tested, before any significance filter."""
-    return TUM_DIR / f"factor_first_top{n_top}_{coll.name}_{RUN_ID}.tsv"
+    """The full ORA output of 05_7: every pair tested, before any significance filter.
+
+    `OUT_TAG` is in the name because pruning changes WHICH pairs were tested and therefore
+    the BH denominator over them: the two files are not two copies of one result.
+    """
+    return TUM_DIR / f"factor_first_top{n_top}_{coll.name}_{RUN_ID}{OUT_TAG}.tsv"
 
 
 def top_genes_tsv(n_top: int) -> Path:
@@ -317,9 +351,9 @@ def top_genes_tsv(n_top: int) -> Path:
 
     Read off the DRVI decoder alone, so this one is deliberately NOT collection-scoped: both
     collections are tested against the same gene lists, and writing it twice would invite the
-    two copies to drift apart.
+    two copies to drift apart. It IS `OUT_TAG`-scoped: a pruned run has fewer columns.
     """
-    return TUM_DIR / f"factor_first_top{n_top}_genes_{RUN_ID}.tsv"
+    return TUM_DIR / f"factor_first_top{n_top}_genes_{RUN_ID}{OUT_TAG}.tsv"
 
 # --------------------------------------------------------------------------- #
 # The caveat that has to travel with every output of this step
@@ -364,6 +398,12 @@ CAVEAT_SHORT = (
 # The signature registries themselves are in `sig_collections.py`. These two numbers are not
 # collection-specific: they are what "this list is still the list it is named after" means on
 # this object, and they are enforced identically for the SCIE lists and the EMT ones.
+
+# The bar |rho| has to clear for Route A to count as an association. It is 05_8's default for
+# `--rho-min` and lives here rather than there because 05_6 now DRAWS it - the derived-axis
+# figure marks the threshold its rows will eventually be judged against, and a figure showing
+# one number while the step enforces another is worse than a figure showing none.
+ROUTE_A_RHO_MIN = 0.20
 
 MIN_SIGNATURE_GENES = 10      # below this a signature is skipped and reported
 MIN_MAPPED_FRACTION = 0.60    # below this the step stops: low coverage means NOT MEASURED
@@ -629,9 +669,15 @@ def write_table(df: pd.DataFrame, name: str, coll, index: bool = True,
     # folder cannot be mistaken for the phase's own. A run id matching no registry entry
     # falls back to the bare id, which is the honest label for one.
     space = next((e.title for e in EMBEDDINGS.values() if e.run_id == run_id), None)
+    # The pruning state belongs in the header for the same reason the run id does: the two
+    # runs share a run id and differ only in which dimensions they were allowed to see, so
+    # a table read outside its folder has nothing else to tell them apart.
+    pruning = ("vanished dimensions PRUNED (DRVI's own behaviour)" if PRUNE_VANISHED
+               else "nothing pruned: every dimension and direction kept")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(f"# {name} | collection {coll.name} ({coll.title}) "
                  f"| {space + ' run' if space else 'run'} {run_id} "
+                 f"| {pruning} "
                  f"| 05_4 - 05_8 signature interpretation\n")
         for line in CAVEAT.split(". "):
             if line.strip():
@@ -659,7 +705,7 @@ def fig_dir(step: str, coll, run_id: str | None = None) -> Path:
     without either being able to overwrite the other, and the run is a subfolder of that, for
     the reason `table_dir` gives. `step` is e.g. '05_6_cell_first'.
     """
-    d = PHASE_DIR / "figures" / step / coll.name / (run_id or RUN_ID)
+    d = PHASE_DIR / f"figures{OUT_TAG}" / step / coll.name / (run_id or RUN_ID)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -714,12 +760,14 @@ def interpretability_scores(embed, gene_names, key: str = SCORE_KEY,
     returns is rebuilt from the embedding alone - no model, no GPU, no scvi-tools.
 
     One difference from 03_3, and it is deliberate: `hide_vanished` defaults to
-    `PRUNE_VANISHED`, i.e. False, so every direction of every dimension comes back and
-    the caller decides what to do with it. DRVI's own accessor drops a direction it
-    marked vanished; here that flag is reported rather than acted on. Passing
+    `PRUNE_VANISHED`, i.e. False unless $PRUNE_VANISHED is set, so every direction of every
+    dimension comes back and the caller decides what to do with it. DRVI's own accessor
+    drops a direction it marked vanished; here that flag is reported rather than acted on.
     `hide_vanished=True` restores DRVI's behaviour: a direction is then dropped only if
     *that* direction vanished, since a dimension can carry a real program on one side and
-    nothing on the other.
+    nothing on the other. Note that this is a finer cut than `analysis_dimensions`, which
+    can only drop a whole dimension - so a pruned Route B run tests slightly fewer than
+    2 x the dimensions Route A kept, and the BH denominator follows it.
     """
     effect = np.concatenate([embed.varm[f"{key}_positive"], embed.varm[f"{key}_negative"]])
 
@@ -742,10 +790,13 @@ def interpretability_scores(embed, gene_names, key: str = SCORE_KEY,
 
 
 def analysis_dimensions(embed) -> list[str]:
-    """The dimensions this stage works on: all of them, in the embedding's own order.
+    """The dimensions this stage works on, in the embedding's own order.
 
-    `PRUNE_VANISHED` is False, so nothing is dropped. When it is flipped back on, the
-    vanished set is read programmatically from `var['vanished']` - never from a plot.
+    `PRUNE_VANISHED` is False by default, so nothing is dropped. Under $PRUNE_VANISHED the
+    vanished set is read programmatically from `var['vanished']` - never from a plot - and
+    dropped here, which is the single point at which Route A loses an axis: 05_7 takes its
+    row order from the table 05_6 writes, and 05_8 from that same table, so the three steps
+    cannot disagree about which dimensions exist.
     """
     if PRUNE_VANISHED and "vanished" in embed.var:
         return embed.var.loc[~embed.var["vanished"].astype(bool), "title"].tolist()

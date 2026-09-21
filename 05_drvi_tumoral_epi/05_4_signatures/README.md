@@ -11,6 +11,7 @@ and Route B and doubles as the Appendix table.
 | File | What it does |
 |---|---|
 | `build_signatures_tum.py` | lists → `.gmt`, coverage, Jaccard, the two figures |
+| `emt_vs_gavish_tum.py` | the one cross-collection check: do the collaborator's EMT lists and Gavish's EMT metaprograms name the same genes? |
 | `signature_composition_tum.py` | what is actually inside each score: which genes carry it, and are they measurable. Runs after 05_6, to join the real scores |
 
 ```bash
@@ -24,6 +25,9 @@ python3 build_signatures_tum.py --allow-low-coverage # report, do not stop
 # the two runs this phase reports, both on the default (MT-free) panel:
 N_LATENT=64 python3 build_signatures_tum.py --collection gavish              # drvi_tum_64_nomt
 CELL_SET=epi N_LATENT=64 python3 build_signatures_tum.py --collection gavish # drvi_epicnv_64_nomt
+
+N_LATENT=64 python3 emt_vs_gavish_tum.py                   # the EMT lists against MP12 - MP15
+N_LATENT=64 python3 emt_vs_gavish_tum.py --all-metaprograms  # MP16 (glioma mesenchymal) too
 ```
 
 `CELL_SET`, `N_LATENT` and `HVG_SET` select **which 05_3 run** this reads — `drvi_tum_32_nomt`
@@ -133,3 +137,50 @@ table of 05_8 has to be read knowing which five those are. Note what they have i
 respiration: these are housekeeping-adjacent programmes whose genes are expressed everywhere
 and therefore *not* highly variable, so their absence from the HVG panel is a property of the
 panel and not evidence that the programme is off.
+
+
+## EMT twice: the collaborator's lists against Gavish's metaprograms
+
+`emt_vs_gavish_tum.py`. EMT enters this phase from two unrelated directions — the `emt`
+collection (a **hypothesis**: nine curated lists, three axes × three curations, 05_6 calls
+cells in it) and the `emt` axis of `gavish_tnbc` (a **vocabulary**: MP12 – MP15, "EMT-I" to
+"EMT-IV", four NMF metaprograms recurrent across ~1,000 tumours, calling no cells). 05_8 treats
+an axis that both collections land on as an axis that does not depend on whose EMT list was
+used — but that argument only holds if the two are not the same genes twice. This step measures
+the genes, on the mapped universe, so it is on the same footing as the Jaccard matrix above.
+
+```
+jaccard_emt_vs_gavish_<run_id>.csv        the 13 × 13 matrix
+shared_genes_emt_vs_gavish_<run_id>.csv   the same as counts
+jaccard_bands_emt_vs_gavish_<run_id>.csv  the four reference bands, summarised
+emt_vs_gavish_pairs_<run_id>.csv          the 36 cross pairs, with the shared genes spelled out
+```
+
+**They are not the same genes twice.** Across the 36 cross pairs the median Jaccard is
+**0.025**, the maximum **0.098**, and 11 pairs share no gene at all. The number to read that
+against is **not 1.0**: Gavish's own four EMT metaprograms reach a median of **0.060** against
+*each other* (range 0.000 – 0.099), and MP14 and MP15 share nothing. The metaprograms are
+clustered NMF programmes, not curated marker panels, so four mutually near-disjoint EMT
+programmes is their result and not a defect of ours. The collaborator's lists are therefore
+about as close to the metaprograms as the metaprograms are to themselves, while two curations
+of the *same* list reach 0.32 – 0.76. The two vocabularies are independent measurements of
+EMT, which is exactly what makes a dimension they both land on worth something.
+
+**And yet the little overlap there is, is structured — one metaprogram per axis.** Every
+collaborator axis has a single best-matching metaprogram, the same one for all three curations:
+
+| axis | best MP | shared genes |
+|---|---|---|
+| mesenchymal | MP12_EMT_1 | ACTA2, FN1, MMP2, SNAI2, SPARC, VIM (6/6/6 on A/B/C) |
+| hybrid | MP13_EMT_2 | ITGAV, LAMC2, PDPN, TNC on A and B; C adds ITGA3, LAMB3, TGFBI |
+| epithelial | MP14_EMT_3 | CD24, CLDN4, KRT8, KRT18, KRT19, LMNA on B; A has no KRT19, C no CLDN4 or LMNA |
+| — | MP15_EMT_4 | nothing above 0.03; it matches no axis |
+
+Six genes out of 25,133 is a Jaccard of 0.10 and a hypergeometric FDR of 1.7e-11 at the same
+time, and those two facts are not in conflict — the `expected_by_chance` and `hypergeom_fdr`
+columns of the pairs table are there so the small Jaccard is not read as "no relation".
+
+So MP12 is the mesenchymal end, MP14 the epithelial end, MP13 the hybrid/ECM-remodelling
+middle, and **MP15 is a fourth EMT programme this project has no list for**. That is the one
+actionable consequence: a latent dimension whose top metaprogram is MP15 cannot be checked
+against the collaborator's lists at all, and must not be reported as agreeing with them.

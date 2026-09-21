@@ -1,0 +1,18 @@
+# confounder_checks | collection emt (epithelial-mesenchymal transition (EMT)) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+check,value
+phase_pct_G1_target,62.17391304347826
+phase_pct_G1_rest,43.81651926247939
+n_target_all_phases,2070.0
+n_target_within_G1_recomputed,973.0
+jaccard_target_vs_G1_recomputed,0.756021756021756
+auroc_doublet_predicts_EMT_B_MESENCHYMAL_high,0.5605604352937374
+rho_doublet_score_EMT_B_MESENCHYMAL,0.21726891648351454
+auroc_doublet_predicts_EMT_A_MESENCHYMAL_high,0.5569512465712176
+rho_doublet_score_EMT_A_MESENCHYMAL,0.20100678320089993
+auroc_doublet_predicts_EMT_C_MESENCHYMAL_high,0.5679276613666359
+rho_doublet_score_EMT_C_MESENCHYMAL,0.2548629418006975
+pct_predicted_doublet_target,0.0
+pct_predicted_doublet_rest,0.02248538450007495

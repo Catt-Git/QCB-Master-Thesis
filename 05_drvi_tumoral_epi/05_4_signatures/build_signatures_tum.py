@@ -188,7 +188,10 @@ def main():
     print(pairs.head(8).to_string(index=False, float_format="%.3f"))
 
     # ----------------------------------------------------------------- figure
-    order = coll.order(list(mapped))
+    # `for_figure` lets a collection reorder the names INSIDE an axis block for the figures
+    # only - `emt` uses it to draw its three list versions A, B, C rather than in the
+    # registry's B, A, C. The blocks, and the .gmt and tables written above, are unchanged.
+    order = coll.order(list(mapped), for_figure=True)
     # The size of each set goes in the tick label: Jaccard is a ratio, and 0.05 between a
     # 25-gene list and a 1,698-gene one does not mean what the same number means between
     # two lists of equal size. The count is the MAPPED one, which is what J is built on.

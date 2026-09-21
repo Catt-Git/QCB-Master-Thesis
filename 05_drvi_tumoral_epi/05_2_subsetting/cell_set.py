@@ -291,16 +291,24 @@ def n_latent() -> int:
     return value
 
 
-def run_id(n: int | None = None, value: str | None = None) -> str:
-    """`drvi_<compartment>_<n_latent><hvg_tag>` - the id 05_3 names every output after.
+def run_id(n: int | None = None, value: str | None = None, method: str = "drvi") -> str:
+    """`<method>_<compartment>_<n_latent><hvg_tag>` - the id 05_3 names every output after.
 
     THE ONLY PLACE THIS STRING IS BUILT, for the reason the whole module exists: 05_3 writes
     the model, the embedding and the downstream object under it, and 05_4 - 05_8 find them by
     reconstructing it. Two spellings of it is a step reading last week's run and saying
     nothing. `n` is for 05_3, which has the value on its command line and must not go through
     the environment to get it back.
+
+    `method` is the integration that produced the space, and it defaults to 'drvi' because
+    that is the line of the phase: every existing run id, every file on disk and every caller
+    in 05_4 - 05_8 keeps the name it already had. 05_3b passes 'harmony' to get
+    `harmony_tum_64_nomt` beside `drvi_tum_64_nomt` - a different method at the same step,
+    which must not be able to land on the other one's files. The segment is part of the id
+    rather than a separate directory for the same reason the compartment and the HVG tag are:
+    one string names a run, and reading it tells you the whole of what produced it.
     """
-    return f"drvi_{compartment(value)}_{n or n_latent()}{hvg_tag()}"
+    return f"{method}_{compartment(value)}_{n or n_latent()}{hvg_tag()}"
 
 
 def banner(step: str) -> None:

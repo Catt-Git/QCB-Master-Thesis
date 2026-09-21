@@ -1,0 +1,15 @@
+# coverage | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+signature,axis,primary,provenance,n_genes,n_mapped,mapped_fraction,n_in_hvg_background,hvg_fraction_of_mapped
+HALLMARK_IFNA,immune,True,"Interferon Alpha response, MSigDB Hallmark",97,96,0.9896907216494846,44,0.4583333333333333
+HALLMARK_IFNG,immune,True,"Interferon Gamma response, MSigDB Hallmark",200,197,0.985,98,0.49746192893401014
+ISDS,immune,True,"IFN-Stem Cell-Down signature, PMC5481166",27,27,1.0,15,0.5555555555555556
+KEGG_APM,immune,True,"Antigen Presentation Machinery, KEGG",88,65,0.7386363636363636,30,0.46153846153846156
+IMMUNOGENIC_CONSENSUS,immune,True,"Curated by the lab from the KEGG APM signature, retaining only immunogenic genes and immunomodulators; primary immune readout",25,25,1.0,17,0.68
+BENPORATH_ES1,stemness,True,MSigDB BENPORATH_ES_1,378,368,0.9735449735449735,64,0.17391304347826086
+ESC_ASSOU,stemness,True,"PMC1906587, Table S3",1066,801,0.7514071294559099,130,0.16229712858926343
+ESC_WONG,stemness,True,MSigDB WONG_EMBRYONIC_STEM_CELL_CORE,335,297,0.8865671641791045,61,0.2053872053872054
+LIM_STEM,stemness,True,MSigDB LIM_MAMMARY_STEM_CELL_UP,479,465,0.9707724425887265,140,0.3010752688172043
+FMASC,stemness,True,"Fetal mammary stem cells, PMC3277444, Supplementary Table 2",1882,1692,0.8990435706695006,284,0.16784869976359337
