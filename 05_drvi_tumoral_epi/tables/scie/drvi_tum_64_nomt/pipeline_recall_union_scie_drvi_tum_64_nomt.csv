@@ -1,0 +1,11 @@
+# pipeline_recall_union | collection scie (stemness x immunogenicity (SCIE)) | run drvi_tum_64_nomt | recall of a signature collection by two pipelines on ONE set of cells: Leiden clusters vs DRVI decoder directions, identical ORA downstream | 05_10_pipeline_recall
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+arm,n_settings,n_signatures_named_union,recall_named_union,best_single_setting,named_union,never_named
+drvi_axes,1,9,0.9,0.9,ESC_ASSOU; ESC_WONG; FMASC; HALLMARK_IFNA; HALLMARK_IFNG; IMMUNOGENIC_CONSENSUS; ISDS; KEGG_APM; LIM_STEM,BENPORATH_ES1
+drvi_leiden,8,9,0.9,0.8,BENPORATH_ES1; ESC_ASSOU; ESC_WONG; FMASC; HALLMARK_IFNA; HALLMARK_IFNG; IMMUNOGENIC_CONSENSUS; KEGG_APM; LIM_STEM,ISDS
+pca_leiden,8,9,0.9,0.9,BENPORATH_ES1; ESC_ASSOU; ESC_WONG; FMASC; HALLMARK_IFNA; HALLMARK_IFNG; IMMUNOGENIC_CONSENSUS; KEGG_APM; LIM_STEM,ISDS
+harmony_leiden,8,9,0.9,0.9,BENPORATH_ES1; ESC_ASSOU; ESC_WONG; FMASC; HALLMARK_IFNA; HALLMARK_IFNG; IMMUNOGENIC_CONSENSUS; KEGG_APM; LIM_STEM,ISDS
+drvi_axes_matched,1,7,0.7,0.7,ESC_ASSOU; ESC_WONG; FMASC; HALLMARK_IFNA; HALLMARK_IFNG; KEGG_APM; LIM_STEM,BENPORATH_ES1; IMMUNOGENIC_CONSENSUS; ISDS
+null_partition,1,0,0.0,0.0,,BENPORATH_ES1; ESC_ASSOU; ESC_WONG; FMASC; HALLMARK_IFNA; HALLMARK_IFNG; IMMUNOGENIC_CONSENSUS; ISDS; KEGG_APM; LIM_STEM

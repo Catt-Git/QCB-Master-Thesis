@@ -402,8 +402,29 @@ CAVEAT_SHORT = (
 # The bar |rho| has to clear for Route A to count as an association. It is 05_8's default for
 # `--rho-min` and lives here rather than there because 05_6 now DRAWS it - the derived-axis
 # figure marks the threshold its rows will eventually be judged against, and a figure showing
-# one number while the step enforces another is worse than a figure showing none.
-ROUTE_A_RHO_MIN = 0.20
+# one number while the step enforces another is worse than a figure showing none. That is also
+# why $ROUTE_A_RHO_MIN exists: `--rho-min` reaches 05_8 alone, and a sweep of the bar that
+# leaves 05_6's dashed line at 0.20 is a sweep whose figures contradict its tables.
+#
+# WHAT THE NUMBER IS AGAINST. `05_9_embedding_control/route_a_null_tum.py` measures the null of
+# the statistic this bar is applied to - a DIMENSION's best gene set, i.e. a maximum over the
+# collection's K sets under size- and expression-matched random lists. On drvi_tum_64_nomt:
+#
+#     collection      K   median genes   null p50   p95     p97.5   p99     0.20 lets through
+#     scie           10       247          0.079    0.267   0.309   0.362   10.9% of directions
+#     emt             9        27          0.065    0.187   0.223   0.275    3.7%
+#     gavish_tnbc    22        49          0.085    0.253   0.275   0.353    9.5%
+#
+# NOT the null in `sig_collections` (p50 0.225, p95 0.325, p99 0.372), which is a maximum over
+# the 64 DIMENSION-directions for one list - the right reference for whether a list can find
+# anything, and the wrong one for a per-direction bar.
+#
+# 0.20 is the default and what `tables/` and `tables_pruned/` were computed with. A variant
+# run sets both the bar and OUT_TAG so it lands beside them rather than on them:
+#
+#     PRUNE_VANISHED=1 OUT_TAG=_pruned_rho030 ROUTE_A_RHO_MIN=0.30 \
+#         ./signature_interpretation_all.sh --collection scie
+ROUTE_A_RHO_MIN = float(os.environ.get("ROUTE_A_RHO_MIN", "0.20"))
 
 MIN_SIGNATURE_GENES = 10      # below this a signature is skipped and reported
 MIN_MAPPED_FRACTION = 0.60    # below this the step stops: low coverage means NOT MEASURED

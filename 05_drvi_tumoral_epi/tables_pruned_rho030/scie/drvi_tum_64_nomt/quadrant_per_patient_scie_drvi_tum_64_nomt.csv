@@ -1,0 +1,24 @@
+# quadrant_per_patient | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+cohort,BENPORATH_ES1,ESC_ASSOU,ESC_WONG,LIM_STEM,FMASC,CytoTRACE2,n_cells_in_cohort,consensus,pct_consensus
+Patient01,26,29,25,20,32,21,369,22,5.9620596205962055
+Patient09,34,37,44,26,35,38,471,35,7.43099787685775
+Patient11,81,63,75,65,73,45,1116,60,5.376344086021505
+Patient16,403,383,402,406,567,506,7686,414,5.386416861826698
+Patient17,110,97,108,165,204,69,2387,90,3.7704231252618348
+Patient18,48,54,43,96,103,64,746,50,6.702412868632708
+Patient19,47,46,56,33,55,36,919,45,4.896626768226333
+Patient20,13,14,11,4,11,15,218,11,5.045871559633028
+Patient26,374,429,442,302,385,439,4849,452,9.321509589606105
+Patient42,24,25,30,11,16,23,278,23,8.273381294964029
+Patient43,167,175,204,153,218,170,2745,170,6.193078324225866
+Patient45,114,116,147,130,160,133,2106,120,5.698005698005698
+Patient46,119,104,115,159,149,56,2218,93,4.192966636609558
+Patient47,236,227,275,172,179,221,2690,225,8.364312267657992
+Patient48,37,32,38,30,30,33,475,37,7.7894736842105265
+Patient53,150,163,260,169,159,190,3900,162,4.153846153846154
+Patient56,437,469,513,250,372,486,6151,430,6.990733214111526
+Patient63,192,183,197,118,196,169,2317,178,7.682347863616746
+Patient64,20,16,24,56,18,40,455,27,5.934065934065934

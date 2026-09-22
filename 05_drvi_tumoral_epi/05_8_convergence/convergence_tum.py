@@ -12,11 +12,17 @@ do not overlap:
 So agreement between the routes is the criterion for calling a dimension a genuine cell
 state, and disagreement is informative rather than a failure:
 
-  * B but not A  -> the axis carries the gene program but no coherent group of cells sits on
-                    it: a candidate patient-specific or technical effect;
-  * A but not B  -> the model separates the cells but does not encode the program cleanly on
-                    a single axis, so the state is real and the axis is not its description;
-  * A and B      -> convergent.
+  * B but not A  -> `factor_only`: the axis carries the gene program and Route A did not
+                    clear the bar. Read it with the `A_vs_null` column, not from the name:
+                    `below` is the classic case - no coherent group of cells sits on the axis,
+                    a candidate patient-specific or technical effect - while `above` is a real
+                    but weak association the bar dropped, which is a different thing;
+  * A but not B  -> `cell_only`: the model separates the cells but does not encode the program
+                    cleanly on a single axis, so the state is real and the axis is not its
+                    description;
+  * A and B      -> `convergent` if the two routes land on the same signature FAMILY,
+                    `both_different_family` if they contradict each other - both routes strong
+                    and pointing at different programmes, which is a signal without a name.
 
 All three categories are reported separately below and NOTHING is promoted on a single route.
 That rule does more work here than in 04. This phase has no non-constant biological
@@ -63,6 +69,41 @@ import signature_common as C  # noqa: E402
 import sig_collections as SC  # noqa: E402
 
 FDR = 0.05
+
+# The five values of the `verdict` column. They name WHICH ROUTES ANSWERED and nothing else,
+# on purpose: an earlier spelling of the B-only one was
+# `factor_only_candidate_patient_or_technical`, which put the READING into the label - and the
+# reading depends on where `ROUTE_A_RHO_MIN` sits while the label does not. At the 0.20 bar
+# "Route B only" did mean "no cell-level signal"; at 0.30 it also catches rows with a real
+# correlation that is merely under the bar (DR 41-: the same metaprogram on both routes, rho
+# 0.281, FDR 4e-22), and the old label called those technical artefacts. What each category
+# usually means is in the README, where it can be qualified; the column states the fact.
+CONVERGENT = "convergent"
+BOTH_DIFFERENT = "both_different_family"
+FACTOR_ONLY = "factor_only"
+CELL_ONLY = "cell_only"
+NEITHER = "neither"
+
+# How each one is written where a human reads it rather than a column: the figure legend and
+# the section headers below. The route in brackets is which one answered.
+VERDICT_LABEL = {
+    CONVERGENT: "convergent",
+    BOTH_DIFFERENT: "both routes, different family",
+    FACTOR_ONLY: "factor only (B)",
+    CELL_ONLY: "cell only (A)",
+    NEITHER: "neither",
+}
+
+# The 95th percentile of Route A's own null, per collection: 05_9/route_a_null_tum.py, which
+# replaces every gene set by a size- and expression-matched random one and takes the best of
+# them on each direction. Carried here as a number rather than read from that table because it
+# is a property of the collection and the run, not of the tables this step writes, and the
+# same reason `sig_collections` carries its own null as a documented constant.
+#
+# It is NOT a threshold. It fills one column, `A_vs_null`, which says whether a row that
+# failed Route A failed it because there is nothing there or because the bar is above the
+# noise floor - the distinction the old verdict name was trying to make and got wrong.
+ROUTE_A_NULL_P95 = {"scie": 0.267, "emt": 0.187, "gavish_tnbc": 0.253}
 
 # A readout is flagged as confounded when its raw score correlates with a technical or
 # cycle covariate above these. Both are conventions, not derived: chosen so the flag fires
@@ -149,18 +190,20 @@ def main():
 
             a_hit = a_rho >= args.rho_min
             b_hit = b_neglog >= thr
+            p95 = ROUTE_A_NULL_P95.get(coll.name)
+            null_side = "unknown" if p95 is None else ("above" if a_rho >= p95 else "below")
 
             same_family = (coll.axis_of.get(a_best) == coll.axis_of.get(b_best)) if (a_hit and b_hit) else False
             same_signature = (a_best == b_best) if (a_hit and b_hit) else False
 
             if a_hit and b_hit:
-                verdict = "convergent" if same_family else "both_routes_different_family"
+                verdict = CONVERGENT if same_family else BOTH_DIFFERENT
             elif b_hit:
-                verdict = "factor_only_candidate_patient_or_technical"
+                verdict = FACTOR_ONLY
             elif a_hit:
-                verdict = "cell_only_state_not_on_one_axis"
+                verdict = CELL_ONLY
             else:
-                verdict = "neither"
+                verdict = NEITHER
 
             # ---- confounder flags, carried over from A3 for the signature being claimed
             claimed = a_best if a_hit else (b_best if b_hit else a_best)
@@ -185,6 +228,11 @@ def main():
                 "same_signature": same_signature, "same_family": same_family,
                 "A_family": coll.axis_of.get(a_best), "B_family": coll.axis_of.get(b_best),
                 "verdict": verdict,
+                # Where this row's Route A value sits against the collection's own noise
+                # floor, independently of the bar. `below` plus a Route B hit is the reading
+                # the B-only category used to assert in its name; `above` plus a Route B hit
+                # is a row the bar dropped, not a row the data is silent on.
+                "A_vs_null": null_side,
                 "dimension_vanished": bool(vanished[d]),
                 "confounder_flags": ",".join(flags) or "none",
             })
@@ -200,36 +248,40 @@ def main():
 
     C.banner("the three categories, reported separately")
     counts = conv["verdict"].value_counts()
-    print(counts.to_string())
+    for v in (CONVERGENT, BOTH_DIFFERENT, FACTOR_ONLY, CELL_ONLY, NEITHER):
+        print(f"  {VERDICT_LABEL[v]:32s} {int(counts.get(v, 0)):3d}")
     print("\nNo dimension is promoted on a single route. A 'convergent' row is a candidate\n"
           "cell state; the two single-route categories are candidates for the OTHER thing\n"
           "each of them can be, and are listed here for that reason, not as weaker hits.")
 
     C.write_table(conv, "convergence", coll)
 
-    conv_rows = conv[conv["verdict"] == "convergent"].sort_values("A_rho", ascending=False)
+    conv_rows = conv[conv["verdict"] == CONVERGENT].sort_values("A_rho", ascending=False)
     print(f"\nCONVERGENT ({len(conv_rows)}): both routes, same signature family")
     if len(conv_rows):
         print(conv_rows[["A_best_signature", "A_rho", *auroc_col,
                          "B_best_signature", "B_fdr", "same_signature",
                          "confounder_flags"]].to_string(float_format="%.3g"))
 
-    b_only = conv[conv["verdict"] == "factor_only_candidate_patient_or_technical"]
-    print(f"\nFACTOR-ONLY ({len(b_only)}): the gene program is on the axis, no coherent cell "
-          "group is.\nCandidate patient-specific or technical effects - NOT cell states.")
+    b_only = conv[conv["verdict"] == FACTOR_ONLY]
+    below = b_only[b_only["A_vs_null"] == "below"]
+    print(f"\nFACTOR ONLY, B ({len(b_only)}): the gene programme is on the axis, Route A did "
+          f"not clear the bar.\n{len(below)} of them are also below the collection's own "
+          f"noise floor (A_vs_null), which is\nthe subset that reads as patient-specific or "
+          f"technical rather than merely weak.")
     if len(b_only):
         print(b_only[["B_best_signature", "B_fdr", "A_best_signature", "A_rho",
-                      "confounder_flags"]].head(20).to_string(float_format="%.3g"))
+                      "A_vs_null", "confounder_flags"]].head(20).to_string(float_format="%.3g"))
 
-    a_only = conv[conv["verdict"] == "cell_only_state_not_on_one_axis"]
-    print(f"\nCELL-ONLY ({len(a_only)}): the cells separate, the axis does not encode the "
+    a_only = conv[conv["verdict"] == CELL_ONLY]
+    print(f"\nCELL ONLY, A ({len(a_only)}): the cells separate, the axis does not encode the "
           "program cleanly.\nThe state may be real; this single dimension is not its description.")
     if len(a_only):
         print(a_only[["A_best_signature", "A_rho", *auroc_col,
                       "B_best_signature", "B_neglog10_fdr", "confounder_flags"]]
               .head(20).to_string(float_format="%.3g"))
 
-    flagged = conv[(conv["verdict"] == "convergent") & (conv["confounder_flags"] != "none")]
+    flagged = conv[(conv["verdict"] == CONVERGENT) & (conv["confounder_flags"] != "none")]
     print(f"\n{len(flagged)} of the {len(conv_rows)} convergent rows carry a confounder flag "
           "from A3 and cannot be read as clean.")
 
@@ -316,18 +368,19 @@ def main():
     plt.close(fig)
 
     # A strength vs B strength, one point per dimension-direction
-    palette = {"convergent": "#C44E52",
-               "both_routes_different_family": "#8172B3",
-               "factor_only_candidate_patient_or_technical": "#4C72B0",
-               "cell_only_state_not_on_one_axis": "#DD8452",
-               "neither": "0.8"}
+    palette = {CONVERGENT: "#C44E52",
+               BOTH_DIFFERENT: "#8172B3",
+               FACTOR_ONLY: "#4C72B0",
+               CELL_ONLY: "#DD8452",
+               NEITHER: "0.8"}
     fig, ax = plt.subplots(figsize=(8, 6.5))
     for v, grp in conv.groupby("verdict"):
         ax.scatter(grp["A_rho"], grp["B_neglog10_fdr"], s=34, lw=0.4, edgecolor="w",
-                   c=palette.get(v, "0.5"), label=f"{v} ({len(grp)})")
+                   c=palette.get(v, "0.5"),
+                   label=f"{VERDICT_LABEL.get(v, v)} ({len(grp)})")
     ax.axvline(args.rho_min, color="k", ls="--", lw=0.9)
     ax.axhline(thr, color="k", ls="--", lw=0.9)
-    for lbl, r in conv[conv["verdict"] == "convergent"].iterrows():
+    for lbl, r in conv[conv["verdict"] == CONVERGENT].iterrows():
         ax.annotate(lbl, (r["A_rho"], r["B_neglog10_fdr"]), fontsize=6,
                     xytext=(3, 3), textcoords="offset points")
     ax.set_xlabel(f"Route A: strongest signature association on this side (Spearman rho)")

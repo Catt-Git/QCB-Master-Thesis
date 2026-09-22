@@ -1,0 +1,24 @@
+# programme_dimensions | collection consensus (all three collections, read together) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+programme,n_directions,max_rho,min_fdr,dimensions,collections
+HALLMARK_IFNG,4,0.729,1.1611812112009439e-40,"DR 18-, DR 23-, DR 31-, DR 35-",scie
+MP17_INTERFERON_MHC_II_1,4,0.5788,1.9493956831325566e-28,"DR 18-, DR 23-, DR 34-, DR 35-",gavish_tnbc
+MP1_CELL_CYCLE_G2_M,3,0.8449,3.848575404157399e-46,"DR 3+, DR 25-, DR 37-",gavish_tnbc
+MP19_EPITHELIAL_SENESCENCE,3,0.3426,3.747140695144035e-16,"DR 36-, DR 40-, DR 51-",gavish_tnbc
+MP5_STRESS,2,0.8113,9.473271845042527e-39,"DR 8+, DR 44-",gavish_tnbc
+MP23_SECRETED_2,2,0.4836,4.1783036664662224e-14,"DR 9-, DR 30+",gavish_tnbc
+MP22_SECRETED_1,2,0.4613,1.4138391390945629e-15,"DR 21+, DR 29-",gavish_tnbc
+MP13_EMT_2,2,0.3944,2.068711839599832e-17,"DR 19-, DR 26-",gavish_tnbc
+ESC_WONG,2,0.3707,1.3372111832804207e-28,"DR 3+, DR 5+",scie
+LIM_STEM,2,0.3343,1.3636408414470667e-06,"DR 19-, DR 32-",scie
+MP2_CELL_CYCLE_G1_S,1,0.7749,6.290714855478366e-29,DR 5+,gavish_tnbc
+MP6_HYPOXIA,1,0.575,5.324759536129933e-31,DR 13-,gavish_tnbc
+HALLMARK_IFNA,1,0.5609,1.5827050934310288e-36,DR 34-,scie
+MP14_EMT_3,1,0.5473,1.2456613801138913e-22,DR 20+,gavish_tnbc
+MP7_STRESS_IN_VITRO,1,0.4706,1.7314103128901558e-16,DR 50+,gavish_tnbc
+MP21_RESPIRATION,1,0.4693,0.0018518252436381,DR 4+,gavish_tnbc
+MP8_PROTEASOMAL_DEGRADATION,1,0.4466,3.347341331292356e-05,DR 9+,gavish_tnbc
+MP39_METAL_RESPONSE,1,0.416,8.77000821143634e-06,DR 43-,gavish_tnbc
+EMT_B_EPITHELIAL,1,0.3879,0.0481504111655667,DR 28+,emt

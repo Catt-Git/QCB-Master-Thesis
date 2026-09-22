@@ -1,0 +1,15 @@
+# signature_concentration | collection scie (stemness x immunogenicity (SCIE)) | DRVI run drvi_tum_64_nomt | vanished dimensions PRUNED (DRVI's own behaviour) | 05_4 - 05_8 signature interpretation
+# CAVEAT: Cells are the aneuploid epithelium called by inferCNV in 05_1: a per-cohort THRESHOLD on a CNV score, not a validated clone assignment - no matched normal, no bulk WGS.
+# CAVEAT: Cells no run covered (not_tested) were excluded rather than assumed normal, and 19 of the 29 cohorts of the epithelial compartment reach the 200-cell floor, so this is the tumour the call could reach in the patients with the most of it.
+# CAVEAT: The CellTypist labels carried along (cell_type_01_4) come from a NORMAL breast atlas with no malignant class and are landmarks, never identities: every state reported here is a state of malignant epithelium, named by its genes and not by that label.
+signature,axis,primary,n_mapped,effective_n_genes,effective_n_fraction,top_gene,top_gene_share_of_variance,top_gene_share_of_mean_signal,top_gene_detection_rate,top_gene_spearman_with_score,share_top3_of_variance,median_detection_rate,n_genes_below_noise_floor,frac_genes_below_noise_floor,frac_cells_all_zero,gini_of_mean_signal,flags
+HALLMARK_IFNA,immune,True,96,28.0724,0.2924,CD74,0.0522,0.0589,0.6885,0.7343,0.1519,0.1421,2,0.0208,0.0033,0.6622,none
+HALLMARK_IFNG,immune,True,197,50.9646,0.2587,HLA-B,0.0418,0.0416,0.7181,0.798,0.1147,0.1097,25,0.1269,0.0005,0.6828,none
+ISDS,immune,True,27,9.2251,0.3417,CD74,0.1249,0.1392,0.6885,0.7482,0.3612,0.1709,0,0.0,0.0246,0.6404,low_effective_n
+KEGG_APM,immune,True,65,24.4511,0.3762,HLA-B,0.0675,0.0618,0.7181,0.8354,0.1856,0.2235,15,0.2308,0.0008,0.6407,none
+IMMUNOGENIC_CONSENSUS,immune,True,25,11.7644,0.4706,HLA-B,0.1016,0.1128,0.7181,0.8573,0.2827,0.3227,3,0.12,0.021,0.5596,none
+BENPORATH_ES1,stemness,True,368,85.6247,0.2327,HSPD1,0.023,0.0192,0.6207,0.4628,0.0647,0.0893,50,0.1359,0.0,0.6553,none
+ESC_ASSOU,stemness,True,801,162.3282,0.2027,TUBB,0.0112,0.0102,0.7408,0.4844,0.0313,0.0898,112,0.1398,0.0,0.7048,none
+ESC_WONG,stemness,True,297,94.8282,0.3193,UQCRH,0.0153,0.0141,0.7689,0.4701,0.0435,0.2169,8,0.0269,0.0,0.6066,none
+LIM_STEM,stemness,True,465,79.9807,0.172,VIM,0.0418,0.0505,0.6585,0.4042,0.1026,0.0337,120,0.2581,0.0021,0.6998,none
+FMASC,stemness,True,1692,424.848,0.2511,YBX1,0.0081,0.0151,0.7694,0.1376,0.0235,0.0455,367,0.2169,0.0,0.6413,none

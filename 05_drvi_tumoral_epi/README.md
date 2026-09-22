@@ -217,7 +217,7 @@ over fewer tests, so FDRs fall and a few rows cross the bar. Nothing here is a n
 |---|---|---|---|
 | `scie` | 16 | 13, incl. **7 convergent** | 1 |
 | `emt` | 16 | 1 | 14, all `neither`/`cell_only` → `factor_only`/`convergent` at FDR 0.0538 → 0.0482 |
-| `gavish_tnbc` | 16 | 15, incl. 11 `both_routes_different_family` | 1 |
+| `gavish_tnbc` | 16 | 15, incl. 11 `both_different_family` | 1 |
 
 Two things to take from it.
 
