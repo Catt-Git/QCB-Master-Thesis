@@ -712,7 +712,12 @@ def main():
     # with no derived readouts - `scie`, `gavish` - are unaffected: the set below is empty and
     # this line is the one it always was.
     derived_names = {d.name for d in coll.derived}
-    col_order = coll.order([c for c in rho.columns if c not in derived_names])
+    # `for_figure`: the columns are drawn in the collection's FIGURE order, which for `emt`
+    # is list version A, B, C. Registry order puts B first because B is the primary triad and
+    # that is what the tables above say; three versions side by side in a figure have to read
+    # A, B, C or the reader takes the order for a result. The blocks are unchanged, so
+    # `block_edges` below reads the same list either way.
+    col_order = coll.order([c for c in rho.columns if c not in derived_names], for_figure=True)
     fig, ax = plt.subplots(figsize=(C.fig_span(len(col_order), 1.0, 4.0),
                                     C.fig_span(len(dims), 0.24, 3.0)))
     sns.heatmap(rho[col_order].astype(float), cmap="vlag", center=0, vmin=-0.6, vmax=0.6,
@@ -756,7 +761,11 @@ def main():
     # the epithelial pole, green the mesenchymal one; both panels that carry a value use the
     # same two, so the reader learns the pair once.
     if coll.derived:
-        der_order = [d.name for d in coll.derived if d.name in rho.columns]
+        # Figure order again (A, B, C for `emt`), for the same reason as the heatmap above.
+        # The PRIMARY version is read off the registry below and not off this list, which is
+        # no longer the registry's.
+        der_order = coll.order([d.name for d in coll.derived if d.name in rho.columns],
+                               for_figure=True)
         der_axis = coll.derived[0].axis
         POLES = plt.get_cmap("PRGn")          # purple (-) -> white (0) -> green (+)
         lo_col, hi_col = POLES(0.12), POLES(0.88)
@@ -847,7 +856,7 @@ def main():
         # the middle of this distribution is not a tautology and was never imposed: it is the
         # middle band RECOVERED, and it is the check the co-expression definition is owed.
         if has_cells:
-            primary = der_order[0]
+            primary = coll.derived[0].name
             v = z[f"z_{primary}"].values
             tgt = consensus.values.astype(bool)
             edges = np.histogram_bin_edges(v, bins=70)

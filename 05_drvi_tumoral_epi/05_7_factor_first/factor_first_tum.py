@@ -255,6 +255,10 @@ def main():
     print(f"\nrow order taken from Route A: {len(row_order)} dimensions")
 
     sig_cols = coll.order(list(custom_bg))
+    # The table keeps REGISTRY order - for `emt` that is B first, the primary triad. The
+    # figure below is drawn in the collection's figure order instead (A, B, C), because three
+    # list versions side by side have to read in their own order or it looks like a result.
+    fig_cols = coll.order(list(custom_bg), for_figure=True)
     signed = pd.DataFrame(0.0, index=row_order, columns=sig_cols)
     sign_of = pd.DataFrame("", index=row_order, columns=sig_cols)
 
@@ -287,13 +291,13 @@ def main():
                       "factor_first_hallmark_significant", coll, index=False)
 
     # ---------------------------------------------------------------- figure
-    fig, ax = plt.subplots(figsize=(C.fig_span(len(sig_cols), 1.0, 4.0),
+    fig, ax = plt.subplots(figsize=(C.fig_span(len(fig_cols), 1.0, 4.0),
                                     C.fig_span(len(row_order), 0.24, 3.0)))
     vmax = float(np.nanpercentile(signed.abs().values, 99)) or 1.0
-    sns.heatmap(signed, cmap="vlag", center=0, vmin=-vmax, vmax=vmax,
+    sns.heatmap(signed[fig_cols], cmap="vlag", center=0, vmin=-vmax, vmax=vmax,
                 cbar_kws={"label": "signed -log10 FDR  (+ = positive direction)", "shrink": 0.4},
                 ax=ax)
-    for pos in coll.block_edges(sig_cols):
+    for pos in coll.block_edges(fig_cols):
         ax.axvline(pos, color="k", lw=1.5)
     ax.set_title(f"Route B, {coll.title}: latent dimensions x gene sets, signed significance\n"
                  f"{len(row_order)} dimensions of {C.RUN_ID}, "
