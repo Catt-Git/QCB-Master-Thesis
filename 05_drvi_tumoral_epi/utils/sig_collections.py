@@ -158,6 +158,10 @@ class Collection:
     extra_readouts: dict[str, str] = field(default_factory=dict)  # name -> axis, joined at runtime
     depth_risk_readout: str | None = None      # the readout whose LOW group could just be shallow
     ambient_risk_axis: str | None = None       # the axis whose HIGH group could just be ambient
+    # (collection, claimed signature, RAW Spearman rho of that signature on that dimension)
+    # -> extra flag names. The rho is 05_6's unoriented value, where the sign IS the
+    # direction, NOT 05_8's side-oriented `a_rho`, which is always positive on a row that
+    # claims anything and would make any `rho < 0` test unreachable.
     extra_flags: Callable[["Collection", str, float], list[str]] = lambda c, n, r: []
 
     # Inside an axis block, `order()` follows REGISTRY order, which is the right order for a
@@ -294,11 +298,17 @@ def _scie_planes(coll: "Collection", available: list[str]) -> list[Plane]:
     return [Plane(label=s, x=s, y=PRIMARY_IMMUNE, x_rule="high", y_rule="low") for s in stem]
 
 
-def _scie_flags(coll: "Collection", claimed: str, a_rho: float) -> list[str]:
+def _scie_flags(coll: "Collection", claimed: str, raw_rho: float) -> list[str]:
     # Immune evasion is defined by the ABSENCE of a signal, which shallow sequencing mimics
     # perfectly. A dimension claimed on a negative correlation with an immune list is exactly
     # that situation and is flagged wherever it is reported.
-    if coll.axis_of.get(claimed) == "immune" and a_rho < 0:
+    #
+    # `raw_rho` is the UNORIENTED correlation, the one 05_6's heatmap draws, where rho < 0 is
+    # a statement about `DR n-`. It is not 05_8's `a_rho`: that one is multiplied by the side,
+    # so a row that claims anything carries a positive number by construction and this test
+    # could never fire. It fired once in 112 rows, on a `neither` row claiming nothing, and
+    # never on the five immune axes it was written for.
+    if coll.axis_of.get(claimed) == "immune" and raw_rho < 0:
         return ["immune_low_is_absence_of_signal"]
     return []
 
@@ -443,7 +453,7 @@ def _emt_version(name: str) -> str:
     return parts[1] if len(parts) == 3 and parts[0] == "EMT" else ""
 
 
-def _emt_flags(coll: "Collection", claimed: str, a_rho: float) -> list[str]:
+def _emt_flags(coll: "Collection", claimed: str, raw_rho: float) -> list[str]:
     # High VIM / FN1 / SPARC / ACTA2 is as easily fibroblast ambient RNA or an
     # epithelial-fibroblast doublet as it is a transition. The malignant subset NARROWS this
     # risk without removing it, and the distinction is worth keeping straight: a cell in this
@@ -784,7 +794,7 @@ _GAVISH_TNBC_SIGNATURES = tuple(s for s in _GAVISH_SIGNATURES
                                 if _mp_number(s) in set(_GAVISH_TNBC_MPS))
 
 
-def _gavish_flags(coll: "Collection", claimed: str, a_rho: float) -> list[str]:
+def _gavish_flags(coll: "Collection", claimed: str, raw_rho: float) -> list[str]:
     """The two things that would make a metaprogram match mean something other than it says.
 
     Neither is a verdict. Both are printed next to the claim so that the reader does not have

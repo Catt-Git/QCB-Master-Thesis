@@ -154,7 +154,14 @@ PHASE_DIR = PROJECT_DIR / "05_drvi_tumoral_epi"
 # `tables/` would mean steps reaching into each other's folders. 05_1 already writes here.
 # `OUT_TAG` makes this `tables_pruned/` for a $PRUNE_VANISHED run, side by side with the
 # reported one rather than on top of it.
-TABLE_DIR = PHASE_DIR / f"tables{OUT_TAG}"
+#
+# $OUT_ROOT moves the `tables*/` and `figures*/` roots out of the phase folder altogether. It
+# is for a run built on a DIFFERENT OBJECT (a DATA_DIR of its own, e.g. a cohort left out),
+# whose tables must not sit in the repo next to the reported ones: pointing it at that
+# DATA_DIR puts every output of the run under one folder that can be deleted in one go.
+# Unset, it is the phase folder and nothing moves.
+OUT_ROOT = Path(os.environ.get("OUT_ROOT", "").strip() or PHASE_DIR).expanduser().resolve()
+TABLE_DIR = OUT_ROOT / f"tables{OUT_TAG}"
 
 # Inputs, all read-only here. Through `cell_set.path()`, so `CELL_SET=epi` reads the control
 # set's objects and writes under its own prefix without a second copy of this module.
@@ -726,7 +733,7 @@ def fig_dir(step: str, coll, run_id: str | None = None) -> Path:
     without either being able to overwrite the other, and the run is a subfolder of that, for
     the reason `table_dir` gives. `step` is e.g. '05_6_cell_first'.
     """
-    d = PHASE_DIR / f"figures{OUT_TAG}" / step / coll.name / (run_id or RUN_ID)
+    d = OUT_ROOT / f"figures{OUT_TAG}" / step / coll.name / (run_id or RUN_ID)
     d.mkdir(parents=True, exist_ok=True)
     return d
 

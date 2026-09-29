@@ -118,11 +118,14 @@ esac
 # owns the run id, `signature_common` owns the tag - and a second copy of either rule in bash
 # is exactly how a driver ends up checking for files the steps do not write. So ask.
 RESOLVE_PY="$SCRIPT_DIR/utils/resolve_run.py"
-read -r RUN_ID COMPARTMENT OUT_TAG < <(cd "$SCRIPT_DIR" && "$PYTHON" "$RESOLVE_PY")
-# The tag is printed as '-' when it is empty, so the line always has three fields and
-# `read` cannot leave a stale value in the third variable.
+read -r RUN_ID COMPARTMENT OUT_TAG OUT_ROOT_DIR < <(cd "$SCRIPT_DIR" && "$PYTHON" "$RESOLVE_PY")
+# The tag is printed as '-' when it is empty, so the line always has four fields and
+# `read` cannot leave a stale value in the fourth variable.
 if [ "$OUT_TAG" = "-" ]; then OUT_TAG=""; fi
-TABLE_ROOT="$SCRIPT_DIR/tables${OUT_TAG}"
+# $OUT_ROOT (resolved by signature_common, the phase folder when unset) moves tables and
+# figures - and this driver's log with them - out of the repo for a run on another object.
+TABLE_ROOT="$OUT_ROOT_DIR/tables${OUT_TAG}"
+if [ "$OUT_ROOT_DIR" != "$SCRIPT_DIR" ]; then LOG_DIR="$OUT_ROOT_DIR/logs"; fi
 
 # THE SLUG IS NOT ALWAYS THE COLLECTION - `--collection gavish` writes under `gavish_tnbc`
 # unless --all-metaprograms widens it. This mirrors `sig_collections.resolve()`, which is

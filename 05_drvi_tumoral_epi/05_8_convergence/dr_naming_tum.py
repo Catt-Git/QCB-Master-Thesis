@@ -71,10 +71,20 @@ diagnosed in 05 - from the dimensions whose name is biology.
     titles the dimensions by `reconstruction_effect`, so the map is
     `embed.var.set_index('title')['original_dim_id']` and it is what the loop below uses.
 
+THE 05_10 STATES, OVERLAID. A second figure, `programmes_named_states`, draws the same
+programme bars and adds the directions that 05_10 ties to a DRVI-Leiden cluster (SMI >= the
+05_10 threshold at `--states-resolution`, the table `smi_matches_drvi_leiden_<res>_<run>.csv`)
+in a second colour: inside a programme bar when the direction is also named, and as one bar per
+cluster below the programmes otherwise. The two are different questions - a name is a gene
+programme both routes agree on, a cluster match is a direction that separates one group of
+cells - so a direction carrying one and not the other is expected, not a contradiction. The
+original `programmes_named` figure is written unchanged; `--no-states` skips the overlay.
+
 Usage:
     export DATA_DIR=~/Desktop/QCB-Master-Thesis/datasets
     N_LATENT=64 HVG_SET=nomt python3 dr_naming_tum.py
     N_LATENT=64 HVG_SET=nomt python3 dr_naming_tum.py --keep-vanished
+    N_LATENT=64 HVG_SET=nomt python3 dr_naming_tum.py --states-resolution 0.5
 """
 
 from __future__ import annotations
@@ -125,6 +135,22 @@ DIM_DEPTH_FLAG = 0.30
 # One colour, slot 1 of the validated categorical palette. One colour because there is one
 # category: a direction either carries the programme or is not on this plot.
 COL_BAR = "#2a78d6"
+# Slot 2, for the second category of the overlay figure: a direction tied to a 05_10 cluster.
+COL_STATE = "#eb6834"
+
+# The Leiden resolution Alberto chose in 05_10 (22 clusters) - the one its SMI table exists for.
+STATES_RESOLUTION = 0.5
+# The cluster -> direction pairs Alberto kept from the 05_10 SMI matches at 0.5 (29/09/2026):
+# the clean one-to-one ties. `--all-states` draws every match over the threshold instead.
+STATES_SELECTION = {
+    "3": ["DR 38+"],
+    "7": ["DR 49+", "DR 17+"],
+    "10": ["DR 17-"],
+    "11": ["DR 55-"],
+    "12": ["DR 15+"],
+    "15": ["DR 7+"],
+    "17": ["DR 45+"],
+}
 
 STEP = "05_8_convergence"
 # A pseudo-collection: this table belongs to the run, not to any one collection, and the
@@ -143,6 +169,14 @@ def parse_args():
                    help=f"Route A's bar for a NAME, applied here to the stored convergence "
                         f"table (default {NAMING_RHO_MIN}, the p97.5 of the per-direction "
                         f"null; must be >= the bar that table was written at)")
+    p.add_argument("--states-resolution", type=float, default=STATES_RESOLUTION,
+                   help="the 05_10 DRVI-Leiden resolution whose SMI cluster matches are "
+                        f"overlaid on the programme bars (default {STATES_RESOLUTION})")
+    p.add_argument("--all-states", action="store_true",
+                   help="overlay every SMI match over the 05_10 threshold, not only "
+                        "STATES_SELECTION")
+    p.add_argument("--no-states", action="store_true",
+                   help="do not draw the programmes_named_states overlay")
     return p.parse_args()
 
 
@@ -158,7 +192,7 @@ def read_convergence(pruned: bool) -> pd.DataFrame:
     variant. Only the unpruned comparison at the end names a directory, because that one is
     a comparison against a specific other run.
     """
-    root = C.TABLE_DIR if pruned else C.PHASE_DIR / "tables"
+    root = C.TABLE_DIR if pruned else C.OUT_ROOT / "tables"
     out = []
     for name in COLLECTIONS:
         path = root / name / C.RUN_ID / f"convergence_{name}_{C.RUN_ID}.csv"
@@ -213,7 +247,7 @@ def main():
     args = parse_args()
     C.banner("05_8 - how many dimensions get a name")
     pruned = not args.keep_vanished
-    print(f"run {C.RUN_ID}; reading {(C.TABLE_DIR if pruned else C.PHASE_DIR / 'tables').name}/ "
+    print(f"run {C.RUN_ID}; reading {(C.TABLE_DIR if pruned else C.OUT_ROOT / 'tables').name}/ "
           f"({'vanished tail NOT read' if pruned else 'vanished tail read'})")
     if args.rho_min < C.ROUTE_A_RHO_MIN:
         sys.exit(f"--rho-min {args.rho_min} is BELOW the bar the convergence tables were "
@@ -326,6 +360,10 @@ def main():
 
     # ---------------------------------------------------------------- figure
     plot_programme_bars(prog, clean["dim_n"].nunique(), len(dims), args.rho_min)
+    if not args.no_states:
+        states_overlay(prog, clean, named, per_dim, clean["dim_n"].nunique(), len(dims),
+                       args.rho_min, args.states_resolution,
+                       None if args.all_states else STATES_SELECTION)
 
     if pruned:
         C.banner("what not reading the vanished tail costs")
@@ -385,6 +423,125 @@ def plot_programme_bars(prog: pd.DataFrame, n_dims_named: int, n_dims: int,
             linespacing=1.45)
     fig.tight_layout()
     C.savefig("programmes_named", STEP, CONSENSUS, fig=fig)
+    plt.close(fig)
+
+
+def states_overlay(prog: pd.DataFrame, clean: pd.DataFrame, named: pd.DataFrame,
+                   per_dim: pd.DataFrame, n_dims_named: int, n_dims: int, rho_min: float,
+                   res: float, selection: dict[str, list[str]] | None = None) -> None:
+    """The programme bars plus the directions 05_10 matched to a DRVI-Leiden cluster.
+
+    05_10 writes its tables outside the pruned tree (it has no OUT_TAG of its own), so the
+    path is built from `tables/` and not from `C.TABLE_DIR`. Its clusters are built on the 56
+    non-vanished dimensions, the same set this step reads.
+    """
+    path = (C.OUT_ROOT / "tables" / "drvi_states" / C.RUN_ID
+            / f"smi_matches_drvi_leiden_{res:g}_{C.RUN_ID}.csv")
+    if not path.exists():
+        print(f"\n[skip] no 05_10 SMI table at {path}: run 05_10 with --smi-resolution {res:g}")
+        return
+    smi = pd.read_csv(path)
+    smi["cluster"] = smi["cluster"].astype(str)
+    if selection is not None:
+        keep = {(c, d) for c, ds in selection.items() for d in ds}
+        missing = keep - set(zip(smi["cluster"], smi["direction"]))
+        if missing:
+            sys.exit(f"selected pairs not in {path.name}: {sorted(missing)}")
+        smi = smi[[(c, d) in keep for c, d in zip(smi["cluster"], smi["direction"])]]
+
+    # What this step says about each matched direction.
+    prog_of = clean.groupby("dim_direction")["B_best_signature"].agg(lambda s: sorted(set(s)))
+    depth_dirs = set(named.loc[named["axis_is_depth"], "dim_direction"])
+
+    def status(d: str) -> str:
+        if d in prog_of.index:
+            return "named: " + ", ".join(n.replace("_", " ") for n in prog_of[d])
+        if d in depth_dirs:
+            return "named, depth axis"
+        call = per_dim.loc[d[:-1].strip(), "call"] if d[:-1].strip() in per_dim.index else ""
+        return "unnamed (other side named)" if call == "named" else "unnamed"
+
+    smi["status"] = smi["direction"].map(status)
+    smi = smi.sort_values(["cluster", "smi"], ascending=[True, False])
+    tbl = smi.rename(columns={"direction": "dim_direction"})
+    tbl["resolution"] = res
+    C.write_table(tbl, "states_vs_names" + ("" if selection is not None else "_all"),
+                  CONSENSUS, index=False)
+
+    state_dirs = set(smi["direction"])
+    cl_of = smi.groupby("direction")["cluster"].agg(lambda s: ", ".join(sorted(s, key=int)))
+    C.banner(f"05_10 cluster matches (resolution {res:g}) against the names")
+    print(f"{len(state_dirs)} directions matched to {smi['cluster'].nunique()} clusters; "
+          f"{len(state_dirs & set(prog_of.index))} of them also carry a programme name")
+    print(tbl[["cluster", "dim_direction", "smi", "status"]].to_string(index=False,
+                                                                      float_format="%.2f"))
+
+    # ---- geometry: programmes on top, a gap, then one bar per cluster
+    p = prog.copy()
+    p["n_state"] = p["dimensions"].map(
+        lambda s: sum(d.strip() in state_dirs for d in s.split(",")))
+    clusters = (smi.groupby("cluster")
+                .agg(n=("direction", "nunique"), top=("smi", "max"),
+                     label=("direction", lambda s: ", ".join(s)))
+                .sort_values(["n", "top"], ascending=False))
+    n_p, n_c = len(p), len(clusters)
+    n_shared = len(state_dirs & set(prog_of.index))
+    y_p = np.arange(n_p)[::-1] + n_c + 1.2           # programmes, largest at the top
+    y_c = np.arange(n_c)[::-1]                        # clusters below
+    xmax = float(max(p["n_directions"].max(), clusters["n"].max())) + 3.2
+
+    fig, ax = plt.subplots(figsize=(11.5, 0.36 * (n_p + n_c) + 2.6))
+    ax.barh(y_p, p["n_directions"], height=0.46, color=COL_BAR,
+            label="named direction (both routes, this step)")
+    ax.barh(y_p, p["n_state"], height=0.46, color=COL_STATE,
+            label=f"direction matched to a 05_10 cluster (SMI, resolution {res:g}"
+                  + (", selected pairs)" if selection is not None else ", all >= 0.4)"))
+    for yi, (_, row) in zip(y_p, p.iterrows()):
+        parts = [f"{d.strip()} [cl {cl_of[d.strip()]}]" if d.strip() in state_dirs else d.strip()
+                 for d in row["dimensions"].split(",")]
+        ax.text(row["n_directions"] + 0.10, yi,
+                f"{', '.join(parts)}   (max rho {row['max_rho']:.2f})",
+                va="center", ha="left", fontsize=7.5, color="0.30")
+    ax.barh(y_c, clusters["n"], height=0.46, color=COL_STATE)
+    stat = smi.set_index("direction")["status"]
+    for yi, (cl, row) in zip(y_c, clusters.iterrows()):
+        sub = smi[smi["cluster"] == cl]
+        txt = ", ".join(f"{r.direction} ({r.smi:.2f}{'' if r.status == 'unnamed' else '; ' + r.status})"
+                        for r in sub.itertuples())
+        ax.text(row["n"] + 0.10, yi, txt, va="center", ha="left", fontsize=7.5, color="0.30")
+
+    ax.axhline(n_c + 0.1, color="0.7", lw=0.8)
+    ax.text(-0.02, y_p[0] + 0.75, "programmes named by both routes", transform=ax.get_yaxis_transform(),
+            ha="right", fontsize=8.5, color="0.35", style="italic")
+    ax.text(-0.02, y_c[0] + 0.75, f"05_10 DRVI-Leiden clusters ({res:g})",
+            transform=ax.get_yaxis_transform(), ha="right", fontsize=8.5, color="0.35",
+            style="italic")
+    ax.set_yticks(np.concatenate([y_p, y_c]))
+    ax.set_yticklabels([n.replace("_", " ") for n in p.index]
+                       + [f"cluster {c}" for c in clusters.index], fontsize=8.5)
+    ax.set_xlabel("latent directions", fontsize=9)
+    ax.set_xlim(0, xmax)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+    ax.grid(axis="x", color="0.88", lw=0.6)
+    ax.set_axisbelow(True)
+    for s_ in ("top", "right", "left"):
+        ax.spines[s_].set_visible(False)
+    ax.spines["bottom"].set_color("0.7")
+    ax.tick_params(length=0)
+    ax.legend(loc="lower right", fontsize=7.5, frameon=False)
+    ax.set_title(f"Programmes named on {C.RUN_ID}, with the 05_10 cell states",
+                 fontsize=12, loc="left", pad=60)
+    ax.text(0, 1.004,
+            f"Blue: Route A rho >= {rho_min} and Route B FDR < 0.05 on the same family, "
+            f"{n_dims_named} of {n_dims} non-vanished dimensions named. Orange: the direction\n"
+            f"that separates a DRVI-Leiden cluster of 05_10, with its SMI"
+            + (" (inside a blue bar: a named direction, [cl = its cluster])"
+               if n_shared else "") + f".\n{len(state_dirs)} cluster directions, "
+            f"{n_shared} of them named: a cluster match and a name answer different questions.",
+            transform=ax.transAxes, fontsize=8.2, color="0.35", va="bottom", linespacing=1.45)
+    fig.tight_layout()
+    C.savefig("programmes_named_states" + ("" if selection is not None else "_all"),
+              STEP, CONSENSUS, fig=fig)
     plt.close(fig)
 
 

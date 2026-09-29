@@ -215,7 +215,13 @@ def main():
                 flags.append("depth")
             if not np.isnan(cyc) and cyc >= CYCLE_FLAG:
                 flags.append("cell_cycle")
-            flags += coll.extra_flags(coll, claimed, a_rho)
+            # The RAW rho of the signature being claimed, in 05_6's convention where the
+            # sign IS the direction. `a_rho` cannot be used here: it is `rho * s`, positive
+            # on any row that claims anything, so a collection flag testing `rho < 0` would
+            # never fire. It also belongs to `a_best`, which is not `claimed` on a row that
+            # only Route B hit.
+            claimed_rho = float(rho.loc[d, claimed]) if claimed in rho.columns else np.nan
+            flags += coll.extra_flags(coll, claimed, claimed_rho)
 
             rows.append({
                 "dimension": d, "direction": direction, "dim_direction": f"{d}{direction}",
@@ -338,7 +344,12 @@ def main():
     # ------------------------------------------------------------------ figures
     C.banner("figures")
 
-    sigs_ord = coll.order(list(sigs))
+    # Figure order, not registry order: for `emt` the three list versions have to read
+    # A, B, C side by side, as they do in the 05_6 and 05_7 heatmaps this panel is meant to
+    # be compared against. `block_edges` reads the same list either way, and the tables
+    # above are untouched - they keep the registry order, where B comes first because B is
+    # the primary triad.
+    sigs_ord = coll.order(list(sigs), for_figure=True)
     # Two panels side by side, so each gets half the cap: forty signatures fit at a narrower
     # column than ten do rather than making a figure no page can hold.
     panel_w = C.fig_span(len(sigs_ord), 0.9, 3.5, cap=C.MAX_FIG_IN / 2)
